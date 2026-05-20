@@ -92,4 +92,14 @@ class CADFeature:
             summary["degree"] = g.get('degree', 0)
             summary["control_points"] = len(g.get('control_points', []))
             summary["fit_points"] = len(g.get('fit_points', []))
+        elif self.feature_type == FeatureType.TEXT:
+            summary["text"] = g.get('text', '')
+            summary["position"] = f"({g.get('x', 0):.2f}, {g.get('y', 0):.2f})"
+            summary["height"] = f"{g.get('height', 0):.2f}"
+            if g.get('rotation', 0) != 0:
+                summary["rotation"] = f"{g.get('rotation', 0):.1f}°"
+        elif self.feature_type == FeatureType.DIMENSION:
+            summary["dim_type"] = g.get('dim_type', 0)
+            if g.get('text'):
+                summary["text"] = g.get('text', '')
         return summary

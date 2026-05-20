@@ -74,6 +74,7 @@ class DXFImporter:
             "TEXT": self._parse_text,
             "HATCH": self._parse_hatch,
             "POINT": self._parse_point,
+            "SOLID": self._parse_solid,
         }
         parser = parser_map.get(etype)
         if parser:
@@ -211,11 +212,39 @@ class DXFImporter:
         self.repo.add(feat)
         self._entity_index += 1
 
-    def _parse_dimension(self, e) -> None:
+    def _parse_dimension(self, e, doc=None) -> None:
+        """
+        Decompose DIMENSION entity into constituent geometry from its block.
+
+        DXF dimensions store visible geometry (extension lines, arrows, measurement text)
+        in an anonymous block. This parser extracts:
+          - LINE entities (extension/dimension lines)
+          - SOLID entities (arrow heads) → rendered as filled triangles
+          - MTEXT entities (measurement value text)
+        """
+        # Get the dimension geometry block content
+        try:
+            # ezdxf provides virtual_entities() to get the block geometry
+            for ve in e.virtual_entities():
+                vtype = ve.dxftype()
+                if vtype == "LINE":
+                    self._parse_line(ve)
+                elif vtype == "SOLID":
+                    self._parse_solid(ve)
+                elif vtype == "MTEXT":
+                    self._parse_mtext(ve)
+                elif vtype == "TEXT":
+                    self._parse_text(ve)
+        except Exception:
+            pass
+
+        # Also store the dimension entity itself for reference
         feat = CADFeature(
             feature_type=FeatureType.DIMENSION,
             geometry={
                 "dim_type": e.dxf.dimension_type if hasattr(e.dxf, "dimension_type") else 0,
+                # Store measurement text if available
+                "text": e.dxf.text if hasattr(e.dxf, "text") else "",
             },
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
@@ -224,13 +253,52 @@ class DXFImporter:
         self.repo.add(feat)
         self._entity_index += 1
 
+    def _parse_solid(self, e) -> None:
+        """
+        Parse SOLID entity (arrow heads in dimensions).
+
+        SOLID is a 3- or 4-point filled solid stored as vtx0..vtx3.
+        """
+        points = []
+        for attr in ["vtx0", "vtx1", "vtx2", "vtx3"]:
+            if hasattr(e.dxf, attr):
+                pt = getattr(e.dxf, attr)
+                if pt is not None:
+                    points.append((pt.x, pt.y))
+
+        # Deduplicate (vtx2 and vtx3 are often identical for triangles)
+        if len(points) >= 3:
+            # Keep unique points only for the triangle
+            unique_pts = [points[0]]
+            for p in points[1:]:
+                if not any(abs(p[0]-u[0]) < 1e-10 and abs(p[1]-u[1]) < 1e-10 for u in unique_pts):
+                    unique_pts.append(p)
+
+            feat = CADFeature(
+                feature_type=FeatureType.POLYLINE,
+                geometry={"points": unique_pts, "closed": True, "is_solid": True},
+                dxf_handle=e.dxf.handle or f"_solid_{self._entity_index}",
+                layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
+                color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+            )
+            self.repo.add(feat)
+            self._entity_index += 1
+
     def _parse_mtext(self, e) -> None:
+        # MTEXT may have rotation via dxf.rotation or from the extrusion/insert vectors
+        rotation = 0.0
+        if hasattr(e.dxf, "rotation"):
+            rotation = e.dxf.rotation
+        elif hasattr(e.dxf, "insert"):
+            pass
+
         feat = CADFeature(
             feature_type=FeatureType.TEXT,
             geometry={
                 "text": e.text,
                 "x": e.dxf.insert.x, "y": e.dxf.insert.y,
                 "height": e.dxf.char_height if hasattr(e.dxf, "char_height") else 2.5,
+                "rotation": rotation,
             },
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
@@ -240,12 +308,17 @@ class DXFImporter:
         self._entity_index += 1
 
     def _parse_text(self, e) -> None:
+        rotation = 0.0
+        if hasattr(e.dxf, "rotation"):
+            rotation = e.dxf.rotation
+
         feat = CADFeature(
             feature_type=FeatureType.TEXT,
             geometry={
                 "text": e.dxf.text,
                 "x": e.dxf.insert.x, "y": e.dxf.insert.y,
                 "height": e.dxf.height if hasattr(e.dxf, "height") else 2.5,
+                "rotation": rotation,
             },
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",

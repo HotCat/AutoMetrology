@@ -152,6 +152,14 @@ class CADViewerCanvas(QWidget):
             return g.get("points", [])
         elif feat.feature_type == FeatureType.SPLINE:
             return g.get("control_points", []) or g.get("fit_points", [])
+        elif feat.feature_type == FeatureType.TEXT:
+            x, y = g["x"], g["y"]
+            h = g.get("height", 2.5)
+            return [(x, y), (x + h * 3, y + h)]
+        elif feat.feature_type == FeatureType.DIMENSION:
+            return []
+        elif feat.feature_type == FeatureType.POINT:
+            return [(g["x"], g["y"])]
         return []
 
     # ── view controls ──────────────────────────────────────────────
@@ -268,7 +276,14 @@ class CADViewerCanvas(QWidget):
             base_pen.setColor(color)
             base_pen.setWidth(line_w)
             pm_painter.setPen(base_pen)
-            pm_painter.setBrush(Qt.NoBrush)
+            # SOLID (filled polygon from dimension arrows)
+            if (feat.feature_type == FeatureType.POLYLINE
+                    and feat.geometry.get("is_solid", False)):
+                fill_color = QColor(color)
+                fill_color.setAlpha(200)
+                pm_painter.setBrush(QBrush(fill_color))
+            else:
+                pm_painter.setBrush(Qt.NoBrush)
             self._draw_feature_geometry(pm_painter, feat)
 
         pm_painter.end()
@@ -328,6 +343,13 @@ class CADViewerCanvas(QWidget):
 
         elif ftype == FeatureType.SPLINE:
             self._draw_spline(painter, g)
+
+        elif ftype == FeatureType.TEXT:
+            self._draw_text(painter, g)
+
+        elif ftype == FeatureType.POINT:
+            px, py = self._world_to_screen(g["x"], g["y"])
+            painter.drawPoint(QPointF(px, py))
 
     def _draw_arc(self, painter: QPainter, g: dict) -> None:
         """Render an arc."""
@@ -398,6 +420,124 @@ class CADViewerCanvas(QWidget):
         result.append(points[-1])
         return result
 
+    def _draw_text(self, painter: QPainter, g: dict) -> None:
+        """
+        Render TEXT/MTEXT entities.
+
+        Handles:
+          - World-to-screen coordinate transform
+          - Font sizing based on text height and current scale
+          - Rotation (if specified)
+          - DXF text formatting codes (%%c for diameter, \S for superscript, etc.)
+        """
+        raw_text = g.get("text", "")
+        if not raw_text:
+            return
+
+        # Convert DXF text formatting codes to readable text
+        clean_text = self._process_dxf_text_formatting(raw_text)
+
+        # World position
+        wx, wy = g.get("x", 0), g.get("y", 0)
+        sx, sy = self._world_to_screen(wx, wy)
+
+        # Font size: scale text height by current zoom
+        text_height_world = g.get("height", 2.5)
+        text_height_screen = text_height_world * self._scale
+
+        # Clamp to reasonable pixel sizes
+        font_size = max(6, min(text_height_screen, 48))
+
+        font = QFont("Arial", int(font_size))
+        font.setBold(True)
+        painter.setFont(font)
+
+        # Rotation (in degrees, DXF uses counterclockwise from X-axis)
+        rotation = g.get("rotation", 0)
+
+        # Save painter state and apply rotation
+        if rotation != 0:
+            painter.save()
+            # DXF rotation: counterclockwise from X-axis
+            # Qt rotation: clockwise, so negate and adjust for screen Y-flip
+            painter.translate(QPointF(sx, sy))
+            painter.rotate(-rotation)  # Apply rotation
+            painter.drawText(0, 0, clean_text)
+            painter.restore()
+        else:
+            painter.drawText(QPointF(sx, sy), clean_text)
+
+    def _process_dxf_text_formatting(self, text: str) -> str:
+        """
+        Convert DXF text formatting codes to readable Unicode characters.
+
+        Common codes:
+          %%c    → Ø (diameter symbol)
+          %%d    → ° (degree symbol)
+          %%p    → ± (plus-minus tolerance)
+          \S...^... → superscript/subscript tolerance notation
+          \H0.5X  → height scaling (ignored for now)
+          \A1;    → alignment (ignored)
+          \P      → paragraph break → newline
+          \L...\l → underline (stripped)
+          \O...\o → overline (stripped)
+          \K...\k → strikethrough (stripped)
+        """
+        import re
+
+        result = text
+
+        # Special character codes
+        result = result.replace("%%c", "Ø")
+        result = result.replace("%%C", "Ø")
+        result = result.replace("%%d", "°")
+        result = result.replace("%%D", "°")
+        result = result.replace("%%p", "±")
+        result = result.replace("%%P", "±")
+        result = result.replace("%%u", "")
+        result = result.replace("%%U", "")
+
+        # Paragraph break
+        result = result.replace("\\P", "\n")
+        result = result.replace("\\p", "\n")
+
+        # Superscript/subscript tolerance notation: \Svalue^tolerance;
+        # Example: \S-0.01^ 0; → "-0.01/0" (tolerance above/below line)
+        def replace_superscript(match):
+            base = match.group(1).strip()
+            sup = match.group(2).strip()
+            if sup:
+                return f"{base}/{sup}"
+            return base
+
+        # With trailing semicolon
+        result = re.sub(r'\\S([^;^]*?)\^([^;]*?);', replace_superscript, result)
+        # Without trailing semicolon
+        result = re.sub(r'\\S([^;^]*?)\^([^;\\]*)', replace_superscript, result)
+
+        # Remove remaining formatting codes
+        # Height scaling \H...X; or \H...;
+        result = re.sub(r'\\H[\d.]*X;?', '', result)
+        result = re.sub(r'\\H[\d.]*;', '', result)
+        # Alignment \A...;
+        result = re.sub(r'\\A\d;', '', result)
+        # Color \C\d;
+        result = re.sub(r'\\C\d;', '', result)
+        # Font name \F...;
+        result = re.sub(r'\\F[^;]*;', '', result)
+        # Underline, overline, strikethrough (toggle on/off)
+        result = re.sub(r'\\[LlOoKk]', '', result)
+        # Width/tracking \W...\T...
+        result = re.sub(r'\\[WwTt][\d.]*;?', '', result)
+
+        # Remove braces around plain text after formatting codes stripped
+        result = re.sub(r'\{([^}]*)\}', r'\1', result)
+
+        # Remove any remaining backslash sequences
+        result = re.sub(r'\\[^\\;{}]*;?', '', result)
+
+        return result.strip()
+
     def _draw_grid(self, painter: QPainter) -> None:
         """Draw adaptive grid lines."""
         pen = QPen(self._grid_color, 0.5, Qt.DotLine)
@@ -462,6 +602,9 @@ class CADViewerCanvas(QWidget):
             return QColor(45, 45, 60)
         if feat.feature_type == FeatureType.SPLINE:
             return QColor(180, 140, 255)
+        if feat.feature_type == FeatureType.TEXT:
+            # Text/annotations rendered in a warm green-yellow for readability
+            return QColor(170, 220, 120)
         return dxf_colors.get(feat.color % 256, QColor(180, 180, 180))
 
     def _scaled_line_width(self) -> float:
@@ -527,7 +670,7 @@ class CADViewerCanvas(QWidget):
         best_id = None
 
         for feat in self._features:
-            if feat.feature_type in (FeatureType.HATCH, FeatureType.TEXT):
+            if feat.feature_type == FeatureType.HATCH:
                 continue
             # Quick bbox pre-check
             bbox = self._feature_bboxes.get(feat.feature_id)
@@ -584,6 +727,14 @@ class CADViewerCanvas(QWidget):
             for i in range(len(pts) - 1):
                 md = min(md, self._pt_seg_dist(px, py, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]))
             return md
+
+        elif ftype == FeatureType.TEXT:
+            tx, ty = g.get("x", 0), g.get("y", 0)
+            th = g.get("height", 2.5)
+            # Approximate bounding box hit test
+            if abs(px - tx) < th * 3 and abs(py - ty) < th:
+                return math.sqrt((px - tx) ** 2 + (py - ty) ** 2)
+            return float('inf')
 
         return float('inf')
 
