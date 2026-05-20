@@ -1,0 +1,609 @@
+"""
+CADViewerCanvas — high-performance 2D QPainter-based CAD viewer.
+
+Primary rendering backend for the metrology inspection tool.
+Renders DXF geometry (lines, arcs, circles, polylines, splines) using
+QPainter with world-to-screen coordinate transformation.
+
+Performance strategy:
+  - Offscreen pixmap cache for static geometry
+  - Frustum culling: skip offscreen features
+  - Highlighted features rendered on top of cached base
+  - Grid drawn at adaptive spacing
+
+Coordinate System:
+  - World coordinates = DXF units (mm)
+  - Screen coordinates = widget pixels
+  - Transform: screen = (world - offset) * scale + center
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Dict, List, Optional, Set, Tuple
+
+from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF, QSize
+from PySide6.QtGui import (
+    QPainter, QPen, QColor, QBrush, QTransform, QPainterPath,
+    QWheelEvent, QMouseEvent, QFont, QPolygonF, QPixmap,
+)
+from PySide6.QtWidgets import QWidget, QSizePolicy
+
+from ..models.feature import CADFeature, FeatureType
+from ..models.repository import FeatureRepository
+from ..core.signals import bus
+
+
+class CADViewerCanvas(QWidget):
+    """2D CAD viewer using QPainter with pan/zoom/select."""
+
+    feature_clicked = Signal(str)   # feature_id
+
+    def __init__(self, parent=None) -> None:
+        super().__init__(parent)
+        self.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Expanding)
+        self.setMinimumSize(400, 300)
+        self.setMouseTracking(True)
+        self.setFocusPolicy(Qt.StrongFocus)
+
+        # View transform state
+        self._scale = 1.0
+        self._offset_x = 0.0      # world offset (center of view)
+        self._offset_y = 0.0
+        self._panning = False
+        self._last_mouse: Optional[QPoint] = None
+
+        # Data
+        self._features: List[CADFeature] = []
+        self._feature_map: Dict[str, CADFeature] = {}
+        self._highlighted_ids: Set[str] = set()
+
+        # Pixmap cache for base geometry
+        self._cache_pixmap: Optional[QPixmap] = None
+        self._cache_key: Optional[Tuple[float, float, float, int, int]] = None
+        self._cache_dirty = True
+
+        # Rendering settings
+        self._bg_color = QColor(18, 18, 26)
+        self._default_pen = QPen(QColor(200, 200, 200), 1.0)
+        self._highlight_pen = QPen(QColor(0, 220, 255), 3.5)
+        self._highlight_pen_outer = QPen(QColor(0, 140, 200, 100), 7.0)
+        self._highlight_fill = QColor(0, 220, 255, 30)
+        self._grid_color = QColor(40, 40, 52)
+
+        # Bounding box for fit-all
+        self._bbox_min = (0.0, 0.0)
+        self._bbox_max = (1.0, 1.0)
+
+        # World-space bounding boxes per feature for culling
+        self._feature_bboxes: Dict[str, Tuple[float, float, float, float]] = {}
+
+        # Connect signals
+        bus.highlight_feature.connect(self._on_highlight_feature)
+        bus.unhighlight_all.connect(self._on_unhighlight_all)
+        bus.view_fit_all.connect(self.fit_all)
+        bus.view_fit_feature.connect(self._on_fit_feature)
+
+    # ── coordinate transforms ──────────────────────────────────────
+
+    def _world_to_screen(self, wx: float, wy: float) -> Tuple[float, float]:
+        """Convert world (DXF mm) to screen (pixel) coordinates."""
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        sx = (wx - self._offset_x) * self._scale + cx
+        sy = -(wy - self._offset_y) * self._scale + cy
+        return sx, sy
+
+    def _screen_to_world(self, sx: float, sy: float) -> Tuple[float, float]:
+        """Convert screen (pixel) to world (DXF mm) coordinates."""
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        wx = (sx - cx) / self._scale + self._offset_x
+        wy = -((sy - cy) / self._scale) + self._offset_y
+        return wx, wy
+
+    # ── data loading ───────────────────────────────────────────────
+
+    def load_repository(self, repo: FeatureRepository) -> None:
+        """Load features from repository and fit view."""
+        self._features = repo.all_features()
+        self._feature_map = {f.feature_id: f for f in self._features}
+        self._compute_bounding_boxes()
+        self._cache_dirty = True
+        self.fit_all()
+
+    def _compute_bounding_boxes(self) -> None:
+        """Compute per-feature and global bounding boxes."""
+        gmin_x, gmin_y = float('inf'), float('inf')
+        gmax_x, gmax_y = float('-inf'), float('-inf')
+
+        for feat in self._features:
+            pts = self._feature_points(feat)
+            if pts:
+                fmin_x = min(p[0] for p in pts)
+                fmin_y = min(p[1] for p in pts)
+                fmax_x = max(p[0] for p in pts)
+                fmax_y = max(p[1] for p in pts)
+                self._feature_bboxes[feat.feature_id] = (fmin_x, fmin_y, fmax_x, fmax_y)
+                gmin_x = min(gmin_x, fmin_x)
+                gmin_y = min(gmin_y, fmin_y)
+                gmax_x = max(gmax_x, fmax_x)
+                gmax_y = max(gmax_y, fmax_y)
+
+        if gmin_x == float('inf'):
+            gmin_x, gmin_y, gmax_x, gmax_y = 0, 0, 210, 297
+
+        pad = max(gmax_x - gmin_x, gmax_y - gmin_y) * 0.03
+        self._bbox_min = (gmin_x - pad, gmin_y - pad)
+        self._bbox_max = (gmax_x + pad, gmax_y + pad)
+
+    def _feature_points(self, feat: CADFeature) -> List[Tuple[float, float]]:
+        """Extract bounding-relevant points from a feature."""
+        g = feat.geometry
+        if feat.feature_type == FeatureType.LINE:
+            return [(g["x1"], g["y1"]), (g["x2"], g["y2"])]
+        elif feat.feature_type == FeatureType.CIRCLE:
+            cx, cy, r = g["cx"], g["cy"], g["radius"]
+            return [(cx - r, cy - r), (cx + r, cy + r)]
+        elif feat.feature_type == FeatureType.ARC:
+            cx, cy, r = g["cx"], g["cy"], g["radius"]
+            return [(cx - r, cy - r), (cx + r, cy + r)]
+        elif feat.feature_type == FeatureType.POLYLINE:
+            return g.get("points", [])
+        elif feat.feature_type == FeatureType.SPLINE:
+            return g.get("control_points", []) or g.get("fit_points", [])
+        return []
+
+    # ── view controls ──────────────────────────────────────────────
+
+    def fit_all(self) -> None:
+        w = self.width()
+        h = self.height()
+        if w == 0 or h == 0:
+            return
+        dx = self._bbox_max[0] - self._bbox_min[0]
+        dy = self._bbox_max[1] - self._bbox_min[1]
+        if dx == 0 or dy == 0:
+            return
+        self._scale = min((w * 0.92) / dx, (h * 0.92) / dy)
+        self._offset_x = (self._bbox_min[0] + self._bbox_max[0]) / 2.0
+        self._offset_y = (self._bbox_min[1] + self._bbox_max[1]) / 2.0
+        self._cache_dirty = True
+        self.update()
+
+    def _on_fit_feature(self, feature_id: str) -> None:
+        """Zoom to fit a specific feature with generous padding."""
+        bbox = self._feature_bboxes.get(feature_id)
+        if not bbox:
+            return
+        fmin_x, fmin_y, fmax_x, fmax_y = bbox
+        pad = max(fmax_x - fmin_x, fmax_y - fmin_y) * 5.0
+        if pad < 5.0:
+            pad = 30.0
+
+        dx = (fmax_x - fmin_x) + pad * 2
+        dy = (fmax_y - fmin_y) + pad * 2
+        w, h = self.width(), self.height()
+        self._scale = min((w * 0.8) / dx, (h * 0.8) / dy)
+        self._offset_x = (fmin_x + fmax_x) / 2.0
+        self._offset_y = (fmin_y + fmax_y) / 2.0
+        self._cache_dirty = True
+        self.update()
+
+    # ── frustum culling ────────────────────────────────────────────
+
+    def _is_visible(self, bbox: Tuple[float, float, float, float]) -> bool:
+        """Check if a world-space bbox overlaps the visible viewport."""
+        wl, wt = self._screen_to_world(0, 0)
+        wr, wb = self._screen_to_world(self.width(), self.height())
+        vmin_x, vmax_x = min(wl, wr), max(wl, wr)
+        vmin_y, vmax_y = min(wt, wb), max(wt, wb)
+
+        bmin_x, bmin_y, bmax_x, bmax_y = bbox
+        return bmax_x >= vmin_x and bmin_x <= vmax_x and bmax_y >= vmin_y and bmin_y <= vmax_y
+
+    # ── painting ───────────────────────────────────────────────────
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        painter.setRenderHint(QPainter.TextAntialiasing, True)
+
+        # Background
+        painter.fillRect(self.rect(), self._bg_color)
+
+        # Grid (lightweight, drawn every frame)
+        self._draw_grid(painter)
+
+        # Base geometry — from cache or rendered fresh
+        self._render_base(painter)
+
+        # Highlighted features drawn on top with glow effect
+        if self._highlighted_ids:
+            for fid in self._highlighted_ids:
+                feat = self._feature_map.get(fid)
+                if feat:
+                    self._draw_feature(painter, feat, highlighted=True)
+
+        # Origin marker
+        self._draw_origin_marker(painter)
+
+        # Coordinate info
+        self._draw_info_overlay(painter)
+
+        painter.end()
+
+    def _render_base(self, painter: QPainter) -> None:
+        """Render base geometry, using pixmap cache when possible."""
+        # Check if cache is valid
+        current_key = (
+            round(self._offset_x, 2), round(self._offset_y, 2),
+            round(self._scale, 4), self.width(), self.height()
+        )
+
+        if not self._cache_dirty and self._cache_key == current_key and self._cache_pixmap:
+            painter.drawPixmap(0, 0, self._cache_pixmap)
+            return
+
+        # Render to offscreen pixmap
+        pm = QPixmap(self.size())
+        pm.fill(Qt.transparent)
+        pm_painter = QPainter(pm)
+        pm_painter.setRenderHint(QPainter.Antialiasing, True)
+
+        line_w = self._scaled_line_width()
+        base_pen = QPen(QColor(200, 200, 200), line_w)
+
+        for feat in self._features:
+            fid = feat.feature_id
+            # Skip highlighted (drawn separately on top)
+            if fid in self._highlighted_ids:
+                continue
+            # Frustum culling
+            bbox = self._feature_bboxes.get(fid)
+            if bbox and not self._is_visible(bbox):
+                continue
+
+            color = self._feature_color(feat)
+            base_pen.setColor(color)
+            base_pen.setWidth(line_w)
+            pm_painter.setPen(base_pen)
+            pm_painter.setBrush(Qt.NoBrush)
+            self._draw_feature_geometry(pm_painter, feat)
+
+        pm_painter.end()
+
+        # Save cache
+        self._cache_pixmap = pm
+        self._cache_key = current_key
+        self._cache_dirty = False
+
+        painter.drawPixmap(0, 0, pm)
+
+    def _draw_feature(self, painter: QPainter, feat: CADFeature, highlighted: bool = False) -> None:
+        """Render a single feature with optional highlight effect."""
+        if highlighted:
+            # Outer glow
+            painter.setPen(self._highlight_pen_outer)
+            painter.setBrush(Qt.NoBrush)
+            self._draw_feature_geometry(painter, feat)
+
+            # Inner bright line
+            painter.setPen(self._highlight_pen)
+            painter.setBrush(QBrush(self._highlight_fill))
+            self._draw_feature_geometry(painter, feat)
+        else:
+            color = self._feature_color(feat)
+            painter.setPen(QPen(color, self._scaled_line_width()))
+            painter.setBrush(Qt.NoBrush)
+            self._draw_feature_geometry(painter, feat)
+
+    def _draw_feature_geometry(self, painter: QPainter, feat: CADFeature) -> None:
+        """Render just the geometry paths (no pen/brush setup)."""
+        g = feat.geometry
+        ftype = feat.feature_type
+
+        if ftype == FeatureType.LINE:
+            x1, y1 = self._world_to_screen(g["x1"], g["y1"])
+            x2, y2 = self._world_to_screen(g["x2"], g["y2"])
+            painter.drawLine(QPointF(x1, y1), QPointF(x2, y2))
+
+        elif ftype == FeatureType.CIRCLE:
+            cx, cy = self._world_to_screen(g["cx"], g["cy"])
+            r = g["radius"] * self._scale
+            painter.drawEllipse(QPointF(cx, cy), r, r)
+
+        elif ftype == FeatureType.ARC:
+            self._draw_arc(painter, g)
+
+        elif ftype == FeatureType.POLYLINE:
+            pts = g.get("points", [])
+            if len(pts) >= 2:
+                screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in pts]
+                if g.get("closed", False) and len(screen_pts) > 2:
+                    painter.drawPolygon(QPolygonF(screen_pts))
+                else:
+                    for i in range(len(screen_pts) - 1):
+                        painter.drawLine(screen_pts[i], screen_pts[i + 1])
+
+        elif ftype == FeatureType.SPLINE:
+            self._draw_spline(painter, g)
+
+    def _draw_arc(self, painter: QPainter, g: dict) -> None:
+        """Render an arc."""
+        if g.get("is_ellipse"):
+            return
+
+        cx, cy = self._world_to_screen(g["cx"], g["cy"])
+        r = g["radius"] * self._scale
+        start_deg = g["start_angle"]
+        end_deg = g["end_angle"]
+        span = end_deg - start_deg
+        if span < 0:
+            span += 360
+
+        rect = QRectF(cx - r, cy - r, 2 * r, 2 * r)
+        path = QPainterPath()
+        path.arcMoveTo(rect, -start_deg)
+        path.arcTo(rect, -start_deg, -span)
+        painter.drawPath(path)
+
+    def _draw_spline(self, painter: QPainter, g: dict) -> None:
+        """Render a spline by evaluating it as polyline approximation."""
+        ctrl_pts = g.get("control_points", [])
+        fit_pts = g.get("fit_points", [])
+        eval_pts = fit_pts if fit_pts else ctrl_pts
+        if len(eval_pts) < 2:
+            return
+
+        pts = self._interpolate_spline(eval_pts, g.get("degree", 3))
+        screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in pts]
+        if len(screen_pts) >= 2:
+            path = QPainterPath()
+            path.moveTo(screen_pts[0])
+            for sp in screen_pts[1:]:
+                path.lineTo(sp)
+            painter.drawPath(path)
+
+    def _interpolate_spline(self, points: list, degree: int) -> list:
+        """Catmull-Rom spline interpolation through control points."""
+        if len(points) < 3 or degree < 3:
+            return points
+
+        result = []
+        n = len(points)
+        segments_per_span = 12
+        for i in range(n - 1):
+            p0 = points[max(i - 1, 0)]
+            p1 = points[i]
+            p2 = points[min(i + 1, n - 1)]
+            p3 = points[min(i + 2, n - 1)]
+
+            for s in range(segments_per_span):
+                t = s / segments_per_span
+                t2, t3 = t * t, t * t * t
+                x = 0.5 * (
+                    (2 * p1[0]) +
+                    (-p0[0] + p2[0]) * t +
+                    (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t2 +
+                    (-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t3
+                )
+                y = 0.5 * (
+                    (2 * p1[1]) +
+                    (-p0[1] + p2[1]) * t +
+                    (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t2 +
+                    (-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t3
+                )
+                result.append((x, y))
+        result.append(points[-1])
+        return result
+
+    def _draw_grid(self, painter: QPainter) -> None:
+        """Draw adaptive grid lines."""
+        pen = QPen(self._grid_color, 0.5, Qt.DotLine)
+        painter.setPen(pen)
+
+        base_spacing = 10.0
+        if self._scale > 0:
+            pixel_spacing = base_spacing * self._scale
+            while pixel_spacing < 40:
+                base_spacing *= 2
+                pixel_spacing = base_spacing * self._scale
+            while pixel_spacing > 160:
+                base_spacing /= 2
+                pixel_spacing = base_spacing * self._scale
+
+        wl, wt = self._screen_to_world(0, 0)
+        wr, wb = self._screen_to_world(self.width(), self.height())
+        vmin_x, vmax_x = min(wl, wr), max(wl, wr)
+        vmin_y, vmax_y = min(wt, wb), max(wt, wb)
+
+        x = math.floor(vmin_x / base_spacing) * base_spacing
+        while x <= vmax_x:
+            sx, _ = self._world_to_screen(x, 0)
+            painter.drawLine(QPointF(sx, 0), QPointF(sx, self.height()))
+            x += base_spacing
+
+        y = math.floor(vmin_y / base_spacing) * base_spacing
+        while y <= vmax_y:
+            _, sy = self._world_to_screen(0, y)
+            painter.drawLine(QPointF(0, sy), QPointF(self.width(), sy))
+            y += base_spacing
+
+    def _draw_origin_marker(self, painter: QPainter) -> None:
+        sx, sy = self._world_to_screen(0, 0)
+        pen = QPen(QColor(100, 60, 60), 1)
+        painter.setPen(pen)
+        painter.drawLine(QPointF(sx - 10, sy), QPointF(sx + 10, sy))
+        pen.setColor(QColor(60, 100, 60))
+        painter.setPen(pen)
+        painter.drawLine(QPointF(sx, sy - 10), QPointF(sx, sy + 10))
+
+    def _draw_info_overlay(self, painter: QPainter) -> None:
+        """Draw zoom level and cursor coordinates overlay."""
+        font = QFont("Monospace", 9)
+        painter.setFont(font)
+        painter.setPen(QColor(120, 120, 140))
+        zoom_pct = self._scale * 100
+        painter.drawText(10, self.height() - 10, f"Zoom: {zoom_pct:.0f}%")
+
+    def _feature_color(self, feat: CADFeature) -> QColor:
+        dxf_colors = {
+            0: QColor(180, 180, 180),
+            1: QColor(255, 60, 60),
+            2: QColor(255, 255, 60),
+            3: QColor(60, 255, 60),
+            4: QColor(60, 255, 255),
+            5: QColor(60, 100, 255),
+            6: QColor(255, 60, 255),
+            7: QColor(180, 180, 180),
+        }
+        if feat.feature_type == FeatureType.HATCH:
+            return QColor(45, 45, 60)
+        if feat.feature_type == FeatureType.SPLINE:
+            return QColor(180, 140, 255)
+        return dxf_colors.get(feat.color % 256, QColor(180, 180, 180))
+
+    def _scaled_line_width(self) -> float:
+        return max(0.7, min(1.5, 1.0))
+
+    # ── mouse interaction ──────────────────────────────────────────
+
+    def mousePressEvent(self, event: QMouseEvent) -> None:
+        self._last_mouse = event.pos()
+        if event.button() == Qt.LeftButton:
+            hit_id = self._hit_test(event.pos())
+            if hit_id:
+                self.feature_clicked.emit(hit_id)
+                bus.highlight_feature.emit(hit_id)
+                bus.property_update.emit({"feature_id": hit_id})
+            else:
+                bus.feature_deselected.emit()
+                bus.unhighlight_all.emit()
+        elif event.button() in (Qt.MiddleButton, Qt.RightButton):
+            self._panning = True
+            self.setCursor(Qt.ClosedHandCursor)
+
+    def mouseReleaseEvent(self, event: QMouseEvent) -> None:
+        self._panning = False
+        self.setCursor(Qt.ArrowCursor)
+        self._last_mouse = None
+
+    def mouseMoveEvent(self, event: QMouseEvent) -> None:
+        if self._panning and self._last_mouse:
+            dx = event.x() - self._last_mouse.x()
+            dy = event.y() - self._last_mouse.y()
+            self._offset_x -= dx / self._scale
+            self._offset_y += dy / self._scale
+            self._last_mouse = event.pos()
+            self._cache_dirty = True
+            self.update()
+
+    def wheelEvent(self, event: QWheelEvent) -> None:
+        angle = event.angleDelta().y()
+        factor = 1.15 if angle > 0 else 1.0 / 1.15
+
+        mx, my = event.position().x(), event.position().y()
+        wx, wy = self._screen_to_world(mx, my)
+
+        self._scale *= factor
+
+        cx = self.width() / 2.0
+        cy = self.height() / 2.0
+        self._offset_x = wx - (mx - cx) / self._scale
+        self._offset_y = wy + (my - cy) / self._scale
+
+        self._cache_dirty = True
+        self.update()
+
+    # ── hit testing ────────────────────────────────────────────────
+
+    def _hit_test(self, pos: QPoint) -> Optional[str]:
+        """Find the closest feature to a screen point."""
+        wx, wy = self._screen_to_world(pos.x(), pos.y())
+        hit_radius = 5.0 / self._scale
+
+        best_dist = float('inf')
+        best_id = None
+
+        for feat in self._features:
+            if feat.feature_type in (FeatureType.HATCH, FeatureType.TEXT):
+                continue
+            # Quick bbox pre-check
+            bbox = self._feature_bboxes.get(feat.feature_id)
+            if bbox:
+                bmin_x, bmin_y, bmax_x, bmax_y = bbox
+                # Expand bbox by hit radius for pre-filter
+                if wx < bmin_x - hit_radius or wx > bmax_x + hit_radius:
+                    continue
+                if wy < bmin_y - hit_radius or wy > bmax_y + hit_radius:
+                    continue
+
+            dist = self._point_to_feature_distance(wx, wy, feat)
+            if dist < hit_radius and dist < best_dist:
+                best_dist = dist
+                best_id = feat.feature_id
+
+        return best_id
+
+    def _point_to_feature_distance(self, px: float, py: float, feat: CADFeature) -> float:
+        """Minimum distance from point to feature geometry."""
+        g = feat.geometry
+        ftype = feat.feature_type
+
+        if ftype == FeatureType.LINE:
+            return self._pt_seg_dist(px, py, g["x1"], g["y1"], g["x2"], g["y2"])
+
+        elif ftype == FeatureType.CIRCLE:
+            d = math.sqrt((px - g["cx"]) ** 2 + (py - g["cy"]) ** 2)
+            return abs(d - g["radius"])
+
+        elif ftype == FeatureType.ARC:
+            dx, dy = px - g["cx"], py - g["cy"]
+            d = math.sqrt(dx * dx + dy * dy)
+            a = math.degrees(math.atan2(dy, dx)) % 360
+            s = g["start_angle"] % 360
+            e = g["end_angle"] % 360
+            in_range = s <= a <= e if s <= e else (a >= s or a <= e)
+            return abs(d - g["radius"]) if in_range else float('inf')
+
+        elif ftype == FeatureType.POLYLINE:
+            pts = g.get("points", [])
+            md = float('inf')
+            for i in range(len(pts) - 1):
+                md = min(md, self._pt_seg_dist(px, py, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]))
+            if g.get("closed") and len(pts) > 2:
+                md = min(md, self._pt_seg_dist(px, py, pts[-1][0], pts[-1][1], pts[0][0], pts[0][1]))
+            return md
+
+        elif ftype == FeatureType.SPLINE:
+            pts = g.get("control_points", []) or g.get("fit_points", [])
+            if len(pts) < 2:
+                return float('inf')
+            md = float('inf')
+            for i in range(len(pts) - 1):
+                md = min(md, self._pt_seg_dist(px, py, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]))
+            return md
+
+        return float('inf')
+
+    @staticmethod
+    def _pt_seg_dist(px, py, x1, y1, x2, y2) -> float:
+        dx, dy = x2 - x1, y2 - y1
+        len_sq = dx * dx + dy * dy
+        if len_sq < 1e-12:
+            return math.sqrt((px - x1) ** 2 + (py - y1) ** 2)
+        t = max(0, min(1, ((px - x1) * dx + (py - y1) * dy) / len_sq))
+        return math.sqrt((px - x1 - t * dx) ** 2 + (py - y1 - t * dy) ** 2)
+
+    # ── signal handlers ────────────────────────────────────────────
+
+    def _on_highlight_feature(self, feature_id: str) -> None:
+        self._highlighted_ids = {feature_id}
+        self._on_fit_feature(feature_id)
+        self.update()
+
+    def _on_unhighlight_all(self) -> None:
+        self._highlighted_ids.clear()
+        self._cache_dirty = True
+        self.update()

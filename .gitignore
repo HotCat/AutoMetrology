@@ -1,0 +1,14 @@
+# Editor artifacts
+*~
+\#*\#
+.#*
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+
+# Large binary DXF/PDF (test data, not source)
+# H89.dxf
+# H89.pdf
