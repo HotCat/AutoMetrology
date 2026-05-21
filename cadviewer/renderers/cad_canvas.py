@@ -155,7 +155,8 @@ class CADViewerCanvas(QWidget):
         elif feat.feature_type == FeatureType.TEXT:
             x, y = g["x"], g["y"]
             h = g.get("height", 2.5)
-            return [(x, y), (x + h * 3, y + h)]
+            # Generous bbox to avoid pre-filter false negatives
+            return [(x - h, y - h), (x + h * 10, y + h * 2)]
         elif feat.feature_type == FeatureType.DIMENSION:
             return []
         elif feat.feature_type == FeatureType.POINT:
@@ -682,14 +683,14 @@ class CADViewerCanvas(QWidget):
                 if wy < bmin_y - hit_radius or wy > bmax_y + hit_radius:
                     continue
 
-            dist = self._point_to_feature_distance(wx, wy, feat)
+            dist = self._point_to_feature_distance(wx, wy, feat, hit_radius)
             if dist < hit_radius and dist < best_dist:
                 best_dist = dist
                 best_id = feat.feature_id
 
         return best_id
 
-    def _point_to_feature_distance(self, px: float, py: float, feat: CADFeature) -> float:
+    def _point_to_feature_distance(self, px: float, py: float, feat: CADFeature, hit_radius: float = 5.0) -> float:
         """Minimum distance from point to feature geometry."""
         g = feat.geometry
         ftype = feat.feature_type
@@ -731,9 +732,12 @@ class CADViewerCanvas(QWidget):
         elif ftype == FeatureType.TEXT:
             tx, ty = g.get("x", 0), g.get("y", 0)
             th = g.get("height", 2.5)
-            # Approximate bounding box hit test
-            if abs(px - tx) < th * 3 and abs(py - ty) < th:
-                return math.sqrt((px - tx) ** 2 + (py - ty) ** 2)
+            # Generous hit area: text height + hit_radius, scaled wider for typical text width
+            hit_margin = hit_radius * 2.0
+            text_width_est = th * 5.0
+            if abs(px - tx) < (text_width_est + hit_margin) and abs(py - ty) < (th + hit_margin):
+                # Return tiny distance so text wins over nearby geometry
+                return 0.001
             return float('inf')
 
         return float('inf')
@@ -751,7 +755,7 @@ class CADViewerCanvas(QWidget):
 
     def _on_highlight_feature(self, feature_id: str) -> None:
         self._highlighted_ids = {feature_id}
-        self._on_fit_feature(feature_id)
+        self._cache_dirty = True
         self.update()
 
     def _on_unhighlight_all(self) -> None:
