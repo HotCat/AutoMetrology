@@ -34,6 +34,7 @@ from ..renderers.cad_canvas import CADViewerCanvas
 from ..ui.tree_panel import FeatureTreePanel
 from ..ui.property_panel import PropertyPanel
 from ..ui.registration_panel import RegistrationPanel
+from ..ui.query_panel import QueryPanel
 from ..registration.pipeline import RegistrationPipeline
 from ..core.signals import bus
 
@@ -156,6 +157,11 @@ class MainWindow(QMainWindow):
         reg_panel_action.toggled.connect(self._toggle_reg_panel)
         view_menu.addAction(reg_panel_action)
         self._reg_panel_action = reg_panel_action
+        query_panel_action = QAction("Query Panel", self)
+        query_panel_action.setCheckable(True)
+        query_panel_action.toggled.connect(self._toggle_query_panel)
+        view_menu.addAction(query_panel_action)
+        self._query_panel_action = query_panel_action
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -186,6 +192,15 @@ class MainWindow(QMainWindow):
 
         # Store reference for toolbar toggle
         self._reg_dock = reg_dock
+
+        # Query panel
+        self._query_panel = QueryPanel()
+        query_dock = QDockWidget("Measurement Queries", self)
+        query_dock.setWidget(self._query_panel)
+        query_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea | Qt.BottomDockWidgetArea)
+        self.addDockWidget(Qt.BottomDockWidgetArea, query_dock)
+        query_dock.hide()
+        self._query_dock = query_dock
 
     def _connect_signals(self) -> None:
         """Connect signals between components."""
@@ -284,6 +299,12 @@ class MainWindow(QMainWindow):
             self._reg_dock.show()
         else:
             self._reg_dock.hide()
+
+    def _toggle_query_panel(self, checked: bool) -> None:
+        if checked:
+            self._query_dock.show()
+        else:
+            self._query_dock.hide()
 
     def _show_about(self) -> None:
         QMessageBox.about(
