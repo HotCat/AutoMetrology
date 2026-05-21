@@ -1,0 +1,154 @@
+"""
+ImageLayerRenderer — displays a telecentric product image as canvas background.
+
+Loads PNG/BMP/TIF images via OpenCV, converts to QImage for QPainter,
+and renders with an affine transform (pixel → world coords) and adjustable
+opacity. The image is drawn under the CAD geometry as a reference layer.
+"""
+
+from __future__ import annotations
+
+import math
+from typing import Optional, Tuple
+
+import numpy as np
+from PySide6.QtCore import Qt, QPointF, QRectF
+from PySide6.QtGui import (
+    QImage, QPainter, QPixmap, QTransform, QColor, QPen,
+)
+
+try:
+    import cv2
+    HAS_CV2 = True
+except ImportError:
+    HAS_CV2 = False
+
+
+class ImageLayerRenderer:
+    """Renders a telecentric image as background under CAD geometry."""
+
+    def __init__(self) -> None:
+        self._image: Optional[np.ndarray] = None
+        self._qimage: Optional[QImage] = None
+        self._affine: np.ndarray = np.eye(3, dtype=np.float64)
+        self._visible: bool = True
+        self._opacity: float = 0.6
+        self._path: str = ""
+        self._pixel_size_mm: float = 0.01
+        self._cached_pixmap: Optional[QPixmap] = None
+        self._cache_dirty: bool = True
+
+    def load_image(self, path: str) -> bool:
+        """Load image from file (PNG/BMP/TIF)."""
+        if not HAS_CV2:
+            return False
+        img = cv2.imread(path, cv2.IMREAD_COLOR)
+        if img is None:
+            return False
+        self._image = img
+        self._path = path
+        self._qimage = self._numpy_to_qimage(img)
+        self._cache_dirty = True
+        return True
+
+    def set_affine_transform(self, matrix: np.ndarray) -> None:
+        """Set 3x3 affine matrix (pixel → world)."""
+        self._affine = matrix.copy()
+        self._cache_dirty = True
+
+    def set_pixel_size_mm(self, size: float) -> None:
+        """Set pixel size for initial placement."""
+        self._pixel_size_mm = size
+
+    def set_opacity(self, opacity: float) -> None:
+        """Set image opacity (0.0 to 1.0)."""
+        self._opacity = max(0.0, min(1.0, opacity))
+        self._cache_dirty = True
+
+    def set_visible(self, visible: bool) -> None:
+        self._visible = visible
+
+    @property
+    def visible(self) -> bool:
+        return self._visible
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def has_image(self) -> bool:
+        return self._image is not None
+
+    @property
+    def image_size(self) -> Tuple[int, int]:
+        if self._image is None:
+            return (0, 0)
+        h, w = self._image.shape[:2]
+        return (w, h)
+
+    def draw_image(
+        self,
+        painter: QPainter,
+        world_to_screen_fn,
+        widget_width: int,
+        widget_height: int,
+    ) -> None:
+        """Draw the image transformed onto the canvas."""
+        if not self._visible or self._qimage is None:
+            return
+
+        img_w, img_h = self.image_size
+
+        # Get 4 image corners in world coords
+        corners_pixel = np.array([
+            [0, 0], [img_w, 0], [img_w, img_h], [0, img_h]
+        ], dtype=np.float64)
+
+        # Apply affine: pixel → world
+        from ..registration.affine_solver import apply
+        corners_world = apply(self._affine, corners_pixel)
+
+        # Convert to screen coords
+        corners_screen = [
+            world_to_screen_fn(c[0], c[1]) for c in corners_world
+        ]
+
+        # Use QPainter transform to map image
+        painter.save()
+        painter.setOpacity(self._opacity)
+
+        # Build a QTransform from the quadrilateral mapping
+        # Source: image corners (0,0), (w,0), (0,h)
+        # Target: screen coords of first 3 corners
+        sx1, sy1 = corners_screen[0]
+        sx2, sy2 = corners_screen[1]
+        sx3, sy3 = corners_screen[3]
+
+        transform = QTransform()
+        # Map (0,0)->(sx1,sy1), (img_w,0)->(sx2,sy2), (0,img_h)->(sx3,sy3)
+        transform.setMatrix(
+            (sx2 - sx1) / img_w if img_w else 1,
+            (sy2 - sy1) / img_w if img_w else 0,
+            0,
+            (sx3 - sx1) / img_h if img_h else 0,
+            (sy3 - sy1) / img_h if img_h else 1,
+            0,
+            sx1, sy1, 1,
+        )
+
+        painter.setTransform(transform, True)
+        painter.drawImage(QPointF(0, 0), self._qimage)
+        painter.restore()
+
+    @staticmethod
+    def _numpy_to_qimage(img: np.ndarray) -> QImage:
+        """Convert OpenCV BGR numpy array to QImage."""
+        h, w = img.shape[:2]
+        if len(img.shape) == 2:
+            # Grayscale
+            return QImage(img.data, w, h, w, QImage.Format_Grayscale8).copy()
+        else:
+            # BGR → RGB
+            rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+            return QImage(rgb.data, w, h, 3 * w, QImage.Format_RGB888).copy()

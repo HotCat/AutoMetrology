@@ -26,6 +26,7 @@ from ..models.feature import FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationGroup, RegistrationManager
 from ..core.signals import bus
+from .image_load_dialog import ImageLoadDialog
 
 
 class RegistrationPanel(QWidget):
@@ -171,6 +172,60 @@ class RegistrationPanel(QWidget):
             stats_layout.addRow(lbl, widget)
 
         layout.addWidget(stats_group)
+
+        # ── Image Registration section ──
+        reg_group = QGroupBox("Image Registration")
+        reg_group.setStyleSheet("""
+            QGroupBox {
+                color: #aaa; font-weight: bold; font-size: 11px;
+                border: 1px solid #333; border-radius: 4px;
+                margin-top: 8px; padding-top: 14px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; left: 8px; padding: 0 4px;
+            }
+        """)
+        reg_layout = QVBoxLayout(reg_group)
+
+        self._btn_load_image = QPushButton("Load Image...")
+        self._btn_load_image.clicked.connect(self._load_image)
+        self._btn_load_image.setStyleSheet("""
+            QPushButton {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px 10px; border-radius: 3px;
+            }
+            QPushButton:hover { background: #444; }
+        """)
+        reg_layout.addWidget(self._btn_load_image)
+
+        self._image_path_label = QLabel("No image loaded")
+        self._image_path_label.setStyleSheet("color: #666; font-size: 10px;")
+        reg_layout.addWidget(self._image_path_label)
+
+        self._btn_run_coarse = QPushButton("Coarse Registration")
+        self._btn_run_coarse.clicked.connect(self._run_coarse)
+        self._btn_run_fine = QPushButton("Fine Registration (ICP)")
+        self._btn_run_fine.clicked.connect(self._run_fine)
+        self._btn_run_full = QPushButton("Full Registration")
+        self._btn_run_full.clicked.connect(self._run_full)
+
+        for btn in [self._btn_run_coarse, self._btn_run_fine, self._btn_run_full]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #264f78; color: white; border: none;
+                    padding: 4px 8px; border-radius: 3px; font-size: 11px;
+                }
+                QPushButton:hover { background: #306898; }
+                QPushButton:disabled { background: #333; color: #666; }
+            """)
+            btn.setEnabled(False)
+            reg_layout.addWidget(btn)
+
+        self._reg_status = QLabel("—")
+        self._reg_status.setStyleSheet("color: #aaa; font-size: 10px;")
+        reg_layout.addWidget(self._reg_status)
+
+        layout.addWidget(reg_group)
 
         # Zoom button
         self._btn_zoom = QPushButton("Zoom to Group")
@@ -367,3 +422,103 @@ class RegistrationPanel(QWidget):
         self._manager.set_repository(repo)
         self._refresh_group_list()
         self._refresh_feature_list()
+
+    # ── image registration ────────────────────────────────────────
+
+    def set_pipeline(self, pipeline) -> None:
+        """Set the registration pipeline (from MainWindow)."""
+        self._pipeline = pipeline
+
+    def _load_image(self) -> None:
+        dialog = ImageLoadDialog(self)
+        if dialog.exec() == ImageLoadDialog.Accepted:
+            path, pixel_size = dialog.get_values()
+            if path and hasattr(self, '_canvas'):
+                self._canvas.get_image_layer().load_image(path)
+                self._canvas.get_image_layer().set_pixel_size_mm(pixel_size)
+                self._image_path_label.setText(path.split('/')[-1])
+                self._pixel_size_mm = pixel_size
+                self._btn_run_coarse.setEnabled(True)
+                self._btn_run_fine.setEnabled(False)
+                self._btn_run_full.setEnabled(True)
+                self._reg_status.setText("Image loaded. Ready for registration.")
+                self._canvas.update()
+                bus.image_loaded.emit(path)
+
+    def _run_coarse(self) -> None:
+        group = self._get_selected_group()
+        if not group:
+            self._reg_status.setText("Error: select a group first")
+            return
+        if not hasattr(self, '_pipeline'):
+            self._reg_status.setText("Error: pipeline not initialized")
+            return
+        try:
+            result = self._pipeline.run_coarse(
+                self._canvas.get_image_layer().path,
+                group.group_id,
+                self._pixel_size_mm,
+            )
+            T = result["transform"]
+            self._canvas.get_image_layer().set_affine_transform(T)
+            self._canvas.update()
+            self._reg_status.setText(
+                f"Coarse: error={result['error']:.4f}mm"
+            )
+            self._coarse_transform = T
+            self._btn_run_fine.setEnabled(True)
+            bus.registration_completed.emit(result)
+        except Exception as e:
+            self._reg_status.setText(f"Error: {e}")
+            bus.registration_failed.emit(str(e))
+
+    def _run_fine(self) -> None:
+        group = self._get_selected_group()
+        if not group:
+            return
+        if not hasattr(self, '_pipeline') or not hasattr(self, '_coarse_transform'):
+            return
+        try:
+            result = self._pipeline.run_fine(
+                self._coarse_transform, group.group_id,
+            )
+            T = result["transform"]
+            self._canvas.get_image_layer().set_affine_transform(T)
+            self._canvas.update()
+            self._reg_status.setText(
+                f"Fine: iters={result['iterations']}, "
+                f"error={result['error']:.4f}mm, "
+                f"converged={result.get('converged', False)}"
+            )
+            bus.registration_completed.emit(result)
+        except Exception as e:
+            self._reg_status.setText(f"Error: {e}")
+            bus.registration_failed.emit(str(e))
+
+    def _run_full(self) -> None:
+        group = self._get_selected_group()
+        if not group:
+            self._reg_status.setText("Error: select a group first")
+            return
+        if not hasattr(self, '_pipeline'):
+            return
+        try:
+            result = self._pipeline.run_full(
+                self._canvas.get_image_layer().path,
+                group.group_id,
+                self._pixel_size_mm,
+            )
+            T = result["transform"]
+            self._canvas.get_image_layer().set_affine_transform(T)
+            self._canvas.update()
+            self._reg_status.setText(
+                f"Full: coarse={result.get('coarse_error', 0):.4f}mm → "
+                f"fine={result.get('fine_error', 0):.4f}mm, "
+                f"iters={result.get('iterations', 0)}"
+            )
+            self._coarse_transform = result.get("coarse_transform", T)
+            self._btn_run_fine.setEnabled(True)
+            bus.registration_completed.emit(result)
+        except Exception as e:
+            self._reg_status.setText(f"Error: {e}")
+            bus.registration_failed.emit(str(e))

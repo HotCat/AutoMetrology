@@ -33,6 +33,7 @@ from ..models.feature import CADFeature, FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
 from ..renderers.overlay_renderer import RegistrationGroupOverlay
+from ..renderers.image_layer import ImageLayerRenderer
 from ..core.signals import bus
 
 
@@ -84,6 +85,9 @@ class CADViewerCanvas(QWidget):
         self._reg_manager: Optional[RegistrationManager] = None
         self._group_overlay = RegistrationGroupOverlay()
         self._show_groups = True
+
+        # Image layer
+        self._image_layer = ImageLayerRenderer()
 
         # Connect signals
         bus.highlight_feature.connect(self._on_highlight_feature)
@@ -231,6 +235,13 @@ class CADViewerCanvas(QWidget):
 
         # Background
         painter.fillRect(self.rect(), self._bg_color)
+
+        # Image layer (under everything)
+        if self._image_layer.has_image:
+            self._image_layer.draw_image(
+                painter, self._world_to_screen,
+                self.width(), self.height(),
+            )
 
         # Grid (lightweight, drawn every frame)
         self._draw_grid(painter)
@@ -791,3 +802,8 @@ class CADViewerCanvas(QWidget):
     def _on_groups_changed(self, *args) -> None:
         self._cache_dirty = True
         self.update()
+
+    # ── image layer integration ────────────────────────────────────
+
+    def get_image_layer(self) -> ImageLayerRenderer:
+        return self._image_layer

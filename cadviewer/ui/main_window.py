@@ -34,6 +34,7 @@ from ..renderers.cad_canvas import CADViewerCanvas
 from ..ui.tree_panel import FeatureTreePanel
 from ..ui.property_panel import PropertyPanel
 from ..ui.registration_panel import RegistrationPanel
+from ..registration.pipeline import RegistrationPipeline
 from ..core.signals import bus
 
 
@@ -176,6 +177,7 @@ class MainWindow(QMainWindow):
         """Create dockable panels for registration and future tools."""
         # Registration panel
         self._reg_panel = RegistrationPanel(self._reg_manager, self._repo)
+        self._reg_panel._canvas = self._viewer
         reg_dock = QDockWidget("Registration", self)
         reg_dock.setWidget(self._reg_panel)
         reg_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
@@ -236,6 +238,10 @@ class MainWindow(QMainWindow):
         self._reg_panel.set_repository(self._repo)
         self._tree_panel.set_registration_manager(self._reg_manager)
         self._viewer.set_registration_manager(self._reg_manager)
+
+        # Create registration pipeline for new repo
+        self._pipeline = RegistrationPipeline(self._repo, self._reg_manager)
+        self._reg_panel.set_pipeline(self._pipeline)
 
         # Print type summary
         counts = self._repo.type_counts()
