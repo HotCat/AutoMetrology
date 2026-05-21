@@ -25,11 +25,12 @@ from PySide6.QtCore import Signal, Qt
 from PySide6.QtGui import QIcon, QColor, QBrush
 from PySide6.QtWidgets import (
     QTreeWidget, QTreeWidgetItem, QWidget, QVBoxLayout, QHBoxLayout,
-    QLineEdit, QLabel, QToolBar, QAbstractItemView,
+    QLineEdit, QLabel, QToolBar, QAbstractItemView, QMenu,
 )
 
 from ..models.feature import CADFeature, FeatureType
 from ..models.repository import FeatureRepository
+from ..models.registration import RegistrationManager
 from ..core.signals import bus
 
 
@@ -73,6 +74,8 @@ class FeatureTreePanel(QWidget):
 
         self._feature_map: Dict[str, QTreeWidgetItem] = {}  # feature_id → tree item
         self._type_nodes: Dict[FeatureType, QTreeWidgetItem] = {}
+        self._reg_manager: Optional[RegistrationManager] = None
+        self._groups_root: Optional[QTreeWidgetItem] = None
 
         self._setup_ui()
 
@@ -114,6 +117,8 @@ class FeatureTreePanel(QWidget):
                 background-color: #2a2d2e;
             }
         """)
+        self._tree.setContextMenuPolicy(Qt.CustomContextMenu)
+        self._tree.customContextMenuRequested.connect(self._on_context_menu)
         layout.addWidget(self._tree)
 
     def populate(self, repo: FeatureRepository) -> None:
@@ -186,10 +191,91 @@ class FeatureTreePanel(QWidget):
             layer_node = QTreeWidgetItem(layers_root, [f"{layer_name} ({len(layer_feats)})"])
             layer_node.setData(0, Qt.UserRole, f"layer:{layer_name}")
 
+    def set_registration_manager(self, manager: RegistrationManager) -> None:
+        self._reg_manager = manager
+        bus.group_created.connect(self._refresh_groups_tree)
+        bus.group_deleted.connect(self._refresh_groups_tree)
+        bus.group_contents_changed.connect(self._refresh_groups_tree)
+        bus.groups_cleared.connect(self._refresh_groups_tree)
+
+    def _refresh_groups_tree(self, *args) -> None:
+        if not self._reg_manager:
+            return
+        if self._groups_root:
+            self._tree.takeTopLevelItem(
+                self._tree.indexOfTopLevelItem(self._groups_root)
+            )
+            self._groups_root = None
+        groups = self._reg_manager.all_groups()
+        if not groups:
+            return
+        self._groups_root = QTreeWidgetItem(self._tree, ["Registration Groups"])
+        self._groups_root.setExpanded(False)
+        font = self._groups_root.font(0)
+        font.setBold(True)
+        self._groups_root.setFont(0, font)
+        for group in groups:
+            grp_node = QTreeWidgetItem(
+                self._groups_root, [f"{group.name} ({group.feature_count})"]
+            )
+            grp_node.setData(0, Qt.UserRole, f"group:{group.group_id}")
+            grp_node.setForeground(0, QBrush(group.color))
+            for fid in group.feature_ids:
+                feat = self._reg_manager._repo.get(fid)
+                if feat:
+                    item = QTreeWidgetItem(grp_node, [feat.display_name])
+                    item.setData(0, Qt.UserRole, fid)
+
+    def _on_context_menu(self, pos) -> None:
+        item = self._tree.itemAt(pos)
+        if not item:
+            return
+
+        feature_id = item.data(0, Qt.UserRole)
+        if not feature_id:
+            return
+
+        menu = QMenu(self)
+        menu.setStyleSheet("""
+            QMenu { background-color: #2d2d2d; color: #cccccc; border: 1px solid #3d3d3d; }
+            QMenu::item:selected { background-color: #264f78; }
+        """)
+
+        if feature_id.startswith("group:"):
+            # Group node context menu
+            group_id = feature_id[len("group:"):]
+            zoom_action = menu.addAction("Zoom to Group")
+            delete_action = menu.addAction("Delete Group")
+            action = menu.exec_(self._tree.mapToGlobal(pos))
+            if action == zoom_action:
+                bus.view_fit_all.emit()
+            elif action == delete_action and self._reg_manager:
+                self._reg_manager.delete_group(group_id)
+                bus.group_deleted.emit(group_id)
+        elif not feature_id.startswith("layer:") and self._reg_manager:
+            # Feature node — offer add to group
+            add_menu = menu.addMenu("Add to Group")
+            new_group_action = add_menu.addAction("New Group...")
+            add_menu.addSeparator()
+            for group in self._reg_manager.all_groups():
+                action = add_menu.addAction(group.name)
+                action.setData(group.group_id)
+
+            action = menu.exec_(self._tree.mapToGlobal(pos))
+            if action == new_group_action:
+                group = self._reg_manager.create_group()
+                self._reg_manager.add_feature_to_group(group.group_id, feature_id)
+                bus.group_created.emit(group.group_id)
+                bus.group_contents_changed.emit(group.group_id)
+            elif action and action.data():
+                gid = action.data()
+                self._reg_manager.add_feature_to_group(gid, feature_id)
+                bus.group_contents_changed.emit(gid)
+
     def _on_item_clicked(self, item: QTreeWidgetItem, column: int) -> None:
         """Handle tree item click — emit feature selection signal."""
         feature_id = item.data(0, Qt.UserRole)
-        if feature_id and not feature_id.startswith("layer:"):
+        if feature_id and not feature_id.startswith("layer:") and not feature_id.startswith("group:"):
             self.feature_selected.emit(feature_id)
             bus.highlight_feature.emit(feature_id)
             bus.view_fit_feature.emit(feature_id)

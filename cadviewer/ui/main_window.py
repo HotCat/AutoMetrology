@@ -24,14 +24,16 @@ from PySide6.QtGui import QAction, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QApplication, QSplitter, QToolBar,
     QFileDialog, QStatusBar, QMessageBox, QLabel, QWidget,
-    QHBoxLayout, QVBoxLayout, QProgressBar,
+    QHBoxLayout, QVBoxLayout, QProgressBar, QDockWidget,
 )
 
 from ..models.repository import FeatureRepository
+from ..models.registration import RegistrationManager
 from ..parsers.dxf_importer import DXFImporter
 from ..renderers.cad_canvas import CADViewerCanvas
 from ..ui.tree_panel import FeatureTreePanel
 from ..ui.property_panel import PropertyPanel
+from ..ui.registration_panel import RegistrationPanel
 from ..core.signals import bus
 
 
@@ -47,12 +49,14 @@ class MainWindow(QMainWindow):
         # Core data
         self._repo = FeatureRepository()
         self._importer = DXFImporter()
+        self._reg_manager = RegistrationManager(self._repo)
 
         # Build UI
         self._setup_ui()
         self._setup_toolbar()
         self._setup_menu()
         self._setup_statusbar()
+        self._setup_dock_widgets()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
@@ -145,6 +149,12 @@ class MainWindow(QMainWindow):
         fit_action = QAction("Fit All", self)
         fit_action.triggered.connect(lambda: bus.view_fit_all.emit())
         view_menu.addAction(fit_action)
+        view_menu.addSeparator()
+        reg_panel_action = QAction("Registration Panel", self)
+        reg_panel_action.setCheckable(True)
+        reg_panel_action.toggled.connect(self._toggle_reg_panel)
+        view_menu.addAction(reg_panel_action)
+        self._reg_panel_action = reg_panel_action
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -161,6 +171,19 @@ class MainWindow(QMainWindow):
 
         self._feature_count_label = QLabel("Features: 0")
         self._statusbar.addPermanentWidget(self._feature_count_label)
+
+    def _setup_dock_widgets(self) -> None:
+        """Create dockable panels for registration and future tools."""
+        # Registration panel
+        self._reg_panel = RegistrationPanel(self._reg_manager, self._repo)
+        reg_dock = QDockWidget("Registration", self)
+        reg_dock.setWidget(self._reg_panel)
+        reg_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea)
+        self.addDockWidget(Qt.RightDockWidgetArea, reg_dock)
+        reg_dock.hide()
+
+        # Store reference for toolbar toggle
+        self._reg_dock = reg_dock
 
     def _connect_signals(self) -> None:
         """Connect signals between components."""
@@ -208,6 +231,12 @@ class MainWindow(QMainWindow):
         # Render in viewer
         self._viewer.load_repository(self._repo)
 
+        # Update registration manager with new repo
+        self._reg_manager.set_repository(self._repo)
+        self._reg_panel.set_repository(self._repo)
+        self._tree_panel.set_registration_manager(self._reg_manager)
+        self._viewer.set_registration_manager(self._reg_manager)
+
         # Print type summary
         counts = self._repo.type_counts()
         for ftype, c in sorted(counts.items(), key=lambda x: -x[1]):
@@ -243,6 +272,12 @@ class MainWindow(QMainWindow):
 
     def _toggle_selection(self, checked: bool) -> None:
         pass  # selection is always via left click in canvas
+
+    def _toggle_reg_panel(self, checked: bool) -> None:
+        if checked:
+            self._reg_dock.show()
+        else:
+            self._reg_dock.hide()
 
     def _show_about(self) -> None:
         QMessageBox.about(

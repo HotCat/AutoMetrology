@@ -31,6 +31,8 @@ from PySide6.QtWidgets import QWidget, QSizePolicy
 
 from ..models.feature import CADFeature, FeatureType
 from ..models.repository import FeatureRepository
+from ..models.registration import RegistrationManager
+from ..renderers.overlay_renderer import RegistrationGroupOverlay
 from ..core.signals import bus
 
 
@@ -78,11 +80,20 @@ class CADViewerCanvas(QWidget):
         # World-space bounding boxes per feature for culling
         self._feature_bboxes: Dict[str, Tuple[float, float, float, float]] = {}
 
+        # Registration group overlay
+        self._reg_manager: Optional[RegistrationManager] = None
+        self._group_overlay = RegistrationGroupOverlay()
+        self._show_groups = True
+
         # Connect signals
         bus.highlight_feature.connect(self._on_highlight_feature)
         bus.unhighlight_all.connect(self._on_unhighlight_all)
         bus.view_fit_all.connect(self.fit_all)
         bus.view_fit_feature.connect(self._on_fit_feature)
+        bus.group_created.connect(self._on_groups_changed)
+        bus.group_deleted.connect(self._on_groups_changed)
+        bus.group_contents_changed.connect(self._on_groups_changed)
+        bus.groups_cleared.connect(self._on_groups_changed)
 
     # ── coordinate transforms ──────────────────────────────────────
 
@@ -233,6 +244,14 @@ class CADViewerCanvas(QWidget):
                 feat = self._feature_map.get(fid)
                 if feat:
                     self._draw_feature(painter, feat, highlighted=True)
+
+        # Registration group overlays
+        if self._reg_manager and self._show_groups:
+            self._group_overlay.draw_group_overlays(
+                painter, self._reg_manager.all_groups(),
+                self._reg_manager._repo, self._world_to_screen,
+                self._scale, self._feature_map,
+            )
 
         # Origin marker
         self._draw_origin_marker(painter)
@@ -760,5 +779,15 @@ class CADViewerCanvas(QWidget):
 
     def _on_unhighlight_all(self) -> None:
         self._highlighted_ids.clear()
+        self._cache_dirty = True
+        self.update()
+
+    # ── registration group integration ──────────────────────────────
+
+    def set_registration_manager(self, manager: Optional[RegistrationManager]) -> None:
+        self._reg_manager = manager
+        self.update()
+
+    def _on_groups_changed(self, *args) -> None:
         self._cache_dirty = True
         self.update()
