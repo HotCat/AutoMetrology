@@ -24,7 +24,7 @@ from PySide6.QtGui import QAction, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QApplication, QSplitter, QToolBar,
     QFileDialog, QStatusBar, QMessageBox, QLabel, QWidget,
-    QHBoxLayout, QVBoxLayout, QProgressBar, QDockWidget,
+    QHBoxLayout, QVBoxLayout, QProgressBar, QDockWidget, QDialog,
 )
 
 from ..models.repository import FeatureRepository
@@ -35,7 +35,12 @@ from ..ui.tree_panel import FeatureTreePanel
 from ..ui.property_panel import PropertyPanel
 from ..ui.registration_panel import RegistrationPanel
 from ..ui.query_panel import QueryPanel
+from ..ui.dwg_import_dialog import DWGImportDialog
+from ..ui.dwg_settings_dialog import DWGSettingsDialog
 from ..registration.pipeline import RegistrationPipeline
+from ..converters.dwg_converter import DWGConverter
+from ..converters.converter_config import ConversionConfig
+from ..converters.oda_cli import ODACLI
 from ..core.signals import bus
 
 
@@ -52,6 +57,7 @@ class MainWindow(QMainWindow):
         self._repo = FeatureRepository()
         self._importer = DXFImporter()
         self._reg_manager = RegistrationManager(self._repo)
+        self._dwg_converter = DWGConverter()
 
         # Build UI
         self._setup_ui()
@@ -60,6 +66,7 @@ class MainWindow(QMainWindow):
         self._setup_statusbar()
         self._setup_dock_widgets()
         self._connect_signals()
+        self._check_dwg_converter()
 
     def _setup_ui(self) -> None:
         """Create the main splitter layout."""
@@ -107,6 +114,12 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_dxf)
         toolbar.addAction(open_action)
 
+        # Import DWG
+        self._dwg_action = QAction("Import DWG", self)
+        self._dwg_action.setShortcut(QKeySequence("Ctrl+D"))
+        self._dwg_action.triggered.connect(self._open_dwg)
+        toolbar.addAction(self._dwg_action)
+
         toolbar.addSeparator()
 
         # Fit All
@@ -140,6 +153,11 @@ class MainWindow(QMainWindow):
         open_action.triggered.connect(self._open_dxf)
         file_menu.addAction(open_action)
 
+        dwg_open_action = QAction("Import DWG...", self)
+        dwg_open_action.setShortcut(QKeySequence("Ctrl+D"))
+        dwg_open_action.triggered.connect(self._open_dwg)
+        file_menu.addAction(dwg_open_action)
+
         file_menu.addSeparator()
         exit_action = QAction("Exit", self)
         exit_action.setShortcut(QKeySequence.Quit)
@@ -162,6 +180,12 @@ class MainWindow(QMainWindow):
         query_panel_action.toggled.connect(self._toggle_query_panel)
         view_menu.addAction(query_panel_action)
         self._query_panel_action = query_panel_action
+
+        # Settings menu
+        settings_menu = menubar.addMenu("Settings")
+        oda_config_action = QAction("Configure DWG Converter...", self)
+        oda_config_action.triggered.connect(self._show_dwg_settings)
+        settings_menu.addAction(oda_config_action)
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -306,6 +330,107 @@ class MainWindow(QMainWindow):
         else:
             self._query_dock.hide()
 
+    @Slot()
+    def _open_dwg(self) -> None:
+        """Open a DWG file, convert to DXF, then load."""
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import DWG File", str(Path.cwd()),
+            "DWG Files (*.dwg);;All Files (*)"
+        )
+        if not path:
+            return
+        self._convert_and_load_dwg(path)
+
+    def _open_dwg_path(self, path: str) -> None:
+        """Convert and load a DWG file from a given path (CLI usage)."""
+        self._convert_and_load_dwg(path)
+
+    def _convert_and_load_dwg(self, path: str) -> None:
+        """Shared logic for DWG conversion and loading."""
+        # Check converter availability
+        info = self._dwg_converter.validate_installation()
+        if not info.installed:
+            QMessageBox.warning(
+                self, "DWG Converter Not Found",
+                "No DWG converter is installed.\n\n"
+                "Install one of:\n"
+                "  • ODA File Converter: https://www.opendesign.com/guestfiles/oda_file_converter\n"
+                "  • libredwg: sudo apt install libredwg-utils\n\n"
+                "Then configure via Settings → Configure DWG Converter.",
+            )
+            return
+
+        # Show progress dialog
+        dialog = DWGImportDialog(self)
+        dialog.show()
+        QApplication.processEvents()
+
+        dwg_path = Path(path)
+        output_dir = Path(path).parent
+
+        config = ConversionConfig(
+            dwg_path=dwg_path,
+            output_dir=output_dir,
+        )
+
+        # Detect DWG version
+        dialog.set_stage("Detecting DWG version...", 5)
+        version = DWGConverter.detect_dwg_version(dwg_path)
+        if version:
+            dialog.set_detail(f"DWG version: {version}")
+        QApplication.processEvents()
+
+        # Run conversion
+        dialog.set_stage("Running ODA File Converter...", 20)
+        bus.dwg_conversion_started.emit(path)
+
+        def on_complete(result):
+            if result.success:
+                dialog.set_stage("Validating DXF output...", 75)
+                QApplication.processEvents()
+
+                dialog.set_stage("Loading features...", 90)
+                QApplication.processEvents()
+
+                dialog.set_complete(result)
+                bus.dwg_conversion_completed.emit({
+                    "dxf_path": str(result.dxf_path),
+                    "entity_count": result.entity_count,
+                    "duration": result.duration_seconds,
+                })
+
+                # Load the converted DXF through existing pipeline
+                if result.dxf_path and result.dxf_path.exists():
+                    self._load_dxf(str(result.dxf_path))
+            else:
+                dialog.set_error(result.error_message or "Unknown error")
+                bus.dwg_conversion_failed.emit(result.error_message or "Unknown error")
+
+        self._dwg_converter.convert_async(config, on_complete)
+
+    def _show_dwg_settings(self) -> None:
+        """Open DWG converter settings dialog."""
+        dialog = DWGSettingsDialog(self)
+        if dialog.exec() == QDialog.Accepted:
+            path = dialog.get_converter_path()
+            if path:
+                from ..converters.oda_cli import ODACLI
+                self._dwg_converter = DWGConverter(
+                    backend=ODACLI(executable_path=Path(path))
+                )
+                bus.oda_path_changed.emit(path)
+            else:
+                self._dwg_converter = DWGConverter()
+            # Re-check installation status
+            info = self._dwg_converter.validate_installation()
+            self._dwg_action.setEnabled(info.installed)
+            if info.installed:
+                self._dwg_action.setToolTip("")
+            else:
+                self._dwg_action.setToolTip(
+                    "DWG converter not found — configure in Settings"
+                )
+
     def _show_about(self) -> None:
         QMessageBox.about(
             self, "About CAD Inspection Tool",
@@ -314,6 +439,15 @@ class MainWindow(QMainWindow):
             "for machine vision alignment and automatic dimension measurement.\n\n"
             "Built with PySide6 + QPainter (OpenCascade optional)"
         )
+
+    def _check_dwg_converter(self) -> None:
+        """Check ODA availability at startup, disable DWG button if missing."""
+        info = self._dwg_converter.validate_installation()
+        if not info.installed:
+            self._dwg_action.setEnabled(False)
+            self._dwg_action.setToolTip(
+                "ODA File Converter not found — install and configure via Settings menu"
+            )
 
     # ── dark theme stylesheet ──────────────────────────────────────
 

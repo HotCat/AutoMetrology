@@ -3,9 +3,10 @@
 CAD Inspection Tool — application entry point.
 
 Usage:
-    python main.py [dxf_file]
+    python main.py [dxf_or_dwg_file]
 
-If a DXF file path is provided as argument, it will be loaded on startup.
+If a DXF file path is provided, it loads directly.
+If a DWG file path is provided, it converts to DXF first, then loads.
 """
 
 import sys
@@ -30,13 +31,22 @@ def main() -> int:
     window = MainWindow()
     window.show()
 
-    # Auto-load DXF if provided as command-line argument
+    # Auto-load file if provided as command-line argument
     if len(sys.argv) > 1:
-        dxf_path = sys.argv[1]
-        if Path(dxf_path).exists():
-            # Delay loading until event loop starts
+        file_path = sys.argv[1]
+        if not Path(file_path).exists():
+            print(f"File not found: {file_path}")
+            return 1
+
+        lower = file_path.lower()
+        if lower.endswith(".dxf"):
             from PySide6.QtCore import QTimer
-            QTimer.singleShot(500, lambda: window._load_dxf(dxf_path))
+            QTimer.singleShot(500, lambda: window._load_dxf(file_path))
+        elif lower.endswith(".dwg"):
+            from PySide6.QtCore import QTimer
+            QTimer.singleShot(500, lambda: window._open_dwg_path(file_path))
+        else:
+            print(f"Unsupported file format: {file_path}")
 
     return app.exec()
 

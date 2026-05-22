@@ -37,5 +37,19 @@ class SignalBus(QObject):
     # ── Measurement signals ──
     queries_evaluated = Signal(int)              # count of evaluated queries
 
+    # ── DWG conversion signals ──
+    dwg_conversion_started = Signal(str)         # dwg_path
+    dwg_conversion_progress = Signal(str, int)   # stage_name, percent
+    dwg_conversion_completed = Signal(dict)      # ConversionResult as dict
+    dwg_conversion_failed = Signal(str)          # error message
+    dwg_conversion_cancelled = Signal()
+
+    # ── DXF validation signals ──
+    dxf_validation_completed = Signal(dict)      # ValidationReport as dict
+    dxf_validation_warning = Signal(str)         # warning message
+
+    # ── ODA configuration signals ──
+    oda_path_changed = Signal(str)               # new executable path
+
 
 bus = SignalBus()

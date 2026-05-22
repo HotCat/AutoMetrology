@@ -75,6 +75,7 @@ class DXFImporter:
             "HATCH": self._parse_hatch,
             "POINT": self._parse_point,
             "SOLID": self._parse_solid,
+            "LEADER": self._parse_leader,
         }
         parser = parser_map.get(etype)
         if parser:
@@ -176,6 +177,15 @@ class DXFImporter:
         fit_pts = [(p[0], p[1]) for p in e.fit_points] if e.fit_points else []
         knots = list(e.knots) if e.knots else []
 
+        # Pre-evaluate curve using ezdxf's BSpline evaluator for accurate rendering
+        eval_pts = []
+        try:
+            bspline = e.construction_tool()
+            n_pts = max(20, len(control_pts) * 8)
+            eval_pts = [(p.x, p.y) for p in bspline.approximate(n_pts)]
+        except Exception:
+            pass
+
         feat = CADFeature(
             feature_type=FeatureType.SPLINE,
             geometry={
@@ -183,6 +193,7 @@ class DXFImporter:
                 "control_points": control_pts,
                 "fit_points": fit_pts,
                 "knots": knots,
+                "eval_points": eval_pts,
                 "closed": e.closed if hasattr(e, "closed") else False,
                 "rational": e.dxf.flags & 4 if hasattr(e.dxf, "flags") else 0,
             },
@@ -331,17 +342,59 @@ class DXFImporter:
         paths = []
         for path in e.paths:
             edges = []
-            for edge in path.edges:
-                edge_data = {"type": edge.EDGE_TYPE}
-                if hasattr(edge, "start"):
-                    edge_data["start"] = (edge.start[0], edge.start[1])
-                if hasattr(edge, "end"):
-                    edge_data["end"] = (edge.end[0], edge.end[1])
-                if hasattr(edge, "center"):
-                    edge_data["center"] = (edge.center[0], edge.center[1])
-                if hasattr(edge, "radius"):
-                    edge_data["radius"] = edge.radius
-                edges.append(edge_data)
+            # Handle polyline-based paths
+            if hasattr(path, 'vertices') and path.vertices:
+                poly_pts = []
+                for v in path.vertices:
+                    if hasattr(v, '__getitem__') and len(v) >= 2:
+                        poly_pts.append((v[0], v[1]))
+                    elif hasattr(v, 'x'):
+                        poly_pts.append((v.x, v.y))
+                if poly_pts:
+                    edges.append({"type": "Polyline", "points": poly_pts})
+            else:
+                for edge in path.edges:
+                    edge_data = {"type": edge.EDGE_TYPE}
+                    if hasattr(edge, "start") and edge.start is not None:
+                        edge_data["start"] = (edge.start[0], edge.start[1])
+                    if hasattr(edge, "end") and edge.end is not None:
+                        edge_data["end"] = (edge.end[0], edge.end[1])
+                    if hasattr(edge, "center") and edge.center is not None:
+                        edge_data["center"] = (edge.center[0], edge.center[1])
+                    if hasattr(edge, "radius"):
+                        edge_data["radius"] = edge.radius
+                    if hasattr(edge, "start_angle"):
+                        edge_data["start_angle"] = edge.start_angle
+                    if hasattr(edge, "end_angle"):
+                        edge_data["end_angle"] = edge.end_angle
+                    if hasattr(edge, "is_ccw"):
+                        edge_data["is_ccw"] = edge.is_ccw
+                    if hasattr(edge, "major_axis") and edge.major_axis is not None:
+                        edge_data["major_axis"] = (edge.major_axis[0], edge.major_axis[1])
+                    if hasattr(edge, "ratio"):
+                        edge_data["ratio"] = edge.ratio
+                    if hasattr(edge, "control_points") and edge.control_points:
+                        edge_data["control_points"] = [(p[0], p[1]) for p in edge.control_points]
+                    if hasattr(edge, "fit_points") and edge.fit_points:
+                        edge_data["fit_points"] = [(p[0], p[1]) for p in edge.fit_points]
+                    if hasattr(edge, "degree"):
+                        edge_data["degree"] = edge.degree
+                    if hasattr(edge, "knot_values") and edge.knot_values:
+                        edge_data["knots"] = list(edge.knot_values)
+                    # SplineEdge uses start_point/end_point instead of start/end
+                    if "start" not in edge_data and hasattr(edge, "start_point"):
+                        try:
+                            sp = edge.start_point
+                            edge_data["start"] = (sp[0], sp[1])
+                        except Exception:
+                            pass
+                    if "end" not in edge_data and hasattr(edge, "end_point"):
+                        try:
+                            ep = edge.end_point
+                            edge_data["end"] = (ep[0], ep[1])
+                        except Exception:
+                            pass
+                    edges.append(edge_data)
             paths.append(edges)
 
         feat = CADFeature(
@@ -359,6 +412,27 @@ class DXFImporter:
         feat = CADFeature(
             feature_type=FeatureType.POINT,
             geometry={"x": loc.x, "y": loc.y},
+            dxf_handle=e.dxf.handle,
+            layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
+            color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+        )
+        self.repo.add(feat)
+        self._entity_index += 1
+
+    def _parse_leader(self, e) -> None:
+        """Parse LEADER entity as a polyline with arrowhead."""
+        vertices = []
+        for v in e.vertices:
+            if hasattr(v, 'x'):
+                vertices.append((v.x, v.y))
+            else:
+                vertices.append((v[0], v[1]))
+        if len(vertices) < 2:
+            return
+
+        feat = CADFeature(
+            feature_type=FeatureType.LEADER,
+            geometry={"points": vertices, "closed": False},
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,

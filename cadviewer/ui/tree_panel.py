@@ -45,6 +45,7 @@ TYPE_LABELS = {
     FeatureType.TEXT: "Annotations",
     FeatureType.HATCH: "Hatches",
     FeatureType.POINT: "Points",
+    FeatureType.LEADER: "Leaders",
 }
 
 # Colors for tree group icons
@@ -58,6 +59,7 @@ TYPE_COLORS = {
     FeatureType.TEXT: "#AAAAAA",
     FeatureType.HATCH: "#666666",
     FeatureType.POINT: "#FF8800",
+    FeatureType.LEADER: "#FFB450",
 }
 
 
@@ -86,7 +88,7 @@ class FeatureTreePanel(QWidget):
 
         # Header
         header = QLabel("Feature Browser")
-        header.setStyleSheet("font-weight: bold; padding: 6px; background: #2d2d2d; color: #ddd;")
+        header.setStyleSheet("font: bold; padding: 6px; background-color: #2d2d2d; color: #ddd;")
         layout.addWidget(header)
 
         # Search filter

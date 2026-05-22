@@ -107,6 +107,8 @@ class CADViewerCanvas(QWidget):
         cy = self.height() / 2.0
         sx = (wx - self._offset_x) * self._scale + cx
         sy = -(wy - self._offset_y) * self._scale + cy
+        if not (math.isfinite(sx) and math.isfinite(sy)):
+            return (0.0, 0.0)
         return sx, sy
 
     def _screen_to_world(self, sx: float, sy: float) -> Tuple[float, float]:
@@ -161,8 +163,17 @@ class CADViewerCanvas(QWidget):
             cx, cy, r = g["cx"], g["cy"], g["radius"]
             return [(cx - r, cy - r), (cx + r, cy + r)]
         elif feat.feature_type == FeatureType.ARC:
-            cx, cy, r = g["cx"], g["cy"], g["radius"]
-            return [(cx - r, cy - r), (cx + r, cy + r)]
+            if "radius" in g:
+                cx, cy, r = g["cx"], g["cy"], g["radius"]
+                return [(cx - r, cy - r), (cx + r, cy + r)]
+            elif "major_axis" in g:
+                cx, cy = g["cx"], g["cy"]
+                mx, my = g["major_axis"]
+                ratio = g["ratio"]
+                rx = math.sqrt(mx * mx + my * my)
+                ry = rx * ratio
+                return [(cx - rx, cy - ry), (cx + rx, cy + ry)]
+            return [(g["cx"], g["cy"])]
         elif feat.feature_type == FeatureType.POLYLINE:
             return g.get("points", [])
         elif feat.feature_type == FeatureType.SPLINE:
@@ -170,12 +181,27 @@ class CADViewerCanvas(QWidget):
         elif feat.feature_type == FeatureType.TEXT:
             x, y = g["x"], g["y"]
             h = g.get("height", 2.5)
-            # Generous bbox to avoid pre-filter false negatives
             return [(x - h, y - h), (x + h * 10, y + h * 2)]
         elif feat.feature_type == FeatureType.DIMENSION:
             return []
         elif feat.feature_type == FeatureType.POINT:
             return [(g["x"], g["y"])]
+        elif feat.feature_type == FeatureType.HATCH:
+            pts = []
+            paths = g.get("paths", [])
+            for path_edges in paths:
+                for edge in path_edges:
+                    start = edge.get("start")
+                    end = edge.get("end")
+                    if start:
+                        pts.append(start)
+                    if end:
+                        pts.append(end)
+                    if edge.get("type") == "Polyline":
+                        pts.extend(edge.get("points", []))
+            return pts
+        elif feat.feature_type == FeatureType.LEADER:
+            return g.get("points", [])
         return []
 
     # ── view controls ──────────────────────────────────────────────
@@ -230,47 +256,48 @@ class CADViewerCanvas(QWidget):
 
     def paintEvent(self, event) -> None:
         painter = QPainter(self)
-        painter.setRenderHint(QPainter.Antialiasing, True)
-        painter.setRenderHint(QPainter.TextAntialiasing, True)
+        try:
+            painter.setRenderHint(QPainter.Antialiasing, True)
+            painter.setRenderHint(QPainter.TextAntialiasing, True)
 
-        # Background
-        painter.fillRect(self.rect(), self._bg_color)
+            # Background
+            painter.fillRect(self.rect(), self._bg_color)
 
-        # Image layer (under everything)
-        if self._image_layer.has_image:
-            self._image_layer.draw_image(
-                painter, self._world_to_screen,
-                self.width(), self.height(),
-            )
+            # Image layer (under everything)
+            if self._image_layer.has_image:
+                self._image_layer.draw_image(
+                    painter, self._world_to_screen,
+                    self.width(), self.height(),
+                )
 
-        # Grid (lightweight, drawn every frame)
-        self._draw_grid(painter)
+            # Grid (lightweight, drawn every frame)
+            self._draw_grid(painter)
 
-        # Base geometry — from cache or rendered fresh
-        self._render_base(painter)
+            # Base geometry — from cache or rendered fresh
+            self._render_base(painter)
 
-        # Highlighted features drawn on top with glow effect
-        if self._highlighted_ids:
-            for fid in self._highlighted_ids:
-                feat = self._feature_map.get(fid)
-                if feat:
-                    self._draw_feature(painter, feat, highlighted=True)
+            # Highlighted features drawn on top with glow effect
+            if self._highlighted_ids:
+                for fid in self._highlighted_ids:
+                    feat = self._feature_map.get(fid)
+                    if feat:
+                        self._draw_feature(painter, feat, highlighted=True)
 
-        # Registration group overlays
-        if self._reg_manager and self._show_groups:
-            self._group_overlay.draw_group_overlays(
-                painter, self._reg_manager.all_groups(),
-                self._reg_manager._repo, self._world_to_screen,
-                self._scale, self._feature_map,
-            )
+            # Registration group overlays
+            if self._reg_manager and self._show_groups:
+                self._group_overlay.draw_group_overlays(
+                    painter, self._reg_manager.all_groups(),
+                    self._reg_manager._repo, self._world_to_screen,
+                    self._scale, self._feature_map,
+                )
 
-        # Origin marker
-        self._draw_origin_marker(painter)
+            # Origin marker
+            self._draw_origin_marker(painter)
 
-        # Coordinate info
-        self._draw_info_overlay(painter)
-
-        painter.end()
+            # Coordinate info
+            self._draw_info_overlay(painter)
+        finally:
+            painter.end()
 
     def _render_base(self, painter: QPainter) -> None:
         """Render base geometry, using pixmap cache when possible."""
@@ -285,39 +312,46 @@ class CADViewerCanvas(QWidget):
             return
 
         # Render to offscreen pixmap
-        pm = QPixmap(self.size())
+        sz = self.size()
+        if sz.width() <= 0 or sz.height() <= 0:
+            return
+        pm = QPixmap(sz)
         pm.fill(Qt.transparent)
         pm_painter = QPainter(pm)
-        pm_painter.setRenderHint(QPainter.Antialiasing, True)
+        try:
+            pm_painter.setRenderHint(QPainter.Antialiasing, True)
 
-        line_w = self._scaled_line_width()
-        base_pen = QPen(QColor(200, 200, 200), line_w)
+            line_w = self._scaled_line_width()
+            base_pen = QPen(QColor(200, 200, 200), line_w)
 
-        for feat in self._features:
-            fid = feat.feature_id
-            # Skip highlighted (drawn separately on top)
-            if fid in self._highlighted_ids:
-                continue
-            # Frustum culling
-            bbox = self._feature_bboxes.get(fid)
-            if bbox and not self._is_visible(bbox):
-                continue
+            for feat in self._features:
+                fid = feat.feature_id
+                # Skip highlighted (drawn separately on top)
+                if fid in self._highlighted_ids:
+                    continue
+                # Frustum culling
+                bbox = self._feature_bboxes.get(fid)
+                if bbox and not self._is_visible(bbox):
+                    continue
 
-            color = self._feature_color(feat)
-            base_pen.setColor(color)
-            base_pen.setWidth(line_w)
-            pm_painter.setPen(base_pen)
-            # SOLID (filled polygon from dimension arrows)
-            if (feat.feature_type == FeatureType.POLYLINE
-                    and feat.geometry.get("is_solid", False)):
-                fill_color = QColor(color)
-                fill_color.setAlpha(200)
-                pm_painter.setBrush(QBrush(fill_color))
-            else:
-                pm_painter.setBrush(Qt.NoBrush)
-            self._draw_feature_geometry(pm_painter, feat)
-
-        pm_painter.end()
+                color = self._feature_color(feat)
+                base_pen.setColor(color)
+                base_pen.setWidth(line_w)
+                pm_painter.setPen(base_pen)
+                # SOLID (filled polygon from dimension arrows)
+                if (feat.feature_type == FeatureType.POLYLINE
+                        and feat.geometry.get("is_solid", False)):
+                    fill_color = QColor(color)
+                    fill_color.setAlpha(200)
+                    pm_painter.setBrush(QBrush(fill_color))
+                else:
+                    pm_painter.setBrush(Qt.NoBrush)
+                try:
+                    self._draw_feature_geometry(pm_painter, feat)
+                except Exception:
+                    pass
+        finally:
+            pm_painter.end()
 
         # Save cache
         self._cache_pixmap = pm
@@ -382,9 +416,16 @@ class CADViewerCanvas(QWidget):
             px, py = self._world_to_screen(g["x"], g["y"])
             painter.drawPoint(QPointF(px, py))
 
+        elif ftype == FeatureType.HATCH:
+            self._draw_hatch(painter, g)
+
+        elif ftype == FeatureType.LEADER:
+            self._draw_leader(painter, g)
+
     def _draw_arc(self, painter: QPainter, g: dict) -> None:
-        """Render an arc."""
+        """Render an arc (circular or elliptical)."""
         if g.get("is_ellipse"):
+            self._draw_elliptical_arc(painter, g)
             return
 
         cx, cy = self._world_to_screen(g["cx"], g["cy"])
@@ -397,12 +438,157 @@ class CADViewerCanvas(QWidget):
 
         rect = QRectF(cx - r, cy - r, 2 * r, 2 * r)
         path = QPainterPath()
-        path.arcMoveTo(rect, -start_deg)
-        path.arcTo(rect, -start_deg, -span)
+        path.arcMoveTo(rect, start_deg)
+        path.arcTo(rect, start_deg, span)
         painter.drawPath(path)
 
+    def _draw_elliptical_arc(self, painter: QPainter, g: dict) -> None:
+        """Render an elliptical arc by parametric evaluation.
+
+        DXF ELLIPSE parametric form:
+            P(t) = center + cos(t) * major_axis + sin(t) * minor_axis
+        where minor_axis = ratio * (-major_axis.y, major_axis.x)
+        """
+        cx, cy = g["cx"], g["cy"]
+        mx, my = g["major_axis"]
+        ratio = g["ratio"]
+        start_t = g["start_param"]
+        end_t = g["end_param"]
+
+        span = end_t - start_t
+        if span < 0:
+            span += 2 * math.pi
+        if span < 1e-10:
+            span = 2 * math.pi
+
+        num_segments = max(24, int(span / (2 * math.pi) * 128))
+
+        points = []
+        for i in range(num_segments + 1):
+            t = start_t + span * i / num_segments
+            cos_t = math.cos(t)
+            sin_t = math.sin(t)
+            wx = cx + cos_t * mx - sin_t * my * ratio
+            wy = cy + cos_t * my + sin_t * mx * ratio
+            sx, sy = self._world_to_screen(wx, wy)
+            points.append(QPointF(sx, sy))
+
+        if len(points) >= 2:
+            path = QPainterPath()
+            path.moveTo(points[0])
+            for p in points[1:]:
+                path.lineTo(p)
+            painter.drawPath(path)
+
+    def _draw_hatch(self, painter: QPainter, g: dict) -> None:
+        """Render hatch boundary edges."""
+        paths = g.get("paths", [])
+        for path_edges in paths:
+            for edge in path_edges:
+                etype = edge.get("type", "")
+                if etype == "LineEdge":
+                    start = edge.get("start")
+                    end = edge.get("end")
+                    if start and end:
+                        sx, sy = self._world_to_screen(start[0], start[1])
+                        ex, ey = self._world_to_screen(end[0], end[1])
+                        painter.drawLine(QPointF(sx, sy), QPointF(ex, ey))
+                elif etype == "ArcEdge":
+                    center = edge.get("center")
+                    radius = edge.get("radius")
+                    start_deg = edge.get("start_angle")
+                    end_deg = edge.get("end_angle")
+                    if center and radius and start_deg is not None and end_deg is not None:
+                        cx, cy = self._world_to_screen(center[0], center[1])
+                        r = radius * self._scale
+                        span = end_deg - start_deg
+                        if span < 0:
+                            span += 360
+                        if span < 1e-10:
+                            span = 360
+                        rect = QRectF(cx - r, cy - r, 2 * r, 2 * r)
+                        path = QPainterPath()
+                        path.arcMoveTo(rect, start_deg)
+                        path.arcTo(rect, start_deg, span)
+                        painter.drawPath(path)
+                elif etype == "EllipseEdge":
+                    emx = edge.get("major_axis")
+                    eratio = edge.get("ratio")
+                    estart = edge.get("start")
+                    eend = edge.get("end")
+                    if emx and eratio and estart and eend:
+                        sx, sy = self._world_to_screen(estart[0], estart[1])
+                        ex, ey = self._world_to_screen(eend[0], eend[1])
+                        painter.drawLine(QPointF(sx, sy), QPointF(ex, ey))
+                elif etype == "SplineEdge":
+                    ctrl = edge.get("control_points", [])
+                    fit = edge.get("fit_points", [])
+                    eval_pts = fit if fit else ctrl
+                    if len(eval_pts) >= 2:
+                        pts = self._interpolate_spline(eval_pts, edge.get("degree", 3))
+                        screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in pts]
+                        path = QPainterPath()
+                        path.moveTo(screen_pts[0])
+                        for sp in screen_pts[1:]:
+                            path.lineTo(sp)
+                        painter.drawPath(path)
+                elif etype == "Polyline":
+                    pts = edge.get("points", [])
+                    if len(pts) >= 2:
+                        screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in pts]
+                        for i in range(len(screen_pts) - 1):
+                            painter.drawLine(screen_pts[i], screen_pts[i + 1])
+
+    def _draw_leader(self, painter: QPainter, g: dict) -> None:
+        """Render LEADER as polyline with arrowhead at first vertex."""
+        pts = g.get("points", [])
+        if len(pts) < 2:
+            return
+
+        screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in pts]
+
+        # Draw leader line segments
+        path = QPainterPath()
+        path.moveTo(screen_pts[0])
+        for sp in screen_pts[1:]:
+            path.lineTo(sp)
+        painter.drawPath(path)
+
+        # Draw arrowhead at first vertex (start of leader)
+        if len(screen_pts) >= 2:
+            p0 = screen_pts[0]
+            p1 = screen_pts[1]
+            dx = p1.x() - p0.x()
+            dy = p1.y() - p0.y()
+            length = math.sqrt(dx * dx + dy * dy)
+            if length > 1e-6:
+                # Arrow size proportional to view scale
+                arrow_len = max(6, min(14, 10))
+                ux, uy = dx / length, dy / length
+                # Perpendicular
+                nx, ny = -uy, ux
+                tip = p0
+                left = QPointF(tip.x() - ux * arrow_len + nx * arrow_len * 0.35,
+                               tip.y() - uy * arrow_len + ny * arrow_len * 0.35)
+                right = QPointF(tip.x() - ux * arrow_len - nx * arrow_len * 0.35,
+                                tip.y() - uy * arrow_len - ny * arrow_len * 0.35)
+                arrow = QPolygonF([tip, left, right])
+                painter.drawPolygon(arrow)
+
     def _draw_spline(self, painter: QPainter, g: dict) -> None:
-        """Render a spline by evaluating it as polyline approximation."""
+        """Render a spline using pre-evaluated points or Catmull-Rom fallback."""
+        # Prefer pre-evaluated points from ezdxf's BSpline evaluator
+        eval_pts = g.get("eval_points", [])
+        if eval_pts and len(eval_pts) >= 2:
+            screen_pts = [QPointF(*self._world_to_screen(p[0], p[1])) for p in eval_pts]
+            path = QPainterPath()
+            path.moveTo(screen_pts[0])
+            for sp in screen_pts[1:]:
+                path.lineTo(sp)
+            painter.drawPath(path)
+            return
+
+        # Fallback to Catmull-Rom interpolation
         ctrl_pts = g.get("control_points", [])
         fit_pts = g.get("fit_points", [])
         eval_pts = fit_pts if fit_pts else ctrl_pts
@@ -634,8 +820,9 @@ class CADViewerCanvas(QWidget):
         if feat.feature_type == FeatureType.SPLINE:
             return QColor(180, 140, 255)
         if feat.feature_type == FeatureType.TEXT:
-            # Text/annotations rendered in a warm green-yellow for readability
             return QColor(170, 220, 120)
+        if feat.feature_type == FeatureType.LEADER:
+            return QColor(255, 180, 80)
         return dxf_colors.get(feat.color % 256, QColor(180, 180, 180))
 
     def _scaled_line_width(self) -> float:
@@ -733,6 +920,10 @@ class CADViewerCanvas(QWidget):
             return abs(d - g["radius"])
 
         elif ftype == FeatureType.ARC:
+            if "radius" not in g:
+                # Elliptical arc — use center distance as approximation
+                d = math.sqrt((px - g["cx"]) ** 2 + (py - g["cy"]) ** 2)
+                return d
             dx, dy = px - g["cx"], py - g["cy"]
             d = math.sqrt(dx * dx + dy * dy)
             a = math.degrees(math.atan2(dy, dx)) % 360
@@ -762,13 +953,18 @@ class CADViewerCanvas(QWidget):
         elif ftype == FeatureType.TEXT:
             tx, ty = g.get("x", 0), g.get("y", 0)
             th = g.get("height", 2.5)
-            # Generous hit area: text height + hit_radius, scaled wider for typical text width
             hit_margin = hit_radius * 2.0
             text_width_est = th * 5.0
             if abs(px - tx) < (text_width_est + hit_margin) and abs(py - ty) < (th + hit_margin):
-                # Return tiny distance so text wins over nearby geometry
                 return 0.001
             return float('inf')
+
+        elif ftype == FeatureType.LEADER:
+            pts = g.get("points", [])
+            md = float('inf')
+            for i in range(len(pts) - 1):
+                md = min(md, self._pt_seg_dist(px, py, pts[i][0], pts[i][1], pts[i + 1][0], pts[i + 1][1]))
+            return md
 
         return float('inf')
 

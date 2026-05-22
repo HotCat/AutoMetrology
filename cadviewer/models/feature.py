@@ -29,6 +29,7 @@ class FeatureType(Enum):
     TEXT = auto()
     HATCH = auto()
     POINT = auto()
+    LEADER = auto()
 
 
 @dataclass
