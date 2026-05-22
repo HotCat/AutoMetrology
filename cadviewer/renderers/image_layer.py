@@ -9,6 +9,8 @@ opacity. The image is drawn under the CAD geometry as a reference layer.
 from __future__ import annotations
 
 import math
+import tempfile
+import os
 from typing import Optional, Tuple
 
 import numpy as np
@@ -47,6 +49,39 @@ class ImageLayerRenderer:
             return False
         self._image = img
         self._path = path
+        self._qimage = self._numpy_to_qimage(img)
+        self._cache_dirty = True
+        return True
+
+    def load_from_array(self, img: np.ndarray) -> bool:
+        """
+        Load image from a numpy array (BGR format from camera capture).
+
+        Saves the array to a temp file so the registration pipeline can read it
+        via cv2.imread(). Returns True on success.
+        """
+        if not HAS_CV2 or img is None:
+            return False
+
+        # Ensure BGR format
+        if len(img.shape) == 2:
+            # Grayscale → BGR
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+        elif img.shape[2] == 4:
+            # BGRA → BGR
+            img = cv2.cvtColor(img, cv2.COLOR_BGRA2BGR)
+        elif img.shape[2] == 1:
+            # Single channel → BGR
+            img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
+
+        self._image = img
+
+        # Save to temp file for pipeline compatibility
+        temp_dir = tempfile.gettempdir()
+        temp_path = os.path.join(temp_dir, "cadrefs_camera_capture.png")
+        cv2.imwrite(temp_path, img)
+        self._path = temp_path
+
         self._qimage = self._numpy_to_qimage(img)
         self._cache_dirty = True
         return True

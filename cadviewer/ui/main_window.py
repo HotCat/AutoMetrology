@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize
+from PySide6.QtCore import Qt, Slot, QSize, Signal, QObject
 from PySide6.QtGui import QAction, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QApplication, QSplitter, QToolBar,
@@ -42,6 +42,11 @@ from ..converters.dwg_converter import DWGConverter
 from ..converters.converter_config import ConversionConfig
 from ..converters.oda_cli import ODACLI
 from ..core.signals import bus
+
+
+class _DWGResultBridge(QObject):
+    """Thread-safe bridge: worker thread emits signal, main thread receives."""
+    result_ready = Signal(object)  # ConversionResult
 
 
 class MainWindow(QMainWindow):
@@ -384,29 +389,36 @@ class MainWindow(QMainWindow):
         dialog.set_stage("Running ODA File Converter...", 20)
         bus.dwg_conversion_started.emit(path)
 
+        # Thread-safe bridge: worker emits signal, slot runs on main thread
+        bridge = _DWGResultBridge()
+        bridge.result_ready.connect(
+            lambda result: self._on_dwg_conversion_done(result, dialog),
+            Qt.QueuedConnection,
+        )
+
         def on_complete(result):
-            if result.success:
-                dialog.set_stage("Validating DXF output...", 75)
-                QApplication.processEvents()
-
-                dialog.set_stage("Loading features...", 90)
-                QApplication.processEvents()
-
-                dialog.set_complete(result)
-                bus.dwg_conversion_completed.emit({
-                    "dxf_path": str(result.dxf_path),
-                    "entity_count": result.entity_count,
-                    "duration": result.duration_seconds,
-                })
-
-                # Load the converted DXF through existing pipeline
-                if result.dxf_path and result.dxf_path.exists():
-                    self._load_dxf(str(result.dxf_path))
-            else:
-                dialog.set_error(result.error_message or "Unknown error")
-                bus.dwg_conversion_failed.emit(result.error_message or "Unknown error")
+            bridge.result_ready.emit(result)
 
         self._dwg_converter.convert_async(config, on_complete)
+
+    def _on_dwg_conversion_done(self, result, dialog) -> None:
+        """Handle DWG conversion result on the main thread."""
+        if result.success:
+            dialog.set_stage("Validating DXF output...", 75)
+            dialog.set_stage("Loading features...", 90)
+            dialog.set_complete(result)
+            bus.dwg_conversion_completed.emit({
+                "dxf_path": str(result.dxf_path),
+                "entity_count": result.entity_count,
+                "duration": result.duration_seconds,
+            })
+
+            # Load the converted DXF through existing pipeline
+            if result.dxf_path and result.dxf_path.exists():
+                self._load_dxf(str(result.dxf_path))
+        else:
+            dialog.set_error(result.error_message or "Unknown error")
+            bus.dwg_conversion_failed.emit(result.error_message or "Unknown error")
 
     def _show_dwg_settings(self) -> None:
         """Open DWG converter settings dialog."""
@@ -448,6 +460,13 @@ class MainWindow(QMainWindow):
             self._dwg_action.setToolTip(
                 "ODA File Converter not found — install and configure via Settings menu"
             )
+
+    def closeEvent(self, event) -> None:
+        """Handle window close — cleanup camera resources."""
+        # Cleanup registration panel (which handles camera cleanup)
+        if hasattr(self, '_reg_panel') and hasattr(self._reg_panel, 'cleanup'):
+            self._reg_panel.cleanup()
+        event.accept()
 
     # ── dark theme stylesheet ──────────────────────────────────────
 

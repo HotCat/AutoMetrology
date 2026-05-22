@@ -19,7 +19,7 @@ from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QGroupBox, QFormLayout, QLineEdit,
-    QInputDialog, QAbstractItemView, QSplitter,
+    QInputDialog, QAbstractItemView, QSplitter, QComboBox,
 )
 
 from ..models.feature import FeatureType
@@ -27,6 +27,18 @@ from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationGroup, RegistrationManager
 from ..core.signals import bus
 from .image_load_dialog import ImageLoadDialog
+
+# Optional camera import
+try:
+    from ..camera import HAS_CAMERA, MindVisionCamera, CameraSettings
+    from ..camera.preview_widget import CameraPreviewWidget
+    from ..camera.settings_widget import CameraSettingsWidget
+except ImportError:
+    HAS_CAMERA = False
+    MindVisionCamera = None
+    CameraSettings = None
+    CameraPreviewWidget = None
+    CameraSettingsWidget = None
 
 
 class RegistrationPanel(QWidget):
@@ -43,7 +55,14 @@ class RegistrationPanel(QWidget):
         self._repo = repo
         self._selected_group_id: Optional[str] = None
 
+        # Camera state
+        self._camera: Optional[MindVisionCamera] = None
+        self._camera_devices: list = []
+        self._camera_open: bool = False
+        self._settings_visible: bool = False
+
         self._setup_ui()
+        self._setup_camera_ui()
         self._connect_signals()
 
     def _setup_ui(self) -> None:
@@ -238,6 +257,238 @@ class RegistrationPanel(QWidget):
             QPushButton:hover { background: #306898; }
         """)
         layout.addWidget(self._btn_zoom)
+
+    def _setup_camera_ui(self) -> None:
+        """Add camera capture section above Image Registration."""
+        if not HAS_CAMERA:
+            return
+
+        layout = self.layout()
+
+        # Camera Capture group box
+        cam_group = QGroupBox("Camera Capture")
+        cam_group.setStyleSheet("""
+            QGroupBox {
+                color: #aaa; font-weight: bold; font-size: 11px;
+                border: 1px solid #333; border-radius: 4px;
+                margin-top: 8px; padding-top: 14px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; left: 8px; padding: 0 4px;
+            }
+        """)
+        cam_layout = QVBoxLayout(cam_group)
+
+        # Device selection row
+        dev_row = QHBoxLayout()
+        self._camera_combo = QComboBox()
+        self._camera_combo.setStyleSheet("""
+            QComboBox {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px; border-radius: 3px; min-width: 120px;
+            }
+            QComboBox:drop-down { border: none; }
+            QComboBox QAbstractItemView {
+                background: #333; color: #ccc; selection-background-color: #264f78;
+            }
+        """)
+        self._refresh_cameras()
+        dev_row.addWidget(self._camera_combo)
+
+        self._btn_refresh = QPushButton("Refresh")
+        self._btn_refresh.clicked.connect(self._refresh_cameras)
+        self._btn_refresh.setStyleSheet("""
+            QPushButton {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px 10px; border-radius: 3px;
+            }
+            QPushButton:hover { background: #444; }
+        """)
+        dev_row.addWidget(self._btn_refresh)
+
+        self._btn_open = QPushButton("Open")
+        self._btn_open.clicked.connect(self._open_camera)
+        self._btn_open.setStyleSheet("""
+            QPushButton {
+                background: #264f78; color: white; border: none;
+                padding: 4px 10px; border-radius: 3px;
+            }
+            QPushButton:hover { background: #306898; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        dev_row.addWidget(self._btn_open)
+
+        self._btn_close = QPushButton("Close")
+        self._btn_close.clicked.connect(self._close_camera)
+        self._btn_close.setEnabled(False)
+        self._btn_close.setStyleSheet("""
+            QPushButton {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px 10px; border-radius: 3px;
+            }
+            QPushButton:hover { background: #444; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        dev_row.addWidget(self._btn_close)
+
+        cam_layout.addLayout(dev_row)
+
+        # Preview widget
+        self._camera_preview = CameraPreviewWidget()
+        cam_layout.addWidget(self._camera_preview)
+
+        # Capture + Settings row
+        capture_row = QHBoxLayout()
+        self._btn_capture = QPushButton("Capture Frame")
+        self._btn_capture.clicked.connect(self._capture_from_camera)
+        self._btn_capture.setEnabled(False)
+        self._btn_capture.setStyleSheet("""
+            QPushButton {
+                background: #264f78; color: white; border: none;
+                padding: 4px 10px; border-radius: 3px; font-weight: bold;
+            }
+            QPushButton:hover { background: #306898; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        capture_row.addWidget(self._btn_capture)
+
+        self._btn_settings = QPushButton("Settings")
+        self._btn_settings.clicked.connect(self._toggle_settings)
+        self._btn_settings.setEnabled(False)
+        self._btn_settings.setStyleSheet("""
+            QPushButton {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px 10px; border-radius: 3px;
+            }
+            QPushButton:hover { background: #444; }
+        """)
+        capture_row.addWidget(self._btn_settings)
+
+        cam_layout.addLayout(capture_row)
+
+        # Settings widget (hidden by default)
+        self._camera_settings = CameraSettingsWidget()
+        self._camera_settings.settings_changed.connect(self._apply_camera_settings)
+        self._camera_settings.setVisible(False)
+        cam_layout.addWidget(self._camera_settings)
+
+        # Camera status
+        self._camera_status = QLabel("No camera connected")
+        self._camera_status.setStyleSheet("color: #666; font-size: 10px;")
+        cam_layout.addWidget(self._camera_status)
+
+        # Insert camera group before Image Registration (find its index)
+        reg_group_idx = layout.indexOf(self.findChild(QGroupBox, "Image Registration"))
+        if reg_group_idx >= 0:
+            layout.insertWidget(reg_group_idx, cam_group)
+        else:
+            layout.addWidget(cam_group)
+
+        # Initialize camera instance
+        self._camera = MindVisionCamera()
+        self._camera.signals.frame_ready.connect(self._camera_preview.display_frame)
+        self._camera.signals.error.connect(self._on_camera_error)
+
+    def _refresh_cameras(self) -> None:
+        """Refresh the camera device list."""
+        if not HAS_CAMERA or self._camera is None:
+            return
+
+        self._camera_devices = self._camera.enumerate_devices()
+        self._camera_combo.clear()
+
+        if not self._camera_devices:
+            self._camera_combo.addItem("No camera detected")
+            self._btn_open.setEnabled(False)
+        else:
+            for dev in self._camera_devices:
+                self._camera_combo.addItem(dev["name"])
+            self._btn_open.setEnabled(True)
+
+    def _open_camera(self) -> None:
+        """Open selected camera and start live view."""
+        if not HAS_CAMERA or self._camera is None:
+            return
+
+        idx = self._camera_combo.currentIndex()
+        if idx < 0 or idx >= len(self._camera_devices):
+            return
+
+        dev_info = self._camera_devices[idx]["dev_info"]
+        try:
+            self._camera.open(dev_info)
+            self._camera.set_live_mode()
+
+            # Populate settings ranges and current values
+            ranges = self._camera.get_setting_ranges()
+            self._camera_settings.set_ranges(ranges)
+            current = self._camera.get_current_settings()
+            self._camera_settings.set_values(current)
+
+            self._camera_open = True
+            self._btn_open.setEnabled(False)
+            self._btn_close.setEnabled(True)
+            self._btn_capture.setEnabled(True)
+            self._btn_settings.setEnabled(True)
+            self._camera_status.setText(f"Camera open: {self._camera_devices[idx]['name']}")
+        except Exception as e:
+            self._camera_status.setText(f"Error: {e}")
+
+    def _close_camera(self) -> None:
+        """Close camera and stop live view."""
+        if not HAS_CAMERA or self._camera is None:
+            return
+
+        self._camera.close()
+        self._camera_open = False
+        self._btn_open.setEnabled(len(self._camera_devices) > 0)
+        self._btn_close.setEnabled(False)
+        self._btn_capture.setEnabled(False)
+        self._btn_settings.setEnabled(False)
+        self._camera_preview.set_placeholder_text("Camera closed")
+        self._camera_status.setText("Camera closed")
+
+    def _capture_from_camera(self) -> None:
+        """Capture current frame and load it as the image layer."""
+        if not HAS_CAMERA or self._camera is None:
+            return
+
+        frame = self._camera_preview.get_latest_frame()
+        if frame is None:
+            self._camera_status.setText("No frame to capture")
+            return
+
+        # Load into image layer
+        if hasattr(self, '_canvas'):
+            self._canvas.get_image_layer().load_from_array(frame)
+            self._image_path_label.setText("<camera capture>")
+            self._pixel_size_mm = 0.01  # Default pixel size; user may adjust
+            self._btn_run_coarse.setEnabled(True)
+            self._btn_run_fine.setEnabled(False)
+            self._btn_run_full.setEnabled(True)
+            self._reg_status.setText("Frame captured. Ready for registration.")
+            self._canvas.update()
+            bus.image_loaded.emit("<camera_capture>")
+
+    def _toggle_settings(self) -> None:
+        """Show/hide camera settings widget."""
+        self._settings_visible = not self._settings_visible
+        self._camera_settings.setVisible(self._settings_visible)
+
+    def _apply_camera_settings(self, settings: CameraSettings) -> None:
+        """Apply settings from the settings widget to the camera."""
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            return
+        self._camera.apply_settings(settings)
+
+    def _on_camera_error(self, msg: str) -> None:
+        """Handle camera error signal."""
+        self._camera_status.setText(f"Camera error: {msg}")
+
+    def cleanup(self) -> None:
+        """Cleanup camera resources on app close."""
+        if HAS_CAMERA and self._camera is not None and self._camera_open:
+            self._camera.close()
 
     def _connect_signals(self) -> None:
         bus.group_created.connect(self._on_group_created)
