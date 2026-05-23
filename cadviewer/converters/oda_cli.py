@@ -147,19 +147,13 @@ class ODACLI:
         ]
 
     def get_version(self) -> Optional[str]:
+        """Return version string. ODA is a GUI app — cannot be queried via CLI."""
         exe = self.find_executable()
         if exe is None:
             return None
-        try:
-            result = subprocess.run(
-                [str(exe), "--help"], capture_output=True, text=True, timeout=10,
-            )
-            for line in (result.stdout + result.stderr).splitlines():
-                if "version" in line.lower() or "oda" in line.lower():
-                    return line.strip()
-            return None
-        except (subprocess.TimeoutExpired, OSError):
-            return None
+        # ODA File Converter is a GUI application that shows a dialog when
+        # called with --help or --version. Just report that it exists.
+        return f"ODA File Converter ({exe.name})"
 
     @staticmethod
     def output_dxf_path(config: ConversionConfig) -> Path:
