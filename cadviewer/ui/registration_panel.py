@@ -40,6 +40,8 @@ except ImportError:
     CameraPreviewWidget = None
     CameraSettingsWidget = None
 
+import numpy as np
+
 
 class RegistrationPanel(QWidget):
     """Panel for creating and managing registration groups."""
@@ -680,6 +682,23 @@ class RegistrationPanel(QWidget):
         """Set the registration pipeline (from MainWindow)."""
         self._pipeline = pipeline
 
+    def _compute_image_affine(self, registration_transform: np.ndarray) -> np.ndarray:
+        """Convert registration transform (CAD→image_world) to image layer affine (pixel→CAD).
+
+        The registration pipeline returns T such that T @ cad_point ≈ image_world_point.
+        The image layer needs an affine mapping pixel → CAD world:
+          pixel → image_world (scale by pixel_size_mm, flip Y)
+          image_world → CAD (invert registration transform)
+        """
+        ps = self._pixel_size_mm
+        T_pixel_to_imgworld = np.array([
+            [ps,  0,   0],
+            [0,  -ps,  0],
+            [0,   0,   1],
+        ], dtype=np.float64)
+        T_imgworld_to_cad = np.linalg.inv(registration_transform)
+        return T_imgworld_to_cad @ T_pixel_to_imgworld
+
     def _load_image(self) -> None:
         dialog = ImageLoadDialog(self)
         if dialog.exec() == ImageLoadDialog.Accepted:
@@ -710,13 +729,13 @@ class RegistrationPanel(QWidget):
                 group.group_id,
                 self._pixel_size_mm,
             )
-            T = result["transform"]
-            self._canvas.get_image_layer().set_affine_transform(T)
+            T_img = self._compute_image_affine(result["transform"])
+            self._canvas.get_image_layer().set_affine_transform(T_img)
             self._canvas.update()
             self._reg_status.setText(
                 f"Coarse: error={result['error']:.4f}mm"
             )
-            self._coarse_transform = T
+            self._coarse_transform = result["transform"]
             self._btn_run_fine.setEnabled(True)
             bus.registration_completed.emit(result)
         except Exception as e:
@@ -733,8 +752,8 @@ class RegistrationPanel(QWidget):
             result = self._pipeline.run_fine(
                 self._coarse_transform, group.group_id,
             )
-            T = result["transform"]
-            self._canvas.get_image_layer().set_affine_transform(T)
+            T_img = self._compute_image_affine(result["transform"])
+            self._canvas.get_image_layer().set_affine_transform(T_img)
             self._canvas.update()
             self._reg_status.setText(
                 f"Fine: iters={result['iterations']}, "
@@ -759,15 +778,15 @@ class RegistrationPanel(QWidget):
                 group.group_id,
                 self._pixel_size_mm,
             )
-            T = result["transform"]
-            self._canvas.get_image_layer().set_affine_transform(T)
+            T_img = self._compute_image_affine(result["transform"])
+            self._canvas.get_image_layer().set_affine_transform(T_img)
             self._canvas.update()
             self._reg_status.setText(
                 f"Full: coarse={result.get('coarse_error', 0):.4f}mm → "
                 f"fine={result.get('fine_error', 0):.4f}mm, "
                 f"iters={result.get('iterations', 0)}"
             )
-            self._coarse_transform = result.get("coarse_transform", T)
+            self._coarse_transform = result.get("coarse_transform", result["transform"])
             self._btn_run_fine.setEnabled(True)
             bus.registration_completed.emit(result)
         except Exception as e:

@@ -1,21 +1,23 @@
 """
 QueryEvaluator — orchestrates query execution pipeline.
 
-Parse → Resolve IDs → Check correspondences → Measure → Build results.
+Parse → Resolve IDs → Measure → Build results.
+
+Supports two modes:
+  - CAD-only: measures purely from CAD feature geometry (no image needed)
+  - Full: uses image correspondences for measured vs nominal comparison
 """
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional
 
 import numpy as np
 
 from ..models.query import QueryInstruction, QueryResult, QueryType
 from ..models.repository import FeatureRepository
-from ..models.correspondence import CorrespondenceMap
-from ..models.image_feature import ImageFeatureRepository
 from .query_parser import QueryParser
-from .engine import MeasurementEngine
 
 
 class QueryEvaluator:
@@ -24,14 +26,9 @@ class QueryEvaluator:
     def __init__(
         self,
         repo: FeatureRepository,
-        corr_map: CorrespondenceMap,
-        image_repo: ImageFeatureRepository,
-        affine: np.ndarray,
-        pixel_size_mm: float,
     ) -> None:
         self._repo = repo
         self._parser = QueryParser()
-        self._engine = MeasurementEngine(corr_map, image_repo, affine, pixel_size_mm)
 
     def evaluate(self, text: str) -> List[QueryResult]:
         """Parse query text and evaluate each instruction."""
@@ -44,14 +41,11 @@ class QueryEvaluator:
 
         results = []
         for inst in instructions:
-            result = self._evaluate_instruction(inst)
-            results.append(result)
-
+            results.append(self._evaluate_instruction(inst))
         return results
 
     def _evaluate_instruction(self, inst: QueryInstruction) -> QueryResult:
-        """Evaluate a single query instruction."""
-        # Resolve feature IDs
+        """Evaluate a single query instruction using CAD geometry."""
         fid1 = self._resolve_id(inst.feature_id_1)
         fid2 = self._resolve_id(inst.feature_id_2)
 
@@ -66,25 +60,11 @@ class QueryEvaluator:
                 error_message=f"Cannot resolve ID: {inst.feature_id_2}",
             )
 
-        # Check correspondences exist
-        corr1 = self._engine._corr_map.get_for_cad(fid1)
-        corr2 = self._engine._corr_map.get_for_cad(fid2)
-        if not corr1:
-            return QueryResult(
-                instruction=inst, status="no_correspondence",
-                error_message=f"No correspondence for {inst.feature_id_1}",
-            )
-        if not corr2:
-            return QueryResult(
-                instruction=inst, status="no_correspondence",
-                error_message=f"No correspondence for {inst.feature_id_2}",
-            )
-
-        # Measure
+        # Measure from CAD geometry
         if inst.query_type == QueryType.CIRCLE_DISTANCE:
-            value = self._engine.measure_circle_distance(fid1, fid2)
+            value = self._measure_cad_circle_distance(fid1, fid2)
         elif inst.query_type == QueryType.LINE_DISTANCE:
-            value = self._engine.measure_line_distance(fid1, fid2)
+            value = self._measure_cad_line_distance(fid1, fid2)
         else:
             value = None
 
@@ -94,22 +74,46 @@ class QueryEvaluator:
                 error_message="Measurement computation failed",
             )
 
-        # Compute nominal and deviation
-        nominal = self._engine.compute_nominal(
-            fid1, fid2, inst.query_type,
-            cad_geometry_getter=self._get_cad_geometry,
-        )
-        deviation = None
-        if nominal is not None:
-            deviation = value - nominal
-
         return QueryResult(
             instruction=inst,
             value=value,
             status="ok",
-            nominal=nominal,
-            deviation=deviation,
+            nominal=value,
+            deviation=0.0,
         )
+
+    # ── CAD-only measurement functions ────────────────────────────
+
+    def _measure_cad_circle_distance(self, fid1: str, fid2: str) -> Optional[float]:
+        """Center-to-center distance between two CAD circles."""
+        g1 = self._get_cad_geometry(fid1)
+        g2 = self._get_cad_geometry(fid2)
+        if g1 is None or g2 is None:
+            return None
+        cx1, cy1 = g1.get("cx", 0), g1.get("cy", 0)
+        cx2, cy2 = g2.get("cx", 0), g2.get("cy", 0)
+        return math.sqrt((cx2 - cx1) ** 2 + (cy2 - cy1) ** 2)
+
+    def _measure_cad_line_distance(self, fid1: str, fid2: str) -> Optional[float]:
+        """Perpendicular distance between two CAD lines."""
+        g1 = self._get_cad_geometry(fid1)
+        g2 = self._get_cad_geometry(fid2)
+        if g1 is None or g2 is None:
+            return None
+        x1, y1 = g1.get("x1", 0), g1.get("y1", 0)
+        x2, y2 = g1.get("x2", 0), g1.get("y2", 0)
+        dx, dy = x2 - x1, y2 - y1
+        length = math.sqrt(dx ** 2 + dy ** 2)
+        if length < 1e-12:
+            return None
+        nx, ny = -dy / length, dx / length
+        lx1, ly1 = g2.get("x1", 0), g2.get("y1", 0)
+        lx2, ly2 = g2.get("x2", 0), g2.get("y2", 0)
+        d1 = abs((lx1 - x1) * nx + (ly1 - y1) * ny)
+        d2 = abs((lx2 - x1) * nx + (ly2 - y1) * ny)
+        return (d1 + d2) / 2
+
+    # ── ID resolution ─────────────────────────────────────────────
 
     def _resolve_id(self, raw_id: str) -> Optional[str]:
         """Resolve a query ID to a CADFeature.feature_id."""
@@ -117,9 +121,9 @@ class QueryEvaluator:
         if self._repo.get(raw_id):
             return raw_id
         # 2. DXF handle match
-        fid = self._repo.get_by_handle(raw_id)
-        if fid:
-            return fid
+        feat = self._repo.get_by_handle(raw_id)
+        if feat:
+            return feat.feature_id
         # 3. Partial UUID match
         for feat in self._repo.all_features():
             if feat.feature_id.startswith(raw_id):

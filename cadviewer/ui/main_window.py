@@ -243,6 +243,7 @@ class MainWindow(QMainWindow):
         # Bus
         bus.features_loaded.connect(self._on_features_loaded)
         bus.feature_deselected.connect(self._on_feature_deselected)
+        bus.queries_evaluated.connect(self._on_queries_evaluated)
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -316,6 +317,15 @@ class MainWindow(QMainWindow):
     @Slot(int)
     def _on_features_loaded(self, count: int) -> None:
         self._feature_count_label.setText(f"Features: {count}")
+
+    @Slot(int)
+    def _on_queries_evaluated(self, _count: int) -> None:
+        """Evaluate measurement queries from the Query Panel."""
+        from ..measurement.evaluator import QueryEvaluator
+        query_text = self._query_panel.get_query_text()
+        evaluator = QueryEvaluator(self._repo)
+        results = evaluator.evaluate(query_text)
+        self._query_panel.set_results(results)
 
     def _toggle_pan(self, checked: bool) -> None:
         pass  # pan is always via middle/right mouse in canvas
