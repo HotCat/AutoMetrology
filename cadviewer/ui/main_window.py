@@ -320,8 +320,9 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_queries_evaluated(self, _count: int) -> None:
-        """Evaluate measurement queries from the Query Panel."""
+        """Evaluate measurement queries using MeasuredFeature data."""
         from ..measurement.evaluator import QueryEvaluator
+        from ..measurement.measurement_pipeline import MeasurementPipeline
         import numpy as np
         try:
             import cv2
@@ -331,21 +332,26 @@ class MainWindow(QMainWindow):
 
         query_text = self._query_panel.get_query_text()
 
-        # Get image layer from canvas (if available)
+        # Build measurement pipeline from current image + registration
+        pipeline = None
         image_layer = self._viewer.get_image_layer()
-        image = None
-        affine = None
-
         if image_layer.has_image and HAS_CV2:
-            # Convert BGR image to grayscale for edge detection
             bgr_image = image_layer.image
-            if bgr_image is not None:
-                image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
             affine = image_layer.affine
+            if bgr_image is not None and affine is not None:
+                image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
+                if not np.allclose(affine, np.eye(3), atol=1e-6):
+                    pipeline = MeasurementPipeline(self._repo, image, affine)
 
-        evaluator = QueryEvaluator(self._repo, image=image, affine=affine)
+        evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
         results = evaluator.evaluate(query_text)
         self._query_panel.set_results(results)
+
+        # Push measurement debug overlay to canvas
+        if pipeline is not None:
+            self._viewer.set_measurement_debug(
+                pipeline.get_debug_data(), image_layer.affine,
+            )
 
     def _toggle_pan(self, checked: bool) -> None:
         pass  # pan is always via middle/right mouse in canvas

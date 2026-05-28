@@ -3,7 +3,9 @@ Overlay renderers for registration groups and debug visualization.
 
 RegistrationGroupOverlay — draws group boundaries, fills, and anchors.
 DebugOverlay — draws CAD silhouette, image silhouette, minAreaRect,
-               contour alignment, and local ROI boxes.
+               contour alignment.
+MeasurementDebugOverlay — draws measured feature ROIs, edge points,
+                          fitted circles/lines, confidence badges.
 """
 
 from __future__ import annotations
@@ -308,3 +310,186 @@ class DebugOverlay:
         painter.setPen(QPen(color, 2))
         painter.drawLine(QPointF(scx - 4, scy), QPointF(scx + 4, scy))
         painter.drawLine(QPointF(scx, scy - 4), QPointF(scx, scy + 4))
+
+
+class MeasurementDebugOverlay:
+    """Renders measurement debug: ROI boxes, edge points, fitted geometry."""
+
+    def __init__(self) -> None:
+        pass
+
+    def draw_measurement(
+        self,
+        painter: QPainter,
+        meas_data: dict,
+        world_to_screen: Callable[[float, float], Tuple[float, float]],
+        scale: float,
+        affine: np.ndarray,
+    ) -> None:
+        """Draw measurement overlays for all measured features.
+
+        Args:
+            meas_data: dict keyed by cad_feature_id, each value is a dict
+                       with 'type', 'roi', 'edge_points', fitted geometry, etc.
+            affine: 3x3 pixel→world affine (to transform pixel data to world)
+            world_to_screen: world→screen coordinate transform
+            scale: current zoom scale (pixels per mm)
+        """
+        from ..registration import affine_solver
+
+        legend_y = 10
+
+        for cad_id, data in meas_data.items():
+            feat_type = data.get("type", "")
+            confidence = data.get("confidence", 0.0)
+
+            # Color based on confidence
+            if confidence > 0.7:
+                base_color = QColor(0, 220, 100)  # green
+            elif confidence > 0.4:
+                base_color = QColor(255, 200, 0)  # yellow
+            else:
+                base_color = QColor(255, 80, 80)  # red
+
+            # 1. Draw ROI box (dashed, transformed to world)
+            roi = data.get("roi")
+            if roi is not None:
+                self._draw_roi_box(
+                    painter, roi, affine, world_to_screen, scale,
+                    QColor(base_color.red(), base_color.green(), base_color.blue(), 100),
+                )
+
+            # 2. Draw detected edge points (small green dots)
+            edge_points = data.get("edge_points")
+            if edge_points is not None and len(edge_points) > 0:
+                pts_world = affine_solver.apply(affine, edge_points)
+                pen = QPen(QColor(0, 255, 128, 180), 2)
+                painter.setPen(pen)
+                max_pts = 300
+                draw_pts = pts_world
+                if len(draw_pts) > max_pts:
+                    idx = np.linspace(0, len(draw_pts) - 1, max_pts, dtype=int)
+                    draw_pts = draw_pts[idx]
+                for pt in draw_pts:
+                    sx, sy = world_to_screen(pt[0], pt[1])
+                    painter.drawPoint(QPointF(sx, sy))
+
+            # 3. Draw fitted geometry
+            if feat_type == "circle":
+                self._draw_fitted_circle(
+                    painter, data, affine, world_to_screen, scale, base_color,
+                )
+            elif feat_type == "line":
+                self._draw_fitted_line(
+                    painter, data, affine, world_to_screen, scale, base_color,
+                )
+
+        # Legend
+        painter.setPen(QPen(QColor(200, 200, 200, 200)))
+        painter.setFont(QFont("Arial", 9))
+        lx = 10
+        ly = legend_y
+        legend = [
+            ("Measured ROI", QColor(100, 200, 100, 100)),
+            ("Edge points (fitted)", QColor(0, 255, 128)),
+            ("Fitted circle/line", QColor(0, 200, 255)),
+        ]
+        for text, color in legend:
+            painter.setPen(QPen(color, 2))
+            painter.drawLine(QPointF(lx, ly + 5), QPointF(lx + 20, ly + 5))
+            painter.setPen(QPen(QColor(200, 200, 200, 200)))
+            painter.drawText(QPointF(lx + 25, ly + 10), text)
+            ly += 16
+
+    def _draw_roi_box(
+        self,
+        painter: QPainter,
+        roi: tuple,
+        affine: np.ndarray,
+        world_to_screen: Callable,
+        scale: float,
+        color: QColor,
+    ) -> None:
+        """Draw ROI bounding box transformed to world coordinates."""
+        from ..registration import affine_solver
+        xmin, ymin, xmax, ymax = roi
+        corners = np.array([
+            [xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax],
+        ], dtype=np.float64)
+        corners_world = affine_solver.apply(affine, corners)
+
+        pen = QPen(color, 1, Qt.DashLine)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+
+        polygon = QPolygonF()
+        for pt in corners_world:
+            sx, sy = world_to_screen(pt[0], pt[1])
+            polygon.append(QPointF(sx, sy))
+        painter.drawPolygon(polygon)
+
+    def _draw_fitted_circle(
+        self,
+        painter: QPainter,
+        data: dict,
+        affine: np.ndarray,
+        world_to_screen: Callable,
+        scale: float,
+        color: QColor,
+    ) -> None:
+        """Draw fitted circle in world coordinates."""
+        from ..registration import affine_solver
+        center = data.get("fitted_center")
+        radius = data.get("fitted_radius")
+        if center is None or radius is None:
+            return
+
+        # Transform center to world
+        center_world = affine_solver.apply(affine, center.reshape(1, 2))[0]
+        # Transform radius point to get world radius
+        edge_pt = np.array([[center[0] + radius, center[1]]])
+        edge_world = affine_solver.apply(affine, edge_pt)[0]
+        r_world = float(np.linalg.norm(edge_world - center_world))
+
+        sx, sy = world_to_screen(center_world[0], center_world[1])
+        r_screen = r_world * scale
+
+        pen = QPen(color, 2)
+        painter.setPen(pen)
+        painter.setBrush(Qt.NoBrush)
+        painter.drawEllipse(QPointF(sx, sy), r_screen, r_screen)
+
+        # Center crosshair
+        pen2 = QPen(color, 1)
+        painter.setPen(pen2)
+        painter.drawLine(QPointF(sx - 4, sy), QPointF(sx + 4, sy))
+        painter.drawLine(QPointF(sx, sy - 4), QPointF(sx, sy + 4))
+
+    def _draw_fitted_line(
+        self,
+        painter: QPainter,
+        data: dict,
+        affine: np.ndarray,
+        world_to_screen: Callable,
+        scale: float,
+        color: QColor,
+    ) -> None:
+        """Draw fitted line in world coordinates."""
+        from ..registration import affine_solver
+        p1 = data.get("fitted_p1")
+        p2 = data.get("fitted_p2")
+        if p1 is None or p2 is None:
+            return
+
+        pixel_pts = np.array([p1, p2])
+        world_pts = affine_solver.apply(affine, pixel_pts)
+
+        pen = QPen(color, 2)
+        painter.setPen(pen)
+        sx1, sy1 = world_to_screen(world_pts[0, 0], world_pts[0, 1])
+        sx2, sy2 = world_to_screen(world_pts[1, 0], world_pts[1, 1])
+        painter.drawLine(QPointF(sx1, sy1), QPointF(sx2, sy2))
+
+        # Endpoint markers
+        for sx, sy in [(sx1, sy1), (sx2, sy2)]:
+            painter.drawEllipse(QPointF(sx, sy), 3, 3)

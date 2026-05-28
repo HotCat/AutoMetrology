@@ -32,7 +32,7 @@ from PySide6.QtWidgets import QWidget, QSizePolicy
 from ..models.feature import CADFeature, FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
-from ..renderers.overlay_renderer import RegistrationGroupOverlay, DebugOverlay
+from ..renderers.overlay_renderer import RegistrationGroupOverlay, DebugOverlay, MeasurementDebugOverlay
 from ..renderers.image_layer import ImageLayerRenderer
 from ..core.signals import bus
 
@@ -93,6 +93,11 @@ class CADViewerCanvas(QWidget):
         self._debug_mode = False
         self._debug_overlay = DebugOverlay()
         self._debug_data: dict = {}
+
+        # Measurement debug overlay
+        self._meas_debug_overlay = MeasurementDebugOverlay()
+        self._meas_debug_data: dict = {}
+        self._meas_debug_affine: Optional[np.ndarray] = None
 
         # Connect signals
         bus.highlight_feature.connect(self._on_highlight_feature)
@@ -304,6 +309,14 @@ class CADViewerCanvas(QWidget):
                 self._debug_overlay.draw_debug(
                     painter, self._debug_data,
                     self._world_to_screen, self._scale,
+                )
+
+            # Measurement debug overlay
+            if self._meas_debug_data and self._meas_debug_affine is not None:
+                self._meas_debug_overlay.draw_measurement(
+                    painter, self._meas_debug_data,
+                    self._world_to_screen, self._scale,
+                    self._meas_debug_affine,
                 )
 
             # Coordinate info
@@ -1025,4 +1038,12 @@ class CADViewerCanvas(QWidget):
     def set_debug_mode(self, enabled: bool) -> None:
         """Toggle debug overlay rendering."""
         self._debug_mode = enabled
+        self.update()
+
+    def set_measurement_debug(
+        self, data: dict, affine: np.ndarray,
+    ) -> None:
+        """Store measurement debug data and the pixel→world affine."""
+        self._meas_debug_data = data
+        self._meas_debug_affine = affine
         self.update()
