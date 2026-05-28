@@ -116,6 +116,16 @@ class ImageLayerRenderer:
         return self._image is not None
 
     @property
+    def affine(self) -> np.ndarray:
+        """3x3 affine matrix (pixel → CAD world)."""
+        return self._affine
+
+    @property
+    def image(self) -> Optional[np.ndarray]:
+        """BGR numpy image array, or None."""
+        return self._image
+
+    @property
     def image_size(self) -> Tuple[int, int]:
         if self._image is None:
             return (0, 0)

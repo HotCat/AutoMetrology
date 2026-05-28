@@ -19,7 +19,7 @@ from PySide6.QtGui import QColor, QFont, QIcon
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QGroupBox, QFormLayout, QLineEdit,
-    QInputDialog, QAbstractItemView, QSplitter, QComboBox,
+    QInputDialog, QAbstractItemView, QSplitter, QComboBox, QCheckBox,
 )
 
 from ..models.feature import FeatureType
@@ -225,7 +225,7 @@ class RegistrationPanel(QWidget):
 
         self._btn_run_coarse = QPushButton("Coarse Registration")
         self._btn_run_coarse.clicked.connect(self._run_coarse)
-        self._btn_run_fine = QPushButton("Fine Registration (ICP)")
+        self._btn_run_fine = QPushButton("Refine (Contour ICP)")
         self._btn_run_fine.clicked.connect(self._run_fine)
         self._btn_run_full = QPushButton("Full Registration")
         self._btn_run_full.clicked.connect(self._run_full)
@@ -245,6 +245,12 @@ class RegistrationPanel(QWidget):
         self._reg_status = QLabel("—")
         self._reg_status.setStyleSheet("color: #aaa; font-size: 10px;")
         reg_layout.addWidget(self._reg_status)
+
+        # Debug checkbox
+        self._btn_debug = QCheckBox("Show Debug Overlay")
+        self._btn_debug.setStyleSheet("color: #aaa; font-size: 10px;")
+        self._btn_debug.toggled.connect(self._toggle_debug)
+        reg_layout.addWidget(self._btn_debug)
 
         layout.addWidget(reg_group)
 
@@ -665,7 +671,7 @@ class RegistrationPanel(QWidget):
             self._centroid_label.setText("—")
         stats = group.type_statistics(self._repo)
         if stats:
-            parts = [f"{ft.name}: {c}" for ft, c in sorted(stats.items())]
+            parts = [f"{ft.name}: {c}" for ft, c in sorted(stats.items(), key=lambda x: x[0].name)]
             self._types_label.setText(", ".join(parts))
         else:
             self._types_label.setText("—")
@@ -731,6 +737,7 @@ class RegistrationPanel(QWidget):
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)
+            self._push_debug_data()
             self._canvas.update()
             self._reg_status.setText(
                 f"Coarse: error={result['error']:.4f}mm"
@@ -754,6 +761,7 @@ class RegistrationPanel(QWidget):
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)
+            self._push_debug_data()
             self._canvas.update()
             self._reg_status.setText(
                 f"Fine: iters={result['iterations']}, "
@@ -780,6 +788,7 @@ class RegistrationPanel(QWidget):
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)
+            self._push_debug_data()
             self._canvas.update()
             self._reg_status.setText(
                 f"Full: coarse={result.get('coarse_error', 0):.4f}mm → "
@@ -792,3 +801,15 @@ class RegistrationPanel(QWidget):
         except Exception as e:
             self._reg_status.setText(f"Error: {e}")
             bus.registration_failed.emit(str(e))
+
+    def _toggle_debug(self, checked: bool) -> None:
+        """Toggle debug overlay on canvas."""
+        if hasattr(self, '_canvas'):
+            self._canvas.set_debug_mode(checked)
+            if checked:
+                self._push_debug_data()
+
+    def _push_debug_data(self) -> None:
+        """Push pipeline debug data to canvas for overlay rendering."""
+        if hasattr(self, '_canvas') and hasattr(self, '_pipeline'):
+            self._canvas.set_debug_data(self._pipeline.get_debug_data())

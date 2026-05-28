@@ -1,12 +1,17 @@
 """
-RegistrationPipeline — orchestrates the CAD-to-image alignment process.
+RegistrationPipeline — silhouette-based CAD-to-image alignment.
 
-Pipeline stages:
-  1. Coarse: centroid/bbox matching → initial affine estimate
-  2. Fine: ICP refinement using sampled CAD points and image edges
+Architecture:
+  1. Coarse: CAD silhouette + image silhouette → minAreaRect alignment
+  2. Refinement: Optional lightweight outer-contour ICP
+  3. Freeze: Global transform is locked after alignment
+  4. Metrology: Local ROI subpixel fitting (separate from registration)
 
-The pipeline is compute-only (no Qt deps). Results are returned as dicts
-with numpy arrays. UI integration happens via signals in MainWindow.
+Registration uses only simple global silhouette geometry.
+Precise measurement happens via local subpixel fitting AFTER registration.
+
+This separation prevents ICP local minima caused by repetitive internal
+CAD geometry (circles, nested contours, parallel lines).
 """
 
 from __future__ import annotations
@@ -17,16 +22,26 @@ from typing import Optional
 
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
-from .sampler import CADFeatureSampler
+from .cad_silhouette import CADSilhouetteExtractor, RegistrationContourGenerator
+from .image_silhouette import ProductSilhouetteExtractor
+from .min_area_rect_reg import MinAreaRectRegistration
+from .contour_refinement import ContourRefinementEngine
 from .image_extractor import ImageFeatureExtractor
-from .icp_engine import ICPRegistrationEngine
 from . import affine_solver
 
 logger = logging.getLogger(__name__)
 
 
+def _print(msg: str) -> None:
+    print(f"[REG] {msg}")
+
+
 class RegistrationPipeline:
-    """Orchestrates coarse-to-fine CAD-to-image registration."""
+    """Silhouette-based registration pipeline.
+
+    Separates global registration (silhouette alignment) from
+    local metrology (subpixel feature fitting).
+    """
 
     def __init__(
         self,
@@ -35,10 +50,11 @@ class RegistrationPipeline:
     ) -> None:
         self._repo = repo
         self._reg_manager = reg_manager
-        self._sampler = CADFeatureSampler(default_density=1.0)
-        self._extractor = ImageFeatureExtractor()
-        self._icp = ICPRegistrationEngine(
-            max_iterations=100, tolerance=1e-6, outlier_distance=10.0,
+        self._silhouette_gen = RegistrationContourGenerator()
+        self._img_silhouette = ProductSilhouetteExtractor()
+        self._min_area_rect = MinAreaRectRegistration()
+        self._refinement = ContourRefinementEngine(
+            max_iterations=30, tolerance=1e-4, outlier_distance=5.0,
         )
         self._debug_data: dict = {}
 
@@ -48,66 +64,114 @@ class RegistrationPipeline:
         group_id: str,
         pixel_size_mm: float,
     ) -> dict:
-        """
-        Coarse registration: centroid/bbox alignment.
+        """Coarse registration: silhouette minAreaRect alignment.
 
         Args:
-            image_path: path to telecentric image (PNG/BMP/TIF)
-            group_id: registration group to use for alignment
-            pixel_size_mm: mm per pixel (from camera calibration)
+            image_path: path to telecentric image
+            group_id: registration group to use
+            pixel_size_mm: mm per pixel
 
         Returns dict with 'transform', 'stage', 'error'.
         """
+        _print("=" * 60)
+        _print("COARSE REGISTRATION (MinAreaRect Silhouette)")
+        _print(f"  pixel_size_mm = {pixel_size_mm}")
+
         group = self._reg_manager.get_group(group_id)
         if not group or not group.feature_ids:
-            return {"transform": affine_solver.identity(), "stage": "coarse", "error": float("inf")}
+            _print("  ERROR: empty group")
+            return {
+                "transform": affine_solver.identity(),
+                "stage": "coarse",
+                "error": float("inf"),
+            }
 
-        # Sample CAD features
-        cad_points = self._sampler.sample_group(group, self._repo)
+        features = [self._repo.get(fid) for fid in group.feature_ids]
+        features = [f for f in features if f is not None]
+
+        # ── Step 1: Extract CAD silhouette ────────────────────────
+        _print(f"  Group: {group.name} ({len(features)} features)")
+        silhouette_types = {"LINE", "POLYLINE", "ARC"}
+        sil_count = sum(1 for f in features if f.feature_type.name in silhouette_types)
+        _print(f"  Silhouette-relevant features: {sil_count}/{len(features)}")
+
+        cad_points = self._silhouette_gen.generate_point_cloud(
+            features, density=0.5,
+        )
+        cad_contour = self._silhouette_gen.generate(features, density=0.5)
+
         if len(cad_points) < 3:
-            return {"transform": affine_solver.identity(), "stage": "coarse", "error": float("inf")}
+            _print("  ERROR: too few CAD silhouette points")
+            return {
+                "transform": affine_solver.identity(),
+                "stage": "coarse",
+                "error": float("inf"),
+            }
 
-        # Load image and extract edges
-        image = self._extractor.load_image(image_path)
-        image_edges = self._extractor.extract_edges(image)
-        if len(image_edges) < 3:
-            return {"transform": affine_solver.identity(), "stage": "coarse", "error": float("inf")}
+        cad_centroid = cad_points.mean(axis=0)
+        _print(f"  CAD silhouette: {len(cad_points)} points, "
+               f"contour: {len(cad_contour) if cad_contour is not None else 0} pts")
+        _print(f"    centroid: ({cad_centroid[0]:.3f}, {cad_centroid[1]:.3f})")
 
-        # Convert image edges from pixel to world coords using pixel_size_mm
-        # Note: image Y is inverted relative to CAD Y
-        image_world = image_edges * pixel_size_mm
-        image_world[:, 1] = -image_world[:, 1]  # flip Y
+        # ── Step 2: Extract image silhouette ──────────────────────
+        image = ImageFeatureExtractor.load_image(image_path)
+        _print(f"  Image: {image.shape[1]}x{image.shape[0]} pixels")
 
-        # Compute centroids
-        cad_centroid = self._sampler.compute_centroid(cad_points)
-        img_centroid = self._sampler.compute_centroid(image_world)
+        mask, img_contour = self._img_silhouette.extract(image)
+        if len(img_contour) < 3:
+            _print("  ERROR: too few image silhouette points")
+            return {
+                "transform": affine_solver.identity(),
+                "stage": "coarse",
+                "error": float("inf"),
+            }
 
-        # Translation to align centroids
-        T_translate = affine_solver.solve_from_centroids(cad_centroid, img_centroid)
+        _print(f"  Image silhouette: {len(img_contour)} contour points")
 
-        # Scale from bounding box sizes
-        cad_bbox = self._sampler.compute_bbox(cad_points)
-        img_bbox = self._sampler.compute_bbox(image_world)
-        T_scale = affine_solver.solve_from_bbox(cad_bbox, img_bbox)
+        # ── Step 3: MinAreaRect registration ──────────────────────
+        T_coarse, rect_info = self._min_area_rect.register(
+            cad_points, img_contour, pixel_size_mm,
+        )
 
-        # Compose: translate then scale
-        T_coarse = affine_solver.compose([T_translate, T_scale])
+        if np.allclose(T_coarse, np.eye(3)):
+            _print("  ERROR: minAreaRect registration failed")
+            return {
+                "transform": affine_solver.identity(),
+                "stage": "coarse",
+                "error": float("inf"),
+            }
 
-        error = self._compute_rmse(cad_points, image_world, T_coarse)
+        params = affine_solver.extract_params(T_coarse)
+        _print(f"  MinAreaRect transform:")
+        _print(f"    scale={params['scale_x']:.6f}  "
+               f"rotation={params['rotation_deg']:.4f}deg")
+        _print(f"    tx={params['tx']:.4f}  ty={params['ty']:.4f}")
 
+        # Compute RMSE
+        img_world = img_contour.copy().astype(np.float64)
+        img_world[:, 0] *= pixel_size_mm
+        img_world[:, 1] *= -pixel_size_mm
+
+        error = self._compute_rmse(cad_points, img_world, T_coarse)
+        _print(f"  Coarse RMSE: {error:.4f} mm")
+
+        # Also extract full image edges for debug overlay
+        image_edges = ImageFeatureExtractor.extract_edges(image)
+
+        # ── Store debug data ──────────────────────────────────────
         self._debug_data["coarse"] = {
             "cad_points": cad_points,
+            "cad_contour": cad_contour,
             "image_edges": image_edges,
-            "image_world": image_world,
+            "img_contour": img_contour,
+            "img_contour_world": img_world,
+            "mask": mask,
             "transform": T_coarse,
+            "rect_info": rect_info,
+            "pixel_size_mm": pixel_size_mm,
             "cad_centroid": cad_centroid,
-            "img_centroid": img_centroid,
+            "image_path": image_path,
         }
-
-        logger.info(
-            f"Coarse registration: error={error:.4f}mm, "
-            f"cad_pts={len(cad_points)}, img_pts={len(image_edges)}"
-        )
 
         return {"transform": T_coarse, "stage": "coarse", "error": error}
 
@@ -117,11 +181,18 @@ class RegistrationPipeline:
         group_id: str,
         pixel_size_mm: Optional[float] = None,
     ) -> dict:
-        """
-        Fine registration: ICP refinement.
+        """Fine registration: lightweight outer contour refinement.
 
-        Uses coarse transform as initial estimate for ICP.
+        Uses only the CAD silhouette contour — no internal features.
         """
+        _print("-" * 60)
+        _print("REFINEMENT (Outer Contour ICP)")
+
+        coarse_params = affine_solver.extract_params(coarse_transform)
+        _print(f"  Input transform:")
+        _print(f"    scale={coarse_params['scale_x']:.6f}  "
+               f"rotation={coarse_params['rotation_deg']:.4f}deg")
+
         group = self._reg_manager.get_group(group_id)
         if not group or not group.feature_ids:
             return {
@@ -129,40 +200,72 @@ class RegistrationPipeline:
                 "iterations": 0, "error": float("inf"), "converged": False,
             }
 
-        cad_points = self._sampler.sample_group(group, self._repo)
-        if len(cad_points) < 3:
+        features = [self._repo.get(fid) for fid in group.feature_ids]
+        features = [f for f in features if f is not None]
+
+        # Use only CAD silhouette contour for refinement (NOT all features)
+        cad_contour = self._silhouette_gen.generate(features, density=0.5)
+        if cad_contour is None or len(cad_contour) < 3:
+            _print("  ERROR: no CAD silhouette contour for refinement")
             return {
                 "transform": coarse_transform, "stage": "fine",
                 "iterations": 0, "error": float("inf"), "converged": False,
             }
 
-        # Use cached image edges from coarse stage
+        _print(f"  CAD contour: {len(cad_contour)} points (silhouette only)")
+
         coarse_data = self._debug_data.get("coarse", {})
-        image_world = coarse_data.get("image_world")
-        if image_world is None or len(image_world) < 3:
+        img_world = coarse_data.get("img_contour_world")
+        if img_world is None or len(img_world) < 3:
+            _print("  ERROR: no cached image silhouette from coarse stage")
             return {
                 "transform": coarse_transform, "stage": "fine",
                 "iterations": 0, "error": float("inf"), "converged": False,
             }
 
-        # Run ICP
-        result = self._icp.align(cad_points, image_world, coarse_transform)
+        _print(f"  Image silhouette: {len(img_world)} points")
+
+        # Run lightweight contour refinement (ICP on silhouette only)
+        result = self._refinement.refine(
+            cad_contour, img_world, coarse_transform,
+        )
+        T_refined = result["transform"]
+
+        refined_params = affine_solver.extract_params(T_refined)
+        _print(f"  Refined ({result['iterations']} iters):")
+        _print(f"    scale={refined_params['scale_x']:.6f}  "
+               f"rotation={refined_params['rotation_deg']:.4f}deg")
+        _print(f"    scale delta = "
+               f"{refined_params['scale_x'] - coarse_params['scale_x']:.6f}")
+        _print(f"    rotation delta = "
+               f"{refined_params['rotation_deg'] - coarse_params['rotation_deg']:.4f}deg")
+        _print(f"    RMSE = {np.sqrt(result['final_error']):.4f} mm  "
+               f"converged={result['converged']}")
+
+        # Log image affine preview
+        ps = coarse_data.get("pixel_size_mm", pixel_size_mm or 0.01)
+        T_pixel_to_imgworld = np.array([
+            [ps, 0, 0], [0, -ps, 0], [0, 0, 1],
+        ], dtype=np.float64)
+        T_imgworld_to_cad = np.linalg.inv(T_refined)
+        T_img = T_imgworld_to_cad @ T_pixel_to_imgworld
+        img_params = affine_solver.extract_params(T_img)
+        _print(f"  Image affine (pixel → CAD):")
+        _print(f"    scale={img_params['scale_x']:.6f}  "
+               f"rotation={img_params['rotation_deg']:.4f}deg  "
+               f"tx={img_params['tx']:.4f}  ty={img_params['ty']:.4f}")
 
         self._debug_data["fine"] = {
-            "transform": result["transform"],
+            "transform": T_refined,
             "iterations": result["iterations"],
             "error": result["final_error"],
-            "correspondences": result["correspondences"],
+            "converged": result["converged"],
+            "cad_contour": cad_contour,
+            "img_world": img_world,
         }
 
-        logger.info(
-            f"Fine registration: iterations={result['iterations']}, "
-            f"error={result['final_error']:.4f}mm, "
-            f"converged={result['converged']}"
-        )
-
         return {
-            "transform": result["transform"],
+            "transform": T_refined,
             "stage": "fine",
             "iterations": result["iterations"],
             "error": result["final_error"],
@@ -175,12 +278,19 @@ class RegistrationPipeline:
         group_id: str,
         pixel_size_mm: float,
     ) -> dict:
-        """Run complete coarse → fine registration pipeline."""
+        """Run complete coarse → refinement pipeline."""
         coarse = self.run_coarse(image_path, group_id, pixel_size_mm)
         if coarse["error"] == float("inf"):
             return coarse
 
         fine = self.run_fine(coarse["transform"], group_id, pixel_size_mm)
+
+        _print("=" * 60)
+        _print("FULL REGISTRATION SUMMARY")
+        _print(f"  Coarse RMSE: {coarse['error']:.4f} mm")
+        _print(f"  Refined RMSE: {np.sqrt(fine['error']):.4f} mm  "
+               f"({fine['iterations']} iters, converged={fine['converged']})")
+        _print("=" * 60)
 
         return {
             "transform": fine["transform"],
@@ -197,7 +307,7 @@ class RegistrationPipeline:
         return self._debug_data.copy()
 
     def _compute_rmse(
-        self, src: np.ndarray, tgt: np.ndarray, T: np.ndarray
+        self, src: np.ndarray, tgt: np.ndarray, T: np.ndarray,
     ) -> float:
         """Root mean squared error between transformed source and nearest target."""
         if len(src) == 0 or len(tgt) == 0:

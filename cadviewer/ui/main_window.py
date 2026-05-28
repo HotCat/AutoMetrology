@@ -322,8 +322,28 @@ class MainWindow(QMainWindow):
     def _on_queries_evaluated(self, _count: int) -> None:
         """Evaluate measurement queries from the Query Panel."""
         from ..measurement.evaluator import QueryEvaluator
+        import numpy as np
+        try:
+            import cv2
+            HAS_CV2 = True
+        except ImportError:
+            HAS_CV2 = False
+
         query_text = self._query_panel.get_query_text()
-        evaluator = QueryEvaluator(self._repo)
+
+        # Get image layer from canvas (if available)
+        image_layer = self._viewer.get_image_layer()
+        image = None
+        affine = None
+
+        if image_layer.has_image and HAS_CV2:
+            # Convert BGR image to grayscale for edge detection
+            bgr_image = image_layer.image
+            if bgr_image is not None:
+                image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
+            affine = image_layer.affine
+
+        evaluator = QueryEvaluator(self._repo, image=image, affine=affine)
         results = evaluator.evaluate(query_text)
         self._query_panel.set_results(results)
 

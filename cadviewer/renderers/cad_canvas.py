@@ -32,7 +32,7 @@ from PySide6.QtWidgets import QWidget, QSizePolicy
 from ..models.feature import CADFeature, FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
-from ..renderers.overlay_renderer import RegistrationGroupOverlay
+from ..renderers.overlay_renderer import RegistrationGroupOverlay, DebugOverlay
 from ..renderers.image_layer import ImageLayerRenderer
 from ..core.signals import bus
 
@@ -88,6 +88,11 @@ class CADViewerCanvas(QWidget):
 
         # Image layer
         self._image_layer = ImageLayerRenderer()
+
+        # Debug overlay
+        self._debug_mode = False
+        self._debug_overlay = DebugOverlay()
+        self._debug_data: dict = {}
 
         # Connect signals
         bus.highlight_feature.connect(self._on_highlight_feature)
@@ -293,6 +298,13 @@ class CADViewerCanvas(QWidget):
 
             # Origin marker
             self._draw_origin_marker(painter)
+
+            # Debug overlay
+            if self._debug_mode and self._debug_data:
+                self._debug_overlay.draw_debug(
+                    painter, self._debug_data,
+                    self._world_to_screen, self._scale,
+                )
 
             # Coordinate info
             self._draw_info_overlay(painter)
@@ -1003,3 +1015,14 @@ class CADViewerCanvas(QWidget):
 
     def get_image_layer(self) -> ImageLayerRenderer:
         return self._image_layer
+
+    def set_debug_data(self, data: dict) -> None:
+        """Store debug data from registration pipeline for overlay rendering."""
+        self._debug_data = data
+        if self._debug_mode:
+            self.update()
+
+    def set_debug_mode(self, enabled: bool) -> None:
+        """Toggle debug overlay rendering."""
+        self._debug_mode = enabled
+        self.update()
