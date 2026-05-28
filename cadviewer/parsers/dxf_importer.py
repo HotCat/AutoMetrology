@@ -33,6 +33,8 @@ class DXFImporter:
     def __init__(self) -> None:
         self.repo = FeatureRepository()
         self._entity_index = 0
+        self._insert_xscale = 1.0
+        self._insert_yscale = 1.0
 
     def import_file(self, path: str | Path) -> FeatureRepository:
         """Load a DXF file and return populated FeatureRepository."""
@@ -52,12 +54,15 @@ class DXFImporter:
 
     def _parse_insert(self, insert_entity, doc) -> None:
         """Decompose INSERT entities (block references) into their virtual children."""
-        block_name = insert_entity.dxf.name
+        self._insert_xscale = getattr(insert_entity.dxf, 'xscale', 1.0)
+        self._insert_yscale = getattr(insert_entity.dxf, 'yscale', 1.0)
         try:
             for ve in insert_entity.virtual_entities():
                 self._parse_entity(ve)
         except Exception:
             pass
+        self._insert_xscale = 1.0
+        self._insert_yscale = 1.0
 
     def _parse_entity(self, entity) -> None:
         etype = entity.dxftype()
@@ -100,9 +105,14 @@ class DXFImporter:
 
     def _parse_circle(self, e) -> None:
         c = e.dxf.center
+        cx, cy = c.x, c.y
+        if self._insert_xscale < 0:
+            cx = -cx
+        if self._insert_yscale < 0:
+            cy = -cy
         feat = CADFeature(
             feature_type=FeatureType.CIRCLE,
-            geometry={"cx": c.x, "cy": c.y, "radius": e.dxf.radius},
+            geometry={"cx": cx, "cy": cy, "radius": e.dxf.radius},
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -112,12 +122,36 @@ class DXFImporter:
 
     def _parse_arc(self, e) -> None:
         c = e.dxf.center
+        cx, cy = c.x, c.y
+        start_angle = float(e.dxf.start_angle)
+        end_angle = float(e.dxf.end_angle)
+        # ezdxf virtual_entities() has two bugs for INSERTs with negative
+        # scale: it negates ARC center coords (mirrors around origin
+        # instead of insert point) and does not transform arc angles
+        # for the mirror.
+        if self._insert_xscale < 0 and self._insert_yscale < 0:
+            cx = -cx
+            cy = -cy
+            start_angle += 180.0
+            end_angle += 180.0
+        elif self._insert_xscale < 0:
+            cx = -cx
+            new_start = 180.0 - end_angle
+            new_end = 180.0 - start_angle
+            start_angle = new_start
+            end_angle = new_end
+        elif self._insert_yscale < 0:
+            cy = -cy
+            new_start = -end_angle
+            new_end = -start_angle
+            start_angle = new_start
+            end_angle = new_end
         feat = CADFeature(
             feature_type=FeatureType.ARC,
             geometry={
-                "cx": c.x, "cy": c.y, "radius": e.dxf.radius,
-                "start_angle": e.dxf.start_angle,
-                "end_angle": e.dxf.end_angle,
+                "cx": cx, "cy": cy, "radius": e.dxf.radius,
+                "start_angle": start_angle,
+                "end_angle": end_angle,
             },
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",

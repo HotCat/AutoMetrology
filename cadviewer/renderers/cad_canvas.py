@@ -448,7 +448,13 @@ class CADViewerCanvas(QWidget):
             self._draw_leader(painter, g)
 
     def _draw_arc(self, painter: QPainter, g: dict) -> None:
-        """Render an arc (circular or elliptical)."""
+        """Render an arc by tessellation into line segments.
+
+        QPainterPath.arcTo() produces near-invisible output when the arc
+        bounding rect is sub-pixel (screen radius < 1 px).  Tessellation
+        avoids this: each line segment is rasterised independently and
+        remains visible even at very low zoom levels.
+        """
         if g.get("is_ellipse"):
             self._draw_elliptical_arc(painter, g)
             return
@@ -456,16 +462,48 @@ class CADViewerCanvas(QWidget):
         cx, cy = self._world_to_screen(g["cx"], g["cy"])
         r = g["radius"] * self._scale
         start_deg = g["start_angle"]
-        end_deg = g["end_angle"]
-        span = end_deg - start_deg
-        if span < 0:
-            span += 360
+        span_deg = g["end_angle"] - start_deg
+        if span_deg < 0:
+            span_deg += 360
 
-        rect = QRectF(cx - r, cy - r, 2 * r, 2 * r)
-        path = QPainterPath()
-        path.arcMoveTo(rect, start_deg)
-        path.arcTo(rect, start_deg, span)
-        painter.drawPath(path)
+        self._tessellate_arc(painter, cx, cy, r, start_deg, span_deg)
+
+    def _tessellate_arc(
+        self,
+        painter: QPainter,
+        cx: float,
+        cy: float,
+        r: float,
+        start_deg: float,
+        span_deg: float,
+    ) -> None:
+        """Tessellate and draw a circular arc as line segments.
+
+        Args:
+            painter: QPainter to draw with
+            cx, cy: Screen coordinates of center
+            r: Screen radius in pixels
+            start_deg: Start angle in degrees
+            span_deg: Sweep angle in degrees (positive = counterclockwise)
+        """
+        if r < 1e-6:
+            return
+        n_seg = max(16, int(abs(span_deg) / 5))
+        theta = math.radians(start_deg)
+        d_theta = math.radians(span_deg) / n_seg
+
+        cos_t, sin_t = math.cos(theta), math.sin(theta)
+        cos_d, sin_d = math.cos(d_theta), math.sin(d_theta)
+
+        prev = QPointF(cx + r * cos_t, cy - r * sin_t)
+        for _ in range(n_seg):
+            cos_t, sin_t = (
+                cos_t * cos_d - sin_t * sin_d,
+                sin_t * cos_d + cos_t * sin_d,
+            )
+            cur = QPointF(cx + r * cos_t, cy - r * sin_t)
+            painter.drawLine(prev, cur)
+            prev = cur
 
     def _draw_elliptical_arc(self, painter: QPainter, g: dict) -> None:
         """Render an elliptical arc by parametric evaluation.
@@ -531,11 +569,7 @@ class CADViewerCanvas(QWidget):
                             span += 360
                         if span < 1e-10:
                             span = 360
-                        rect = QRectF(cx - r, cy - r, 2 * r, 2 * r)
-                        path = QPainterPath()
-                        path.arcMoveTo(rect, start_deg)
-                        path.arcTo(rect, start_deg, span)
-                        painter.drawPath(path)
+                        self._tessellate_arc(painter, cx, cy, r, start_deg, span)
                 elif etype == "EllipseEdge":
                     emx = edge.get("major_axis")
                     eratio = edge.get("ratio")
