@@ -32,13 +32,13 @@ from .image_load_dialog import ImageLoadDialog
 try:
     from ..camera import HAS_CAMERA, MindVisionCamera, CameraSettings
     from ..camera.preview_widget import CameraPreviewWidget
-    from ..camera.settings_widget import CameraSettingsWidget
+    from ..camera.live_window import CameraLiveWindow
 except ImportError:
     HAS_CAMERA = False
     MindVisionCamera = None
     CameraSettings = None
     CameraPreviewWidget = None
-    CameraSettingsWidget = None
+    CameraLiveWindow = None
 
 import numpy as np
 
@@ -61,7 +61,7 @@ class RegistrationPanel(QWidget):
         self._camera: Optional[MindVisionCamera] = None
         self._camera_devices: list = []
         self._camera_open: bool = False
-        self._settings_visible: bool = False
+        self._live_window: Optional[CameraLiveWindow] = None
 
         self._setup_ui()
         self._setup_camera_ui()
@@ -345,7 +345,7 @@ class RegistrationPanel(QWidget):
         self._camera_preview = CameraPreviewWidget()
         cam_layout.addWidget(self._camera_preview)
 
-        # Capture + Settings row
+        # Capture + Focus Preview row
         capture_row = QHBoxLayout()
         self._btn_capture = QPushButton("Capture Frame")
         self._btn_capture.clicked.connect(self._capture_from_camera)
@@ -360,25 +360,20 @@ class RegistrationPanel(QWidget):
         """)
         capture_row.addWidget(self._btn_capture)
 
-        self._btn_settings = QPushButton("Settings")
-        self._btn_settings.clicked.connect(self._toggle_settings)
-        self._btn_settings.setEnabled(False)
-        self._btn_settings.setStyleSheet("""
+        self._btn_focus_preview = QPushButton("Focus Preview")
+        self._btn_focus_preview.clicked.connect(self._open_focus_preview)
+        self._btn_focus_preview.setEnabled(False)
+        self._btn_focus_preview.setStyleSheet("""
             QPushButton {
-                background: #333; color: #ccc; border: 1px solid #555;
-                padding: 4px 10px; border-radius: 3px;
+                background: #3a6b35; color: white; border: none;
+                padding: 4px 10px; border-radius: 3px; font-weight: bold;
             }
-            QPushButton:hover { background: #444; }
+            QPushButton:hover { background: #4a8b45; }
+            QPushButton:disabled { background: #333; color: #666; }
         """)
-        capture_row.addWidget(self._btn_settings)
+        capture_row.addWidget(self._btn_focus_preview)
 
         cam_layout.addLayout(capture_row)
-
-        # Settings widget (hidden by default)
-        self._camera_settings = CameraSettingsWidget()
-        self._camera_settings.settings_changed.connect(self._apply_camera_settings)
-        self._camera_settings.setVisible(False)
-        cam_layout.addWidget(self._camera_settings)
 
         # Camera status
         self._camera_status = QLabel("No camera connected")
@@ -426,18 +421,11 @@ class RegistrationPanel(QWidget):
         try:
             self._camera.open(dev_info)
             self._camera.set_live_mode()
-
-            # Populate settings ranges and current values
-            ranges = self._camera.get_setting_ranges()
-            self._camera_settings.set_ranges(ranges)
-            current = self._camera.get_current_settings()
-            self._camera_settings.set_values(current)
-
             self._camera_open = True
             self._btn_open.setEnabled(False)
             self._btn_close.setEnabled(True)
             self._btn_capture.setEnabled(True)
-            self._btn_settings.setEnabled(True)
+            self._btn_focus_preview.setEnabled(True)
             self._camera_status.setText(f"Camera open: {self._camera_devices[idx]['name']}")
         except Exception as e:
             self._camera_status.setText(f"Error: {e}")
@@ -452,9 +440,11 @@ class RegistrationPanel(QWidget):
         self._btn_open.setEnabled(len(self._camera_devices) > 0)
         self._btn_close.setEnabled(False)
         self._btn_capture.setEnabled(False)
-        self._btn_settings.setEnabled(False)
+        self._btn_focus_preview.setEnabled(False)
         self._camera_preview.set_placeholder_text("Camera closed")
         self._camera_status.setText("Camera closed")
+        if self._live_window is not None:
+            self._live_window.clear()
 
     def _capture_from_camera(self) -> None:
         """Capture current frame and load it as the image layer."""
@@ -478,10 +468,30 @@ class RegistrationPanel(QWidget):
             self._canvas.update()
             bus.image_loaded.emit("<camera_capture>")
 
-    def _toggle_settings(self) -> None:
-        """Show/hide camera settings widget."""
-        self._settings_visible = not self._settings_visible
-        self._camera_settings.setVisible(self._settings_visible)
+    def _open_focus_preview(self) -> None:
+        """Open a dedicated full-size live preview window for focus adjustment."""
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            return
+
+        if self._live_window is not None and self._live_window.isVisible():
+            self._live_window.raise_()
+            self._live_window.activateWindow()
+            return
+
+        self._live_window = CameraLiveWindow(self)
+        self._live_window._btn_capture.clicked.connect(self._capture_from_camera)
+
+        # Populate settings ranges and current values in the live window
+        ranges = self._camera.get_setting_ranges()
+        self._live_window.settings_widget.set_ranges(ranges)
+        current = self._camera.get_current_settings()
+        self._live_window.settings_widget.set_values(current)
+        self._live_window.settings_widget.settings_changed.connect(
+            self._apply_camera_settings,
+        )
+
+        self._camera.signals.frame_ready.connect(self._live_window.display_frame)
+        self._live_window.show()
 
     def _apply_camera_settings(self, settings: CameraSettings) -> None:
         """Apply settings from the settings widget to the camera."""
@@ -497,6 +507,8 @@ class RegistrationPanel(QWidget):
         """Cleanup camera resources on app close."""
         if HAS_CAMERA and self._camera is not None and self._camera_open:
             self._camera.close()
+        if self._live_window is not None:
+            self._live_window.close()
 
     def _connect_signals(self) -> None:
         bus.group_created.connect(self._on_group_created)
