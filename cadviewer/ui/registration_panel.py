@@ -223,6 +223,50 @@ class RegistrationPanel(QWidget):
         self._image_path_label.setStyleSheet("color: #666; font-size: 10px;")
         reg_layout.addWidget(self._image_path_label)
 
+        # Registration method dropdown
+        method_row = QHBoxLayout()
+        method_label = QLabel("Method:")
+        method_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        method_row.addWidget(method_label)
+
+        self._method_combo = QComboBox()
+        self._method_combo.setStyleSheet("""
+            QComboBox {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px; border-radius: 3px; min-width: 160px;
+            }
+            QComboBox:drop-down { border: none; }
+            QComboBox QAbstractItemView {
+                background: #333; color: #ccc; selection-background-color: #264f78;
+            }
+        """)
+        self._method_combo.addItem("Full Silhouette", "full_silhouette")
+        self._method_combo.addItem("Convex Hull (partial FOV)", "convex_hull")
+        self._method_combo.currentIndexChanged.connect(self._on_method_changed)
+        method_row.addWidget(self._method_combo)
+        reg_layout.addLayout(method_row)
+
+        # Anchor configuration
+        anchor_row = QHBoxLayout()
+        anchor_row.addWidget(QLabel("Anchors:"))
+        self._anchor_edit = QLineEdit()
+        self._anchor_edit.setPlaceholderText("DXF handles, e.g. 120C3,12121")
+        self._anchor_edit.setStyleSheet(
+            "QLineEdit { background: #333; color: #ccc; border: 1px solid #555; "
+            "padding: 2px 4px; border-radius: 2px; font-size: 10px; }"
+        )
+        anchor_row.addWidget(self._anchor_edit)
+        self._btn_auto_anchors = QPushButton("Auto")
+        self._btn_auto_anchors.setFixedWidth(40)
+        self._btn_auto_anchors.setStyleSheet(
+            "QPushButton { background: #444; color: #ccc; border: 1px solid #555; "
+            "padding: 2px; border-radius: 2px; font-size: 10px; }"
+            "QPushButton:hover { background: #555; }"
+        )
+        self._btn_auto_anchors.clicked.connect(self._auto_detect_anchors)
+        anchor_row.addWidget(self._btn_auto_anchors)
+        reg_layout.addLayout(anchor_row)
+
         self._btn_run_coarse = QPushButton("Coarse Registration")
         self._btn_run_coarse.clicked.connect(self._run_coarse)
         self._btn_run_fine = QPushButton("Refine (Contour ICP)")
@@ -493,6 +537,14 @@ class RegistrationPanel(QWidget):
         self._camera.signals.frame_ready.connect(self._live_window.display_frame)
         self._live_window.show()
 
+    def _on_method_changed(self, index: int) -> None:
+        """Switch registration strategy when method dropdown changes."""
+        if not hasattr(self, '_pipeline'):
+            return
+        method_key = self._method_combo.currentData()
+        self._pipeline.set_strategy_by_key(method_key)
+        self._reg_status.setText(f"Method: {self._method_combo.currentText()}")
+
     def _apply_camera_settings(self, settings: CameraSettings) -> None:
         """Apply settings from the settings widget to the camera."""
         if not HAS_CAMERA or self._camera is None or not self._camera_open:
@@ -733,6 +785,12 @@ class RegistrationPanel(QWidget):
                 self._canvas.update()
                 bus.image_loaded.emit(path)
 
+    def _get_anchor_handles(self) -> list[str]:
+        text = self._anchor_edit.text().strip()
+        if not text:
+            return []
+        return [h.strip() for h in text.split(",") if h.strip()]
+
     def _run_coarse(self) -> None:
         group = self._get_selected_group()
         if not group:
@@ -746,6 +804,7 @@ class RegistrationPanel(QWidget):
                 self._canvas.get_image_layer().path,
                 group.group_id,
                 self._pixel_size_mm,
+                anchor_handles=self._get_anchor_handles(),
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)
@@ -760,6 +819,18 @@ class RegistrationPanel(QWidget):
         except Exception as e:
             self._reg_status.setText(f"Error: {e}")
             bus.registration_failed.emit(str(e))
+
+    def _auto_detect_anchors(self) -> None:
+        from ..registration.anchor_detector import AnchorHeuristic
+        heuristic = AnchorHeuristic()
+        candidates = heuristic.find_anchor_candidates(self._repo)
+        if candidates:
+            handles = [c["handle"] for c in candidates[:4]]
+            self._anchor_edit.setText(",".join(handles))
+            info = ", ".join([f"{c['handle']}@({c['cx']:.0f},{c['cy']:.0f})" for c in candidates[:2]])
+            self._reg_status.setText(f"Auto anchors: {info}")
+        else:
+            self._reg_status.setText("No anchor candidates found")
 
     def _run_fine(self) -> None:
         group = self._get_selected_group()
@@ -797,6 +868,7 @@ class RegistrationPanel(QWidget):
                 self._canvas.get_image_layer().path,
                 group.group_id,
                 self._pixel_size_mm,
+                anchor_handles=self._get_anchor_handles(),
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)

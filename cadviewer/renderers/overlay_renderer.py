@@ -247,7 +247,54 @@ class DebugOverlay:
             path.closeSubpath()
             painter.drawPath(path)
 
-        # 7. Legend
+        # 7. Convex hull debug overlays (when hull strategy produced data)
+        cad_hull = coarse.get("cad_hull")
+        img_hull_world = coarse.get("img_hull_world")
+
+        if cad_hull is not None and len(cad_hull) >= 3:
+            # CAD convex hull (bright green, dash-dot)
+            pen = QPen(QColor(100, 255, 100, 220), 2.5, Qt.DashDotLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            path = QPainterPath()
+            sx0, sy0 = world_to_screen(cad_hull[0, 0], cad_hull[0, 1])
+            path.moveTo(sx0, sy0)
+            for pt in cad_hull[1:]:
+                sx, sy = world_to_screen(pt[0], pt[1])
+                path.lineTo(sx, sy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+            # Hull vertex markers
+            pen = QPen(QColor(100, 255, 100, 255), 4)
+            painter.setPen(pen)
+            for pt in cad_hull:
+                sx, sy = world_to_screen(pt[0], pt[1])
+                painter.drawPoint(QPointF(sx, sy))
+
+        if (img_hull_world is not None and T_coarse is not None
+                and len(img_hull_world) >= 3):
+            T_inv = np.linalg.inv(T_coarse)
+            hull_cad = affine_solver.apply(T_inv, img_hull_world)
+
+            # Image hull in CAD coords (magenta, dash-dot)
+            pen = QPen(QColor(255, 80, 255, 200), 2.5, Qt.DashDotLine)
+            painter.setPen(pen)
+            painter.setBrush(Qt.NoBrush)
+            pts = hull_cad
+            if len(pts) > 200:
+                idx = np.linspace(0, len(pts) - 1, 200, dtype=int)
+                pts = pts[idx]
+            path = QPainterPath()
+            sx0, sy0 = world_to_screen(pts[0, 0], pts[0, 1])
+            path.moveTo(sx0, sy0)
+            for pt in pts[1:]:
+                sx, sy = world_to_screen(pt[0], pt[1])
+                path.lineTo(sx, sy)
+            path.closeSubpath()
+            painter.drawPath(path)
+
+        # 8. Legend
         painter.setPen(QPen(QColor(200, 200, 200, 200)))
         painter.setFont(QFont("Arial", 9))
         lx, ly = 10, 10
@@ -259,6 +306,11 @@ class DebugOverlay:
             ("Image minAreaRect (→CAD)", QColor(0, 255, 255)),
             ("Refined contour alignment", QColor(0, 200, 255)),
         ]
+        # Add hull-specific legend entries when hull data is present
+        if cad_hull is not None:
+            legend.append(("CAD convex hull", QColor(100, 255, 100)))
+        if img_hull_world is not None and T_coarse is not None:
+            legend.append(("Image convex hull (→CAD)", QColor(255, 80, 255)))
         for text, color in legend:
             painter.setPen(QPen(color, 2))
             painter.drawLine(QPointF(lx, ly + 5), QPointF(lx + 20, ly + 5))
