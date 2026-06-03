@@ -13,10 +13,31 @@ Each feature carries:
 
 from __future__ import annotations
 
+import hashlib
 import uuid
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Any, Optional
+
+
+def _stable_id(feature_type: FeatureType, geometry: dict, dxf_handle: str = "") -> str:
+    """Generate a deterministic feature ID from stable entity properties.
+
+    Uses type + geometry + dxf_handle so the same DXF file always produces
+    the same feature IDs across program restarts.
+    """
+    payload = feature_type.name
+    if dxf_handle:
+        payload += f"|h={dxf_handle}"
+    # Sort geometry keys for deterministic ordering
+    for k in sorted(geometry.keys()):
+        v = geometry[k]
+        if isinstance(v, (list, tuple)):
+            payload += f"|{k}={v}"
+        else:
+            payload += f"|{k}={v}"
+    digest = hashlib.md5(payload.encode("utf-8")).hexdigest()
+    return f"{digest[:8]}-{digest[8:12]}-{digest[12:16]}-{digest[16:20]}-{digest[20:32]}"
 
 
 class FeatureType(Enum):

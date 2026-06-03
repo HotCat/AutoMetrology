@@ -50,12 +50,20 @@ class RegistrationPanel(QWidget):
         self,
         manager: RegistrationManager,
         repo: FeatureRepository,
+        config=None,
         parent=None,
     ) -> None:
         super().__init__(parent)
         self._manager = manager
         self._repo = repo
+        self._config = config
         self._selected_group_id: Optional[str] = None
+
+        # Pixel size from config
+        if config is not None:
+            self._pixel_size_mm = config.pixel_size_mm
+        else:
+            self._pixel_size_mm = 0.01
 
         # Camera state
         self._camera: Optional[MindVisionCamera] = None
@@ -466,6 +474,21 @@ class RegistrationPanel(QWidget):
             self._camera.open(dev_info)
             self._camera.set_live_mode()
             self._camera_open = True
+            # Apply saved camera settings
+            if self._config is not None:
+                try:
+                    saved = self._config.camera
+                    self._camera.apply_settings(CameraSettings(
+                        exposure_us=saved.exposure_us,
+                        gamma=saved.gamma,
+                        contrast=saved.contrast,
+                        analog_gain=saved.analog_gain,
+                        ae_enabled=saved.ae_enabled,
+                        reverse_x=saved.reverse_x,
+                        reverse_y=saved.reverse_y,
+                    ))
+                except Exception:
+                    pass
             self._btn_open.setEnabled(False)
             self._btn_close.setEnabled(True)
             self._btn_capture.setEnabled(True)
@@ -561,6 +584,25 @@ class RegistrationPanel(QWidget):
             self._camera.close()
         if self._live_window is not None:
             self._live_window.close()
+
+    def _camera_settings_for_config(self):
+        """Return current camera settings as CameraConfig for persistence."""
+        if not HAS_CAMERA or self._camera is None:
+            return None
+        from ..core.config import CameraConfig
+        try:
+            s = self._camera.get_current_settings()
+            return CameraConfig(
+                exposure_us=s.exposure_us,
+                gamma=s.gamma,
+                contrast=s.contrast,
+                analog_gain=s.analog_gain,
+                ae_enabled=s.ae_enabled,
+                reverse_x=s.reverse_x,
+                reverse_y=s.reverse_y,
+            )
+        except Exception:
+            return None
 
     def _connect_signals(self) -> None:
         bus.group_created.connect(self._on_group_created)
@@ -770,20 +812,35 @@ class RegistrationPanel(QWidget):
         return T_imgworld_to_cad @ T_pixel_to_imgworld
 
     def _load_image(self) -> None:
-        dialog = ImageLoadDialog(self)
+        camera = self._camera if (HAS_CAMERA and self._camera_open) else None
+        dialog = ImageLoadDialog(
+            self,
+            default_pixel_size=self._pixel_size_mm,
+            camera=camera,
+            config=self._config,
+        )
         if dialog.exec() == ImageLoadDialog.Accepted:
             path, pixel_size = dialog.get_values()
-            if path and hasattr(self, '_canvas'):
-                self._canvas.get_image_layer().load_image(path)
+            captured = dialog.get_captured_frame()
+            if hasattr(self, '_canvas'):
+                if captured is not None:
+                    self._canvas.get_image_layer().load_from_array(captured)
+                    self._image_path_label.setText("<camera capture>")
+                elif path:
+                    self._canvas.get_image_layer().load_image(path)
+                    self._image_path_label.setText(path.split('/')[-1])
+                else:
+                    return
                 self._canvas.get_image_layer().set_pixel_size_mm(pixel_size)
-                self._image_path_label.setText(path.split('/')[-1])
                 self._pixel_size_mm = pixel_size
                 self._btn_run_coarse.setEnabled(True)
                 self._btn_run_fine.setEnabled(False)
                 self._btn_run_full.setEnabled(True)
                 self._reg_status.setText("Image loaded. Ready for registration.")
                 self._canvas.update()
-                bus.image_loaded.emit(path)
+                bus.image_loaded.emit(path or "<camera_capture>")
+            if self._config:
+                self._config.pixel_size_mm = pixel_size
 
     def _get_anchor_handles(self) -> list[str]:
         text = self._anchor_edit.text().strip()

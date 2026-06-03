@@ -52,7 +52,11 @@ class LineFittingEngine:
         scan_width: float = 15.0,
         min_gradient: float = 15.0,
     ) -> LineFitResult | None:
-        """Fit line using perpendicular scanline sampling.
+        """Fit line using iterative perpendicular scanline sampling.
+
+        Runs up to 3 iterations: after each SVD fit, re-scans perpendicular
+        to the fitted direction. This eliminates systematic bias caused by
+        scanlines not being perpendicular to the actual edge.
 
         Args:
             predicted_p1: (x1, y1) in pixels from CAD projection
@@ -71,33 +75,49 @@ class LineFittingEngine:
         if length < 1e-6:
             return None
         direction /= length
-        normal = np.array([-direction[1], direction[0]])
 
         scan_width = max(scan_width, length * 0.08)
 
-        edge_points = self._scanline_sampling(
-            p1, p2, direction, normal, n_scanlines, scan_width, min_gradient,
-        )
+        # Iterative refinement: re-scan perpendicular to fitted line
+        best_edge_points = None
+        for _ in range(3):
+            normal = np.array([-direction[1], direction[0]])
+            edge_points = self._scanline_sampling(
+                p1, p2, direction, normal, n_scanlines, scan_width, min_gradient,
+            )
+            if len(edge_points) < 4:
+                break
+            fitted = self._fit_line_svd(edge_points)
+            if fitted is None:
+                break
+            new_direction, _ = fitted
+            # Check convergence: direction change < 0.001 radians
+            dot = abs(np.dot(new_direction, direction))
+            best_edge_points = edge_points
+            direction = new_direction
+            if dot > 0.999999:
+                break
 
-        if len(edge_points) < 4:
+        if best_edge_points is None or len(best_edge_points) < 4:
             return None
 
-        # Fit line via SVD (total least squares)
-        fitted = self._fit_line_svd(edge_points)
+        # Final fit
+        fitted = self._fit_line_svd(best_edge_points)
         if fitted is None:
             return None
 
         line_dir, line_pt = fitted
 
         # Project edge points onto line to get endpoints
-        projections = (edge_points - line_pt) @ line_dir
+        line_normal = np.array([-line_dir[1], line_dir[0]])
+        projections = (best_edge_points - line_pt) @ line_dir
         t_min, t_max = projections.min(), projections.max()
         fit_p1 = line_pt + t_min * line_dir
         fit_p2 = line_pt + t_max * line_dir
 
         # Residual: mean perpendicular distance
-        diffs = edge_points - line_pt
-        perp_dists = np.abs(diffs @ normal)
+        diffs = best_edge_points - line_pt
+        perp_dists = np.abs(diffs @ line_normal)
         residual = float(np.mean(perp_dists))
 
         # Confidence
@@ -131,7 +151,13 @@ class LineFittingEngine:
         scan_width: float,
         min_gradient: float,
     ) -> np.ndarray:
-        """Sample edges along perpendicular scanlines."""
+        """Sample edges along perpendicular scanlines.
+
+        For each scanline, finds all gradient peaks above threshold and picks
+        the one closest to the center (predicted line position). This is
+        CAD-guided: among multiple edges (chamfer, shadow, etc.), the one
+        nearest the predicted geometry is the true feature boundary.
+        """
         n_samples = max(7, int(2 * scan_width) + 1)
         offsets = np.linspace(-scan_width, scan_width, n_samples)
         t_values = np.linspace(0, 1, n_scanlines)
@@ -142,7 +168,6 @@ class LineFittingEngine:
         for t in t_values:
             base = p1 + t * (p2 - p1)
 
-            # Sample positions along perpendicular direction
             sample_px = base[0] + offsets * normal[0]
             sample_py = base[1] + offsets * normal[1]
 
@@ -158,10 +183,10 @@ class LineFittingEngine:
             grad_profile = self._gradient[iy, ix]
             grad_profile[~in_bounds] = 0.0
 
-            peak_idx = int(np.argmax(grad_profile))
-            peak_val = grad_profile[peak_idx]
-
-            if peak_val < min_gradient:
+            # Find all local maxima above threshold
+            center_idx = n_samples // 2
+            peak_idx = self._find_closest_peak(grad_profile, min_gradient, center_idx)
+            if peak_idx is None:
                 continue
 
             # Subpixel localization
@@ -180,6 +205,40 @@ class LineFittingEngine:
             edge_points.append([ex, ey])
 
         return np.array(edge_points) if edge_points else np.empty((0, 2))
+
+    @staticmethod
+    def _find_closest_peak(
+        profile: np.ndarray, min_gradient: float, center: int,
+    ) -> int | None:
+        """Find the gradient peak closest to center index.
+
+        Scans outward from center, finding the nearest local maximum
+        above the gradient threshold. Falls back to any sample above
+        threshold if no local maximum found.
+        """
+        n = len(profile)
+        # Find all local maxima above threshold
+        peaks = []
+        for j in range(1, n - 1):
+            if (profile[j] >= min_gradient
+                    and profile[j] >= profile[j - 1]
+                    and profile[j] >= profile[j + 1]):
+                peaks.append(j)
+        # Check endpoints
+        if n > 0 and profile[0] >= min_gradient and profile[0] >= profile[min(1, n-1)]:
+            peaks.append(0)
+        if n > 1 and profile[-1] >= min_gradient and profile[-1] >= profile[-2]:
+            peaks.append(n - 1)
+
+        if peaks:
+            # Return peak closest to center
+            return min(peaks, key=lambda j: abs(j - center))
+
+        # Fallback: any sample above threshold, closest to center
+        above = [j for j in range(n) if profile[j] >= min_gradient]
+        if above:
+            return min(above, key=lambda j: abs(j - center))
+        return None
 
     @staticmethod
     def _fit_line_svd(

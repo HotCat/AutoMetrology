@@ -23,7 +23,7 @@ from typing import List, Optional, Tuple
 
 import ezdxf
 
-from ..models.feature import CADFeature, FeatureType, MeasurementMetadata
+from ..models.feature import CADFeature, FeatureType, MeasurementMetadata, _stable_id
 from ..models.repository import FeatureRepository
 
 
@@ -93,10 +93,13 @@ class DXFImporter:
 
     def _parse_line(self, e) -> None:
         s, end = e.dxf.start, e.dxf.end
+        geom = {"x1": s.x, "y1": s.y, "x2": end.x, "y2": end.y}
+        handle = e.dxf.handle
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.LINE, geom, handle),
             feature_type=FeatureType.LINE,
-            geometry={"x1": s.x, "y1": s.y, "x2": end.x, "y2": end.y},
-            dxf_handle=e.dxf.handle,
+            geometry=geom,
+            dxf_handle=handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
         )
@@ -110,10 +113,13 @@ class DXFImporter:
             cx = -cx
         if self._insert_yscale < 0:
             cy = -cy
+        geom = {"cx": cx, "cy": cy, "radius": e.dxf.radius}
+        handle = e.dxf.handle
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.CIRCLE, geom, handle),
             feature_type=FeatureType.CIRCLE,
-            geometry={"cx": cx, "cy": cy, "radius": e.dxf.radius},
-            dxf_handle=e.dxf.handle,
+            geometry=geom,
+            dxf_handle=handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
         )
@@ -146,14 +152,17 @@ class DXFImporter:
             new_end = -start_angle
             start_angle = new_start
             end_angle = new_end
+        geom = {
+            "cx": cx, "cy": cy, "radius": e.dxf.radius,
+            "start_angle": start_angle,
+            "end_angle": end_angle,
+        }
+        handle = e.dxf.handle
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.ARC, geom, handle),
             feature_type=FeatureType.ARC,
-            geometry={
-                "cx": cx, "cy": cy, "radius": e.dxf.radius,
-                "start_angle": start_angle,
-                "end_angle": end_angle,
-            },
-            dxf_handle=e.dxf.handle,
+            geometry=geom,
+            dxf_handle=handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
         )
@@ -171,18 +180,22 @@ class DXFImporter:
 
         # Determine subtype: if only 2 vertices and not closed, treat as LINE
         if len(points) == 2 and not closed:
+            geom = {"x1": points[0][0], "y1": points[0][1],
+                      "x2": points[1][0], "y2": points[1][1]}
             feat = CADFeature(
+                feature_id=_stable_id(FeatureType.LINE, geom, e.dxf.handle),
                 feature_type=FeatureType.LINE,
-                geometry={"x1": points[0][0], "y1": points[0][1],
-                          "x2": points[1][0], "y2": points[1][1]},
+                geometry=geom,
                 dxf_handle=e.dxf.handle,
                 layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
                 color=e.dxf.color if hasattr(e.dxf, "color") else 7,
             )
         else:
+            geom = {"points": points, "closed": closed}
             feat = CADFeature(
+                feature_id=_stable_id(FeatureType.POLYLINE, geom, e.dxf.handle),
                 feature_type=FeatureType.POLYLINE,
-                geometry={"points": points, "closed": closed},
+                geometry=geom,
                 dxf_handle=e.dxf.handle,
                 layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
                 color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -196,9 +209,11 @@ class DXFImporter:
         if len(points) < 2:
             return
         closed = e.closed
+        geom = {"points": points, "closed": closed}
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.POLYLINE, geom, e.dxf.handle),
             feature_type=FeatureType.POLYLINE,
-            geometry={"points": points, "closed": closed},
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -220,17 +235,19 @@ class DXFImporter:
         except Exception:
             pass
 
+        geom = {
+            "degree": e.dxf.degree,
+            "control_points": control_pts,
+            "fit_points": fit_pts,
+            "knots": knots,
+            "eval_points": eval_pts,
+            "closed": e.closed if hasattr(e, "closed") else False,
+            "rational": e.dxf.flags & 4 if hasattr(e.dxf, "flags") else 0,
+        }
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.SPLINE, geom, e.dxf.handle),
             feature_type=FeatureType.SPLINE,
-            geometry={
-                "degree": e.dxf.degree,
-                "control_points": control_pts,
-                "fit_points": fit_pts,
-                "knots": knots,
-                "eval_points": eval_pts,
-                "closed": e.closed if hasattr(e, "closed") else False,
-                "rational": e.dxf.flags & 4 if hasattr(e.dxf, "flags") else 0,
-            },
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -240,16 +257,18 @@ class DXFImporter:
 
     def _parse_ellipse(self, e) -> None:
         c = e.dxf.center
+        geom = {
+            "cx": c.x, "cy": c.y,
+            "major_axis": (e.dxf.major_axis.x, e.dxf.major_axis.y),
+            "ratio": e.dxf.ratio,
+            "start_param": e.dxf.start_param,
+            "end_param": e.dxf.end_param,
+            "is_ellipse": True,
+        }
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.ARC, geom, e.dxf.handle),
             feature_type=FeatureType.ARC,
-            geometry={
-                "cx": c.x, "cy": c.y,
-                "major_axis": (e.dxf.major_axis.x, e.dxf.major_axis.y),
-                "ratio": e.dxf.ratio,
-                "start_param": e.dxf.start_param,
-                "end_param": e.dxf.end_param,
-                "is_ellipse": True,
-            },
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -284,13 +303,14 @@ class DXFImporter:
             pass
 
         # Also store the dimension entity itself for reference
+        geom = {
+            "dim_type": e.dxf.dimension_type if hasattr(e.dxf, "dimension_type") else 0,
+            "text": e.dxf.text if hasattr(e.dxf, "text") else "",
+        }
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.DIMENSION, geom, e.dxf.handle),
             feature_type=FeatureType.DIMENSION,
-            geometry={
-                "dim_type": e.dxf.dimension_type if hasattr(e.dxf, "dimension_type") else 0,
-                # Store measurement text if available
-                "text": e.dxf.text if hasattr(e.dxf, "text") else "",
-            },
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -319,10 +339,13 @@ class DXFImporter:
                 if not any(abs(p[0]-u[0]) < 1e-10 and abs(p[1]-u[1]) < 1e-10 for u in unique_pts):
                     unique_pts.append(p)
 
+            geom = {"points": unique_pts, "closed": True, "is_solid": True}
+            handle = e.dxf.handle or f"_solid_{self._entity_index}"
             feat = CADFeature(
+                feature_id=_stable_id(FeatureType.POLYLINE, geom, handle),
                 feature_type=FeatureType.POLYLINE,
-                geometry={"points": unique_pts, "closed": True, "is_solid": True},
-                dxf_handle=e.dxf.handle or f"_solid_{self._entity_index}",
+                geometry=geom,
+                dxf_handle=handle,
                 layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
                 color=e.dxf.color if hasattr(e.dxf, "color") else 7,
             )
@@ -330,21 +353,22 @@ class DXFImporter:
             self._entity_index += 1
 
     def _parse_mtext(self, e) -> None:
-        # MTEXT may have rotation via dxf.rotation or from the extrusion/insert vectors
         rotation = 0.0
         if hasattr(e.dxf, "rotation"):
             rotation = e.dxf.rotation
         elif hasattr(e.dxf, "insert"):
             pass
 
+        geom = {
+            "text": e.text,
+            "x": e.dxf.insert.x, "y": e.dxf.insert.y,
+            "height": e.dxf.char_height if hasattr(e.dxf, "char_height") else 2.5,
+            "rotation": rotation,
+        }
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.TEXT, geom, e.dxf.handle),
             feature_type=FeatureType.TEXT,
-            geometry={
-                "text": e.text,
-                "x": e.dxf.insert.x, "y": e.dxf.insert.y,
-                "height": e.dxf.char_height if hasattr(e.dxf, "char_height") else 2.5,
-                "rotation": rotation,
-            },
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -357,14 +381,16 @@ class DXFImporter:
         if hasattr(e.dxf, "rotation"):
             rotation = e.dxf.rotation
 
+        geom = {
+            "text": e.dxf.text,
+            "x": e.dxf.insert.x, "y": e.dxf.insert.y,
+            "height": e.dxf.height if hasattr(e.dxf, "height") else 2.5,
+            "rotation": rotation,
+        }
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.TEXT, geom, e.dxf.handle),
             feature_type=FeatureType.TEXT,
-            geometry={
-                "text": e.dxf.text,
-                "x": e.dxf.insert.x, "y": e.dxf.insert.y,
-                "height": e.dxf.height if hasattr(e.dxf, "height") else 2.5,
-                "rotation": rotation,
-            },
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -432,6 +458,7 @@ class DXFImporter:
             paths.append(edges)
 
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.HATCH, {"paths": len(paths), "pattern": e.dxf.pattern_name if hasattr(e.dxf, "pattern_name") else ""}, e.dxf.handle),
             feature_type=FeatureType.HATCH,
             geometry={"paths": paths, "pattern": e.dxf.pattern_name if hasattr(e.dxf, "pattern_name") else ""},
             dxf_handle=e.dxf.handle,
@@ -443,9 +470,11 @@ class DXFImporter:
 
     def _parse_point(self, e) -> None:
         loc = e.dxf.location
+        geom = {"x": loc.x, "y": loc.y}
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.POINT, geom, e.dxf.handle),
             feature_type=FeatureType.POINT,
-            geometry={"x": loc.x, "y": loc.y},
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,
@@ -464,9 +493,11 @@ class DXFImporter:
         if len(vertices) < 2:
             return
 
+        geom = {"points": vertices, "closed": False}
         feat = CADFeature(
+            feature_id=_stable_id(FeatureType.LEADER, geom, e.dxf.handle),
             feature_type=FeatureType.LEADER,
-            geometry={"points": vertices, "closed": False},
+            geometry=geom,
             dxf_handle=e.dxf.handle,
             layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
             color=e.dxf.color if hasattr(e.dxf, "color") else 7,

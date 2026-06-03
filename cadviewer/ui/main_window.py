@@ -42,6 +42,7 @@ from ..converters.dwg_converter import DWGConverter
 from ..converters.converter_config import ConversionConfig
 from ..converters.oda_cli import ODACLI
 from ..core.signals import bus
+from ..core.config import AppConfig
 
 
 class _DWGResultBridge(QObject):
@@ -63,6 +64,7 @@ class MainWindow(QMainWindow):
         self._importer = DXFImporter()
         self._reg_manager = RegistrationManager(self._repo)
         self._dwg_converter = DWGConverter()
+        self._config = AppConfig.load()
 
         # Build UI
         self._setup_ui()
@@ -191,6 +193,10 @@ class MainWindow(QMainWindow):
         oda_config_action = QAction("Configure DWG Converter...", self)
         oda_config_action.triggered.connect(self._show_dwg_settings)
         settings_menu.addAction(oda_config_action)
+        settings_menu.addSeparator()
+        cal_action = QAction("Camera Calibration...", self)
+        cal_action.triggered.connect(self._open_calibration_window)
+        settings_menu.addAction(cal_action)
 
         # Help menu
         help_menu = menubar.addMenu("Help")
@@ -211,7 +217,7 @@ class MainWindow(QMainWindow):
     def _setup_dock_widgets(self) -> None:
         """Create dockable panels for registration and future tools."""
         # Registration panel
-        self._reg_panel = RegistrationPanel(self._reg_manager, self._repo)
+        self._reg_panel = RegistrationPanel(self._reg_manager, self._repo, self._config)
         self._reg_panel._canvas = self._viewer
         reg_dock = QDockWidget("Registration", self)
         reg_dock.setWidget(self._reg_panel)
@@ -323,6 +329,7 @@ class MainWindow(QMainWindow):
         """Evaluate measurement queries using MeasuredFeature data."""
         from ..measurement.evaluator import QueryEvaluator
         from ..measurement.measurement_pipeline import MeasurementPipeline
+        from ..calibration.residual_map import ResidualDistortionMap
         import numpy as np
         try:
             import cv2
@@ -341,7 +348,18 @@ class MainWindow(QMainWindow):
             if bgr_image is not None and affine is not None:
                 image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
                 if not np.allclose(affine, np.eye(3), atol=1e-6):
-                    pipeline = MeasurementPipeline(self._repo, image, affine)
+                    # Load residual distortion map if available
+                    residual_map = None
+                    try:
+                        residual_map = ResidualDistortionMap.from_dict(
+                            self._config.lens_calibration.residual_map
+                        )
+                    except Exception:
+                        pass
+                    pipeline = MeasurementPipeline(
+                        self._repo, image, affine,
+                        residual_map=residual_map if residual_map and residual_map.is_built else None,
+                    )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
         results = evaluator.evaluate(query_text)
@@ -488,6 +506,27 @@ class MainWindow(QMainWindow):
             "Built with PySide6 + QPainter (OpenCascade optional)"
         )
 
+    def _open_calibration_window(self) -> None:
+        """Open the camera calibration window."""
+        from .calibration_window import CalibrationWindow
+        camera = getattr(self._reg_panel, '_camera', None)
+        camera_open = getattr(self._reg_panel, '_camera_open', False)
+        win = CalibrationWindow(
+            parent=self,
+            config=self._config,
+            camera=camera if camera_open else None,
+        )
+        win.exec()
+        # Persist updated chessboard params
+        params = win.get_chessboard_params()
+        self._config.calibration.chessboard_cols = params["cols"]
+        self._config.calibration.chessboard_rows = params["rows"]
+        self._config.calibration.chessboard_cell_mm = params["cell_mm"]
+        pixel_size = win.get_computed_pixel_size()
+        if pixel_size is not None:
+            self._config.pixel_size_mm = pixel_size
+        self._config.save()
+
     def _check_dwg_converter(self) -> None:
         """Check ODA availability at startup, disable DWG button if missing."""
         info = self._dwg_converter.validate_installation()
@@ -498,10 +537,19 @@ class MainWindow(QMainWindow):
             )
 
     def closeEvent(self, event) -> None:
-        """Handle window close — cleanup camera resources."""
-        # Cleanup registration panel (which handles camera cleanup)
-        if hasattr(self, '_reg_panel') and hasattr(self._reg_panel, 'cleanup'):
-            self._reg_panel.cleanup()
+        """Handle window close — save config, cleanup camera resources."""
+        # Persist settings from registration panel
+        if hasattr(self, '_reg_panel'):
+            self._config.pixel_size_mm = getattr(
+                self._reg_panel, '_pixel_size_mm', self._config.pixel_size_mm,
+            )
+            if hasattr(self, '_reg_panel') and hasattr(self._reg_panel, '_camera_settings_for_config'):
+                cam = self._reg_panel._camera_settings_for_config()
+                if cam is not None:
+                    self._config.camera = cam
+            if hasattr(self._reg_panel, 'cleanup'):
+                self._reg_panel.cleanup()
+        self._config.save()
         event.accept()
 
     # ── dark theme stylesheet ──────────────────────────────────────

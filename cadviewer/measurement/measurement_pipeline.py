@@ -23,6 +23,7 @@ from ..models.feature import FeatureType, CADFeature
 from ..models.repository import FeatureRepository
 from ..models.measured_feature import MeasuredFeature, MeasuredFeatureStore
 from ..registration import affine_solver
+from ..calibration.residual_map import ResidualDistortionMap
 from .roi_predictor import FeatureROIPredictor, ROIRegion
 from .circle_fitter import CircleFittingEngine, CircleFitResult
 from .line_fitter import LineFittingEngine, LineFitResult
@@ -53,6 +54,7 @@ class MeasurementPipeline:
         image: np.ndarray,
         affine: np.ndarray,
         pixel_size_mm: float = 0.01,
+        residual_map: Optional[ResidualDistortionMap] = None,
     ) -> None:
         """
         Args:
@@ -60,11 +62,13 @@ class MeasurementPipeline:
             image: grayscale uint8 image
             affine: 3x3 matrix mapping pixel → CAD world
             pixel_size_mm: mm per pixel
+            residual_map: optional residual distortion map for sub-pixel correction
         """
         self._repo = repo
         self._image = image
         self._affine = affine
         self._pixel_size_mm = pixel_size_mm
+        self._residual_map = residual_map
 
         self._store = MeasuredFeatureStore()
         self._roi_predictor = FeatureROIPredictor(affine)
@@ -136,6 +140,12 @@ class MeasurementPipeline:
     def get_debug_data(self) -> dict:
         return self._debug_data
 
+    def _correct_points(self, points: np.ndarray) -> np.ndarray:
+        """Apply residual distortion correction if map is available."""
+        if self._residual_map is not None and self._residual_map.is_built:
+            return self._residual_map.correct(points)
+        return points
+
     # ── private measurement methods ──────────────────────────────
 
     def _measure_circle(self, feat: CADFeature) -> Optional[MeasuredFeature]:
@@ -157,12 +167,15 @@ class MeasurementPipeline:
             return None
 
         # Convert fitted center and radius to world coords
+        # Apply residual distortion correction first
         pixel_center_fitted = np.array([[result.center[0], result.center[1]]])
-        world_center = affine_solver.apply(self._affine, pixel_center_fitted)[0]
+        corrected_center = self._correct_points(pixel_center_fitted)
+        world_center = affine_solver.apply(self._affine, corrected_center)[0]
 
         # Convert radius to world coords
         pixel_edge = np.array([[result.center[0] + result.radius, result.center[1]]])
-        world_edge = affine_solver.apply(self._affine, pixel_edge)[0]
+        corrected_edge = self._correct_points(pixel_edge)
+        world_edge = affine_solver.apply(self._affine, corrected_edge)[0]
         world_radius = float(np.linalg.norm(world_edge - world_center))
 
         fitted_geom = {
@@ -224,8 +237,10 @@ class MeasurementPipeline:
             return None
 
         # Convert fitted line endpoints to world coords
+        # Apply residual distortion correction first
         pixel_pts = np.array([result.p1, result.p2])
-        world_pts = affine_solver.apply(self._affine, pixel_pts)
+        corrected_pts = self._correct_points(pixel_pts)
+        world_pts = affine_solver.apply(self._affine, corrected_pts)
 
         fitted_geom = {
             "x1": float(result.p1[0]),

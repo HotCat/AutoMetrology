@@ -116,8 +116,11 @@ class CircleFittingEngine:
         """Sample edges along radial rays from center.
 
         For each ray, scans from (radius - search_width) to (radius + search_width),
-        finds the strongest gradient transition, and localizes it to subpixel via
-        parabolic interpolation.
+        finds the gradient peak closest to the predicted radius, and localizes it
+        to subpixel via parabolic interpolation.
+
+        Uses closest-to-predicted strategy: among multiple edges (chamfer, shadow),
+        the one nearest the CAD-predicted radius is the true feature boundary.
         """
         cx, cy = float(center[0]), float(center[1])
         r_start = max(1.0, radius - search_width)
@@ -127,7 +130,6 @@ class CircleFittingEngine:
         angles = np.linspace(0, 2 * np.pi, n_rays, endpoint=False)
         sample_radii = np.linspace(r_start, r_end, n_samples)
 
-        # Build all sample positions: (n_rays, n_samples)
         cos_a = np.cos(angles)[:, None]
         sin_a = np.sin(angles)[:, None]
         r = sample_radii[None, :]
@@ -135,35 +137,32 @@ class CircleFittingEngine:
         px = cx + r * cos_a
         py = cy + r * sin_a
 
-        # Bounds mask
         in_bounds = (px >= 0) & (px < self._w) & (py >= 0) & (py < self._h)
 
-        # Sample gradient with safe indexing
         ix = np.clip(np.round(px).astype(int), 0, self._w - 1)
         iy = np.clip(np.round(py).astype(int), 0, self._h - 1)
         grad_profile = self._gradient[iy, ix]
         grad_profile[~in_bounds] = 0.0
 
-        # Find peak gradient for each ray
-        peak_indices = np.argmax(grad_profile, axis=1)
-        peak_values = np.take_along_axis(grad_profile, peak_indices[:, None], 1).ravel()
-
-        # Subpixel localization
-        edge_points: list[list[float]] = []
         dr = (r_end - r_start) / (n_samples - 1) if n_samples > 1 else 1.0
+        # Center index = predicted radius position
+        center_idx = n_samples // 2
+
+        edge_points: list[list[float]] = []
 
         for i in range(n_rays):
-            if peak_values[i] < min_gradient:
+            profile = grad_profile[i]
+            pi = self._find_closest_peak(profile, min_gradient, center_idx)
+            if pi is None:
                 continue
 
-            pi = peak_indices[i]
             sub_r = r_start + pi * dr
 
             # Parabolic subpixel refinement
             if 1 <= pi <= n_samples - 2:
-                y_m1 = grad_profile[i, pi - 1]
-                y_0 = grad_profile[i, pi]
-                y_p1 = grad_profile[i, pi + 1]
+                y_m1 = profile[pi - 1]
+                y_0 = profile[pi]
+                y_p1 = profile[pi + 1]
                 denom = 2.0 * (2.0 * y_0 - y_m1 - y_p1)
                 if abs(denom) > 1e-10:
                     offset = np.clip((y_p1 - y_m1) / denom, -0.5, 0.5)
@@ -174,6 +173,38 @@ class CircleFittingEngine:
             edge_points.append([ex, ey])
 
         return np.array(edge_points) if edge_points else np.empty((0, 2))
+
+    @staticmethod
+    def _find_closest_peak(
+        profile: np.ndarray, min_gradient: float, center: int,
+    ) -> int | None:
+        """Find the gradient peak closest to center index.
+
+        Finds all local maxima above threshold, then returns the one
+        nearest to center. Falls back to any sample above threshold.
+        """
+        n = len(profile)
+        # Find all local maxima above threshold
+        peaks = []
+        for j in range(1, n - 1):
+            if (profile[j] >= min_gradient
+                    and profile[j] >= profile[j - 1]
+                    and profile[j] >= profile[j + 1]):
+                peaks.append(j)
+        # Check endpoints
+        if n > 0 and profile[0] >= min_gradient and profile[0] >= profile[min(1, n - 1)]:
+            peaks.append(0)
+        if n > 1 and profile[-1] >= min_gradient and profile[-1] >= profile[-2]:
+            peaks.append(n - 1)
+
+        if peaks:
+            return min(peaks, key=lambda j: abs(j - center))
+
+        # Fallback: any sample above threshold, closest to center
+        above = [j for j in range(n) if profile[j] >= min_gradient]
+        if above:
+            return min(above, key=lambda j: abs(j - center))
+        return None
 
     @staticmethod
     def _fit_circle_kasa(points: np.ndarray) -> tuple[float, float, float] | None:
