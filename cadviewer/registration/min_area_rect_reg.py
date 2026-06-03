@@ -129,12 +129,12 @@ class MinAreaRectRegistration:
                 if ratio_err > 0.5:
                     return None, {}
 
-        # Scale from area ratio
-        cad_area = abs(cs[0] * cs[1])
-        img_area = abs(iss[0] * iss[1])
-        if cad_area < 1e-6:
-            return None, {}
-        scale = np.sqrt(img_area / cad_area)
+        # Scale: fixed at 1.0 since both point sets are already in mm.
+        # The pixel_size_mm was used to convert image pixels → mm before
+        # this method is called. Using area-ratio scale introduces errors
+        # from thresholding artifacts, partial occlusion, and silhouette
+        # mismatch. The calibrated pixel_size_mm is the authoritative scale.
+        scale = 1.0
 
         # Rotation
         theta = np.radians(ia - ca)
