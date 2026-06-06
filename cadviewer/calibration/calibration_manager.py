@@ -6,12 +6,10 @@ Pipeline:
   2. Run standard OpenCV calibration (camera matrix + distortion coefficients)
   3. Undistort images, re-detect corners
   4. Compute residual errors (detected vs ideal grid positions)
-  5. Build ResidualDistortionMap via thin-plate-spline interpolation
-  6. Generate CalibrationReport with before/after statistics
+  5. Generate CalibrationReport with before/after statistics
 
-The residual map corrects sub-pixel geometric errors that remain after
-OpenCV calibration, improving circle center accuracy and line position
-accuracy for industrial metrology.
+The coordinate correction is handled by HomographyCalibrationModel and
+AffineCalibrationModel (in coordinate_correction.py), not by TPS.
 """
 
 from __future__ import annotations
@@ -21,7 +19,6 @@ from typing import Optional
 
 import numpy as np
 
-from .residual_map import ResidualDistortionMap
 from .report import CalibrationReport
 
 try:
@@ -46,7 +43,6 @@ class CalibrationResult:
     camera_matrix: Optional[np.ndarray] = None
     dist_coeffs: Optional[np.ndarray] = None
     opencv_rms: float = 0.0
-    residual_map: Optional[ResidualDistortionMap] = None
     report: Optional[CalibrationReport] = None
     image_count: int = 0
     corner_count: int = 0
@@ -62,7 +58,7 @@ class CalibrationManager:
         ...
         result = mgr.run_calibration(cols=11, rows=8, cell_mm=21.0)
         if result.calibrated:
-            result.residual_map.correct(edge_points)
+            # Use camera_matrix and dist_coeffs for undistortion
     """
 
     def __init__(self) -> None:
@@ -103,8 +99,7 @@ class CalibrationManager:
 
         1. Detect corners in all images
         2. Run OpenCV calibration
-        3. Build residual distortion map
-        4. Generate error report
+        3. Generate error report
 
         Args:
             cols: Number of inner corners in X.
@@ -152,16 +147,12 @@ class CalibrationManager:
             calibrated=True,
         )
 
-        # Step 3: Build residual distortion map
+        # Step 3: Generate error report
         try:
-            rmap, report = self._build_residual_map(
-                good, mtx, dist, cols, rows, cell_mm, image_size,
-            )
-            result.residual_map = rmap
+            report = self._build_report(good, mtx, dist, cols, rows, cell_mm)
             result.report = report
         except Exception as e:
-            # Residual map is optional — OpenCV calibration still valid
-            print(f"Warning: residual map build failed: {e}")
+            print(f"Warning: report generation failed: {e}")
 
         total_corners = sum(
             e.corners.shape[0] for e in good if e.corners is not None
@@ -170,7 +161,7 @@ class CalibrationManager:
         self._result = result
         return result
 
-    def _build_residual_map(
+    def _build_report(
         self,
         good_images: list[_CollectedImage],
         camera_matrix: np.ndarray,
@@ -178,36 +169,20 @@ class CalibrationManager:
         cols: int,
         rows: int,
         cell_mm: float,
-        image_size: tuple[int, int],
-    ) -> tuple[ResidualDistortionMap, CalibrationReport]:
-        """Build the residual distortion map from calibrated images.
-
-        For each image:
-        1. Undistort it with the calibrated camera matrix + dist coeffs
-        2. Re-detect chessboard corners in the undistorted image
-        3. Compute ideal grid positions (where corners SHOULD be)
-        4. Residual = detected_position - ideal_position
-
-        The ideal positions are computed by fitting an affine transform
-        between detected corners and the known grid, then projecting.
-        This accounts for the board pose while extracting purely
-        geometric residual errors.
-        """
-        all_points = []
+    ) -> CalibrationReport:
+        """Build calibration error report from calibrated images."""
         all_residuals = []
-        all_corrected = []
 
         for entry in good_images:
             if entry.corners is None:
                 continue
 
-            # Undistort the image
+            # Undistort and re-detect
             undistorted = cv2.undistort(
                 entry.image, camera_matrix, dist_coeffs,
             )
             gray = self._to_gray(undistorted)
 
-            # Re-detect corners in undistorted image
             found, corners_undist = cv2.findChessboardCorners(
                 gray, (cols, rows),
                 cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
@@ -221,46 +196,30 @@ class CalibrationManager:
             )
             detected = corners_undist.reshape(-1, 2)
 
-            # Compute ideal grid positions via affine fit
-            # The detected corners should lie on a regular grid.
-            # Fit an affine from grid indices → detected positions,
-            # then compute ideal positions from that affine.
-            ideal = self._compute_ideal_grid(
-                detected, cols, rows,
-            )
-
-            # Residual = ideal - detected (correction needed)
+            # Compute ideal grid and residuals
+            ideal = self._compute_ideal_grid(detected, cols, rows)
             residual = ideal - detected
-
-            all_points.append(detected)
             all_residuals.append(residual)
-            all_corrected.append(ideal)
 
-        if not all_points:
+        if not all_residuals:
             raise ValueError("No corners detected in undistorted images")
 
-        points = np.vstack(all_points)
         residuals = np.vstack(all_residuals)
-        corrected = np.vstack(all_corrected)
+        h, w = good_images[0].image.shape[:2]
 
-        # Build the TPS map
-        rmap = ResidualDistortionMap()
-        rmap.build(points, residuals, image_size)
-
-        # Compute after-correction residuals
-        corrected_by_map = rmap.correct(points)
-        residuals_after = corrected - corrected_by_map
-
-        # Generate report
         report = CalibrationReport(
             n_images=len(good_images),
-            image_size=image_size,
+            image_size=(w, h),
             opencv_rms=float(
                 np.sqrt(np.mean(np.sum(residuals ** 2, axis=1)))
             ) if len(residuals) > 0 else 0.0,
         )
-        report.compute(points, residuals, residuals_after)
-        return rmap, report
+        report.compute(
+            np.vstack([entry.corners.reshape(-1, 2) for entry in good_images if entry.corners is not None]),
+            residuals,
+            residuals,  # no correction applied, same residuals
+        )
+        return report
 
     @staticmethod
     def _compute_ideal_grid(

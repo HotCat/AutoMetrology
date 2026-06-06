@@ -299,6 +299,11 @@ class PartialFOVAligner:
         if best_T is None:
             return affine_solver.identity(), {}
 
+        # ── Scale refinement ─────────────────────────────────────────
+        # The pixel_size_mm calibration may have residual error (1-5%).
+        # Search over scale values to find the best match.
+        best_T = self._refine_scale(cad_sub, img_world, best_T, img_centroid)
+
         # ── Translation fine-tuning: grid search with tighter sigma ────
         # The NN refinement can converge to a suboptimal translation for
         # partial FOV / grid structures. Do a local grid search to fix it.
@@ -316,14 +321,82 @@ class PartialFOVAligner:
         dists_final, _ = img_tree.query(translated_cad)
         best_score = float(np.mean(np.exp(-dists_final ** 2 / (2 * 3.0 ** 2))))
 
+        scale_est = affine_solver.extract_scale(best_T)
         info = {
             "score": best_score,
             "rotation_deg": best_angle,
+            "scale": scale_est,
             "n_cad": len(cad_sub),
             "n_img": len(img_world),
             "orientation_candidates": candidates[:8],
         }
         return best_T, info
+
+    def _refine_scale(
+        self,
+        cad_points: np.ndarray,
+        img_world: np.ndarray,
+        T: np.ndarray,
+        img_centroid: np.ndarray,
+    ) -> np.ndarray:
+        """Refine scale by searching over a range of values.
+
+        The pixel_size_mm calibration may have residual error. This method
+        tries different scales, re-estimates translation for each, and picks
+        the one that maximizes the Gaussian-weighted alignment score.
+        """
+        R = T[:2, :2]
+        # Extract current rotation angle (unit rotation, ignoring scale)
+        current_scale = affine_solver.extract_scale(T)
+        cos_a = R[0, 0] / current_scale
+        sin_a = R[1, 0] / current_scale
+
+        img_tree = cKDTree(img_world)
+        cad_centroid = cad_points.mean(axis=0)
+
+        best_T = T.copy()
+        best_score = -1.0
+
+        for s in np.arange(0.90, 1.101, 0.01):
+            Rs = np.array([[s * cos_a, -s * sin_a],
+                           [s * sin_a, s * cos_a]])
+            # Re-estimate translation to match centroids
+            rotated_centroid = Rs @ cad_centroid
+            t = img_centroid - rotated_centroid
+
+            translated_cad = cad_points @ Rs.T + t
+            dists, _ = img_tree.query(translated_cad)
+            score = float(np.mean(np.exp(-dists ** 2 / (2 * 3.0 ** 2))))
+
+            if score > best_score:
+                best_score = score
+                best_T = np.eye(3, dtype=np.float64)
+                best_T[:2, :2] = Rs
+                best_T[0, 2] = t[0]
+                best_T[1, 2] = t[1]
+
+        # Fine scale search around best
+        best_s = affine_solver.extract_scale(best_T)
+        for s in np.arange(best_s - 0.03, best_s + 0.031, 0.005):
+            if s <= 0:
+                continue
+            Rs = np.array([[s * cos_a, -s * sin_a],
+                           [s * sin_a, s * cos_a]])
+            rotated_centroid = Rs @ cad_centroid
+            t = img_centroid - rotated_centroid
+
+            translated_cad = cad_points @ Rs.T + t
+            dists, _ = img_tree.query(translated_cad)
+            score = float(np.mean(np.exp(-dists ** 2 / (2 * 2.0 ** 2))))
+
+            if score > best_score:
+                best_score = score
+                best_T = np.eye(3, dtype=np.float64)
+                best_T[:2, :2] = Rs
+                best_T[0, 2] = t[0]
+                best_T[1, 2] = t[1]
+
+        return best_T
 
     def _refine_translation(
         self,

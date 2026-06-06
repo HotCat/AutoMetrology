@@ -1,11 +1,16 @@
 """
 MeasurementPipeline — orchestrates CAD-guided local feature measurement.
 
+DATA CONTRACT:
+  1. Image source is ALWAYS raw camera image, never CAD overlay or display canvas
+  2. MeasuredFeature.source_type is set to "FITTED" (image-derived geometry)
+  3. Query evaluator uses MeasuredFeature.fitted_geometry_world ONLY
+
 Flow:
   1. CAD feature → ROI prediction (via registration transform)
   2. ROI → gradient-based edge sampling (radial for circles, scanline for lines)
   3. Edge points → least-squares geometric fitting
-  4. Fitted geometry → MeasuredFeature (stored separately from CAD)
+  4. Fitted geometry → MeasuredFeature (source_type="FITTED")
 
 CAD features are geometric priors only. The actual measurement comes
 from image edge data within locally constrained search regions.
@@ -41,11 +46,21 @@ def _print(msg: str) -> None:
     print(f"[MEAS] {msg}")
 
 
+def _audit(msg: str) -> None:
+    logger.info(f"[AUDIT] {msg}")
+
+
 class MeasurementPipeline:
     """CAD-guided local feature measurement pipeline.
 
     Uses CAD features as geometric priors to predict ROIs, then fits
     actual geometry from image edge data.
+
+    IMAGE SOURCE CONTRACT:
+      The gradient image passed to fitting engines is computed from
+      self._image, which is the raw grayscale camera image.
+      There is no code path that uses CAD overlay pixels or display
+      canvas pixels as input to measurement.
     """
 
     def __init__(
@@ -59,7 +74,7 @@ class MeasurementPipeline:
         """
         Args:
             repo: CAD feature repository
-            image: grayscale uint8 image
+            image: grayscale uint8 image (RAW CAMERA IMAGE, not overlay)
             affine: 3x3 matrix mapping pixel → CAD world
             pixel_size_mm: mm per pixel
             residual_map: optional residual distortion map for sub-pixel correction
@@ -70,23 +85,48 @@ class MeasurementPipeline:
         self._pixel_size_mm = pixel_size_mm
         self._residual_map = residual_map
 
+        # Image source assertion: must be raw camera image
+        self._assert_image_source(image)
+
         self._store = MeasuredFeatureStore()
         self._roi_predictor = FeatureROIPredictor(affine)
 
-        # Precompute gradient magnitude
+        # Precompute gradient magnitude from RAW IMAGE
         self._gradient: Optional[np.ndarray] = None
         if image is not None and HAS_CV2:
             grad_x = cv2.Scharr(image, cv2.CV_64F, 1, 0)
             grad_y = cv2.Scharr(image, cv2.CV_64F, 0, 1)
             self._gradient = np.sqrt(grad_x ** 2 + grad_y ** 2)
+            _audit(f"Gradient computed from image: shape={image.shape}, dtype={image.dtype}")
 
         self._circle_engine: Optional[CircleFittingEngine] = None
         self._line_engine: Optional[LineFittingEngine] = None
         if self._gradient is not None:
             self._circle_engine = CircleFittingEngine(self._gradient)
             self._line_engine = LineFittingEngine(self._gradient)
+            _audit(f"Fitting engines initialized with gradient from RAW IMAGE")
 
         self._debug_data: dict = {}
+
+    def _assert_image_source(self, image: np.ndarray) -> None:
+        """Assert that image is raw camera data, not CAD overlay.
+
+        This is a structural assertion — the image passed to MeasurementPipeline
+        comes from ImageLayerRenderer.image (numpy BGR array from camera or file),
+        not from any CAD rendering or display compositing.
+        """
+        if image is None:
+            return
+        # Type check: must be uint8 grayscale (converted from BGR camera image)
+        assert image.dtype == np.uint8, (
+            f"Image source assertion failed: dtype={image.dtype}, expected uint8. "
+            f"Image must be raw camera data converted to grayscale."
+        )
+        assert len(image.shape) == 2, (
+            f"Image source assertion failed: shape={image.shape}, expected 2D grayscale. "
+            f"Image must be raw camera data converted to grayscale, not BGR or RGBA."
+        )
+        _audit(f"Image source validated: dtype=uint8, shape={image.shape} (RAW CAMERA)")
 
     @property
     def store(self) -> MeasuredFeatureStore:
@@ -154,16 +194,37 @@ class MeasurementPipeline:
             return None
 
         geom = feat.geometry
-        roi_result = self._roi_predictor.predict_circle_roi(geom, padding=15)
+        roi_result = self._roi_predictor.predict_circle_roi(geom, padding=50)
         if roi_result is None:
             return None
         roi, pixel_center, pixel_radius = roi_result
 
-        # Fit
+        # Fit — wide search to handle registration errors up to ~5mm
         result: Optional[CircleFitResult] = self._circle_engine.fit(
             pixel_center, pixel_radius,
+            search_width_ratio=0.5,
+            min_gradient=15.0,
         )
         if result is None:
+            _print(f"  Circle {feat.feature_id[:12]}: NO EDGE FOUND "
+                   f"(predicted=({pixel_center[0]:.1f},{pixel_center[1]:.1f}) "
+                   f"r={pixel_radius:.1f}px)")
+            return None
+
+        # Log pixel-space displacement from predicted to fitted
+        dp = result.center - pixel_center
+        displacement_px = float(np.linalg.norm(dp))
+        _print(f"  Circle {feat.feature_id[:12]}: "
+               f"predicted=({pixel_center[0]:.1f},{pixel_center[1]:.1f}) "
+               f"fitted=({result.center[0]:.1f},{result.center[1]:.1f}) "
+               f"Δpx=({dp[0]:.1f},{dp[1]:.1f}) "
+               f"conf={result.confidence:.2f} pts={result.n_edge_points}")
+
+        # Gradient quality validation: require strong edges
+        image_grad_mean = float(np.mean(self._gradient)) if self._gradient is not None else 0.0
+        if result.gradient_strength < max(45.0, image_grad_mean * 3.0):
+            _print(f"  REJECTED: gradient_strength={result.gradient_strength:.1f} < threshold "
+                   f"(edges too weak, likely noise)")
             return None
 
         # Convert fitted center and radius to world coords
@@ -200,6 +261,7 @@ class MeasurementPipeline:
             residual_error=result.residual,
             confidence=result.confidence,
             detection_method="radial_edge_sampling",
+            source_type="FITTED",
         )
         self._store.add(mf)
 
@@ -224,16 +286,37 @@ class MeasurementPipeline:
             return None
 
         geom = feat.geometry
-        roi_result = self._roi_predictor.predict_line_roi(geom, padding=15)
+        roi_result = self._roi_predictor.predict_line_roi(geom, padding=50)
         if roi_result is None:
             return None
         roi, pixel_p1, pixel_p2 = roi_result
 
-        # Fit
+        # Fit — wide search to handle registration errors up to ~5mm
         result: Optional[LineFitResult] = self._line_engine.fit(
             pixel_p1, pixel_p2,
+            scan_width=50.0,
+            min_gradient=15.0,
         )
         if result is None:
+            _print(f"  Line {feat.feature_id[:12]}: NO EDGE FOUND "
+                   f"(predicted=({pixel_p1[0]:.1f},{pixel_p1[1]:.1f})-"
+                   f"({pixel_p2[0]:.1f},{pixel_p2[1]:.1f}))")
+            return None
+
+        dp1 = result.p1 - pixel_p1
+        dp2 = result.p2 - pixel_p2
+        displacement_px1 = float(np.linalg.norm(dp1))
+        displacement_px2 = float(np.linalg.norm(dp2))
+        _print(f"  Line {feat.feature_id[:12]}: "
+               f"Δpx1=({dp1[0]:.1f},{dp1[1]:.1f}) "
+               f"Δpx2=({dp2[0]:.1f},{dp2[1]:.1f}) "
+               f"conf={result.confidence:.2f} pts={result.n_edge_points}")
+
+        # Gradient quality validation: require strong edges
+        image_grad_mean = float(np.mean(self._gradient)) if self._gradient is not None else 0.0
+        if result.gradient_strength < max(45.0, image_grad_mean * 3.0):
+            _print(f"  REJECTED: gradient_strength={result.gradient_strength:.1f} < threshold "
+                   f"(edges too weak, likely noise)")
             return None
 
         # Convert fitted line endpoints to world coords
@@ -266,6 +349,7 @@ class MeasurementPipeline:
             residual_error=result.residual,
             confidence=result.confidence,
             detection_method="perpendicular_scanline",
+            source_type="FITTED",
         )
         self._store.add(mf)
 

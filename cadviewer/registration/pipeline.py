@@ -141,3 +141,7 @@ class RegistrationPipeline:
     def get_debug_data(self) -> dict:
         """Return intermediate data for debug visualization."""
         return self._debug_data.copy()
+
+    def set_debug_data(self, key: str, data: dict) -> None:
+        """Populate debug data cache (e.g. for manual alignment seeding)."""
+        self._debug_data[key] = data

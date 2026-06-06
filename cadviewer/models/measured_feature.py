@@ -5,6 +5,11 @@ A MeasuredFeature stores the result of fitting actual image edge data
 within a CAD-predicted ROI. It is distinct from CADFeature (which stores
 nominal design geometry) and should be used for all dimension computations.
 
+DATA CONTRACT:
+  - source_type must be one of: IMAGE_EDGE, FITTED, MEASURED
+  - The query evaluator must NEVER access CADFeature.geometry for measured values
+  - MeasuredFeature.fitted_geometry_world is the ONLY valid source for measurements
+
 CAD features are priors; MeasuredFeatures are the actual measurements.
 """
 
@@ -12,11 +17,21 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass, field
+from enum import Enum
 from typing import Dict, List, Optional
 
 import numpy as np
 
 from .feature import FeatureType
+
+
+class GeometrySourceType(Enum):
+    """Origin of geometry data — used for audit and validation."""
+    CAD = "CAD"                     # Nominal design geometry (from DXF)
+    REGISTERED_CAD = "REGISTERED_CAD"  # CAD transformed by registration (not measured)
+    IMAGE_EDGE = "IMAGE_EDGE"       # Raw edge points from image gradient
+    FITTED = "FITTED"               # Geometry fitted from image edge points
+    MEASURED = "MEASURED"           # Final measurement result (IMAGE_EDGE or FITTED)
 
 
 @dataclass
@@ -33,10 +48,23 @@ class MeasuredFeature:
     residual_error: float  # mean fitting residual (pixels)
     confidence: float  # 0.0 to 1.0
     detection_method: str  # e.g. "radial_edge_sampling"
+    source_type: str = "IMAGE_EDGE"  # GeometrySourceType value for audit
 
     def is_valid(self) -> bool:
         """Check if measurement is usable."""
         return self.confidence > 0.2 and self.residual_error < 5.0
+
+    def assert_source_is_image(self) -> None:
+        """Assert that geometry comes from image, not CAD.
+        Raises AssertionError if source_type indicates CAD origin.
+        """
+        valid_sources = ("IMAGE_EDGE", "FITTED", "MEASURED")
+        if self.source_type not in valid_sources:
+            raise AssertionError(
+                f"Data contract violation: MeasuredFeature.source_type={self.source_type}, "
+                f"must be one of {valid_sources}. "
+                f"CAD geometry cannot be used for measurement values."
+            )
 
 
 class MeasuredFeatureStore:

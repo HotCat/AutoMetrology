@@ -19,7 +19,7 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Optional
 
-from PySide6.QtCore import Qt, Slot, QSize, Signal, QObject
+from PySide6.QtCore import Qt, Slot, QSize, Signal, QObject, QTimer
 from PySide6.QtGui import QAction, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QApplication, QSplitter, QToolBar,
@@ -74,6 +74,10 @@ class MainWindow(QMainWindow):
         self._setup_dock_widgets()
         self._connect_signals()
         self._check_dwg_converter()
+
+        # Auto-load last DXF if available
+        if self._config.last_dxf_path and Path(self._config.last_dxf_path).exists():
+            QTimer.singleShot(0, lambda: self._load_dxf(self._config.last_dxf_path))
 
     def _setup_ui(self) -> None:
         """Create the main splitter layout."""
@@ -285,14 +289,21 @@ class MainWindow(QMainWindow):
         self._viewer.load_repository(self._repo)
 
         # Update registration manager with new repo
-        self._reg_manager.set_repository(self._repo)
+        # (set_repository on panel clears groups, so restore must come after)
         self._reg_panel.set_repository(self._repo)
+        self._reg_manager.restore_groups(self._config.registration_groups)
+        self._reg_panel._refresh_group_list()
+        self._reg_panel._refresh_feature_list()
         self._tree_panel.set_registration_manager(self._reg_manager)
         self._viewer.set_registration_manager(self._reg_manager)
 
         # Create registration pipeline for new repo
         self._pipeline = RegistrationPipeline(self._repo, self._reg_manager)
         self._reg_panel.set_pipeline(self._pipeline)
+
+        # Track last DXF path for auto-restore
+        self._last_dxf_path = path
+        self._config.last_dxf_path = path
 
         # Print type summary
         counts = self._repo.type_counts()
@@ -329,7 +340,6 @@ class MainWindow(QMainWindow):
         """Evaluate measurement queries using MeasuredFeature data."""
         from ..measurement.evaluator import QueryEvaluator
         from ..measurement.measurement_pipeline import MeasurementPipeline
-        from ..calibration.residual_map import ResidualDistortionMap
         import numpy as np
         try:
             import cv2
@@ -348,17 +358,9 @@ class MainWindow(QMainWindow):
             if bgr_image is not None and affine is not None:
                 image = cv2.cvtColor(bgr_image, cv2.COLOR_BGR2GRAY)
                 if not np.allclose(affine, np.eye(3), atol=1e-6):
-                    # Load residual distortion map if available
-                    residual_map = None
-                    try:
-                        residual_map = ResidualDistortionMap.from_dict(
-                            self._config.lens_calibration.residual_map
-                        )
-                    except Exception:
-                        pass
                     pipeline = MeasurementPipeline(
                         self._repo, image, affine,
-                        residual_map=residual_map if residual_map and residual_map.is_built else None,
+                        pixel_size_mm=self._config.pixel_size_mm,
                     )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
@@ -549,6 +551,8 @@ class MainWindow(QMainWindow):
                     self._config.camera = cam
             if hasattr(self._reg_panel, 'cleanup'):
                 self._reg_panel.cleanup()
+        # Persist registration groups
+        self._config.registration_groups = self._reg_manager.save_groups()
         self._config.save()
         event.accept()
 

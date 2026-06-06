@@ -113,6 +113,27 @@ class RegistrationGroup:
     def contains(self, feature_id: str) -> bool:
         return feature_id in self.feature_ids
 
+    def to_dict(self) -> dict:
+        """Serialize to JSON-compatible dict."""
+        c = self.color
+        return {
+            "group_id": self.group_id,
+            "name": self.name,
+            "color": [c.red(), c.green(), c.blue(), c.alpha()],
+            "feature_ids": list(self.feature_ids),
+        }
+
+    @staticmethod
+    def from_dict(data: dict) -> RegistrationGroup:
+        """Deserialize from dict (e.g. loaded from config JSON)."""
+        rgba = data.get("color", [255, 100, 100, 180])
+        return RegistrationGroup(
+            group_id=data["group_id"],
+            name=data.get("name", "Group"),
+            color=QColor(rgba[0], rgba[1], rgba[2], rgba[3]),
+            feature_ids=data.get("feature_ids", []),
+        )
+
 
 class RegistrationManager:
     """Manages all registration groups with CRUD operations and reverse lookup."""
@@ -192,3 +213,18 @@ class RegistrationManager:
     def set_repository(self, repo: FeatureRepository) -> None:
         self._repo = repo
         self.clear()
+
+    def save_groups(self) -> list[dict]:
+        """Serialize all groups for persistence."""
+        return [g.to_dict() for g in self._groups.values()]
+
+    def restore_groups(self, groups_data: list[dict]) -> None:
+        """Restore groups from persisted data. Call after set_repository."""
+        self.clear()
+        for gdata in groups_data:
+            group = RegistrationGroup.from_dict(gdata)
+            self._groups[group.group_id] = group
+            for fid in group.feature_ids:
+                self._feature_to_group[fid] = group.group_id
+            # Advance color index past restored colors
+            self._color_index += 1

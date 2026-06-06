@@ -20,6 +20,7 @@ Coordinate System:
 from __future__ import annotations
 
 import math
+import numpy as np
 from typing import Dict, List, Optional, Set, Tuple
 
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF, QSize
@@ -98,6 +99,12 @@ class CADViewerCanvas(QWidget):
         self._meas_debug_overlay = MeasurementDebugOverlay()
         self._meas_debug_data: dict = {}
         self._meas_debug_affine: Optional[np.ndarray] = None
+
+        # Teach mode state
+        self._teach_mode: bool = False
+        self._teach_phase: str = ""  # "cad_p1", "cad_p2", "img_p1", "img_p2", "done"
+        self._teach_cad_points: list = []   # [{label, world: [x,y]}]
+        self._teach_img_points: list = []   # [{label, pixel: [x,y]}]
 
         # Connect signals
         bus.highlight_feature.connect(self._on_highlight_feature)
@@ -318,6 +325,9 @@ class CADViewerCanvas(QWidget):
                     self._world_to_screen, self._scale,
                     self._meas_debug_affine,
                 )
+
+            # Teach mode markers
+            self._draw_teach_markers(painter)
 
             # Coordinate info
             self._draw_info_overlay(painter)
@@ -891,6 +901,9 @@ class CADViewerCanvas(QWidget):
 
     def mousePressEvent(self, event: QMouseEvent) -> None:
         self._last_mouse = event.pos()
+        if self._teach_mode and event.button() == Qt.LeftButton:
+            self._handle_teach_click(event.pos())
+            return
         if event.button() == Qt.LeftButton:
             hit_id = self._hit_test(event.pos())
             if hit_id:
@@ -906,6 +919,9 @@ class CADViewerCanvas(QWidget):
 
     def mouseReleaseEvent(self, event: QMouseEvent) -> None:
         self._panning = False
+        if self._teach_mode:
+            self.setCursor(Qt.CrossCursor)
+            return
         self.setCursor(Qt.ArrowCursor)
         self._last_mouse = None
 
@@ -935,6 +951,91 @@ class CADViewerCanvas(QWidget):
 
         self._cache_dirty = True
         self.update()
+
+    # ── teach mode point picking ───────────────────────────────────
+
+    PHASE_LABELS = {
+        "cad_p1": "P1", "cad_p2": "P2",
+        "img_p1": "P1", "img_p2": "P2",
+    }
+
+    def _handle_teach_click(self, pos: QPoint) -> None:
+        wx, wy = self._screen_to_world(pos.x(), pos.y())
+
+        if self._teach_phase in ("cad_p1", "cad_p2"):
+            label = self.PHASE_LABELS[self._teach_phase]
+            self._teach_cad_points.append({"label": label, "world": [wx, wy]})
+            bus.teach_point_added.emit({
+                "phase": self._teach_phase,
+                "world": [wx, wy],
+            })
+            if self._teach_phase == "cad_p1":
+                self._teach_phase = "cad_p2"
+            else:
+                self._teach_phase = "img_p1"
+
+        elif self._teach_phase in ("img_p1", "img_p2"):
+            # Convert world click to image pixel coords
+            from ..registration.affine_solver import apply as aff_apply
+            inv_affine = np.linalg.inv(self._image_layer.affine)
+            px_world = np.array([[wx, wy]], dtype=np.float64)
+            px_img = aff_apply(inv_affine, px_world)
+            pixel = [float(px_img[0, 0]), float(px_img[0, 1])]
+
+            label = self.PHASE_LABELS[self._teach_phase]
+            self._teach_img_points.append({"label": label, "pixel": pixel})
+            bus.teach_point_added.emit({
+                "phase": self._teach_phase,
+                "pixel": pixel,
+            })
+            if self._teach_phase == "img_p1":
+                self._teach_phase = "img_p2"
+            else:
+                self._teach_phase = "done"
+                self._teach_mode = False
+                self.setCursor(Qt.ArrowCursor)
+                bus.teach_mode_completed.emit({
+                    "cad_points": list(self._teach_cad_points),
+                    "img_points": list(self._teach_img_points),
+                })
+
+        self.update()
+
+    def _draw_teach_markers(self, painter: QPainter) -> None:
+        if not self._teach_cad_points and not self._teach_img_points:
+            return
+        painter.save()
+        marker_radius = max(6.0, 12.0 / self._scale)
+
+        # Draw CAD point markers (green)
+        cad_pen = QPen(QColor(0, 255, 100), 2)
+        cad_font = painter.font()
+        cad_font.setPixelSize(max(10, int(14 / self._scale)))
+        painter.setFont(cad_font)
+        for pt in self._teach_cad_points:
+            wx, wy = pt["world"]
+            painter.setPen(cad_pen)
+            painter.drawEllipse(QPointF(wx, wy), marker_radius, marker_radius)
+            painter.drawText(
+                QPointF(wx + marker_radius * 1.5, wy - marker_radius * 0.5),
+                pt["label"],
+            )
+
+        # Draw image point markers (magenta) — in world coords
+        img_pen = QPen(QColor(255, 80, 255), 2)
+        from ..registration.affine_solver import apply as aff_apply
+        for pt in self._teach_img_points:
+            px = np.array([pt["pixel"]], dtype=np.float64)
+            world = aff_apply(self._image_layer.affine, px)
+            wx, wy = float(world[0, 0]), float(world[0, 1])
+            painter.setPen(img_pen)
+            painter.drawEllipse(QPointF(wx, wy), marker_radius, marker_radius)
+            painter.drawText(
+                QPointF(wx + marker_radius * 1.5, wy - marker_radius * 0.5),
+                pt["label"],
+            )
+
+        painter.restore()
 
     # ── hit testing ────────────────────────────────────────────────
 
@@ -1062,6 +1163,41 @@ class CADViewerCanvas(QWidget):
 
     def get_image_layer(self) -> ImageLayerRenderer:
         return self._image_layer
+
+    # ── teach mode ────────────────────────────────────────────────
+
+    def start_teach_mode(self) -> None:
+        self._teach_mode = True
+        self._teach_phase = "cad_p1"
+        self._teach_cad_points.clear()
+        self._teach_img_points.clear()
+        self.setCursor(Qt.CrossCursor)
+        bus.teach_mode_started.emit()
+        self.update()
+
+    def cancel_teach_mode(self) -> None:
+        self._teach_mode = False
+        self._teach_phase = ""
+        self._teach_cad_points.clear()
+        self._teach_img_points.clear()
+        self.setCursor(Qt.ArrowCursor)
+        bus.teach_mode_cancelled.emit()
+        self.update()
+
+    def is_teach_mode(self) -> bool:
+        return self._teach_mode
+
+    @property
+    def teach_phase(self) -> str:
+        return self._teach_phase
+
+    @property
+    def teach_cad_points(self) -> list:
+        return list(self._teach_cad_points)
+
+    @property
+    def teach_img_points(self) -> list:
+        return list(self._teach_img_points)
 
     def set_debug_data(self, data: dict) -> None:
         """Store debug data from registration pipeline for overlay rendering."""

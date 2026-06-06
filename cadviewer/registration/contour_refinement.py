@@ -56,7 +56,6 @@ class ContourRefinementEngine:
             dict with 'transform', 'iterations', 'final_error', 'converged'
         """
         T = initial_transform.copy()
-        fixed_scale = affine_solver.extract_scale(T)
 
         if len(cad_contour) < 3 or len(img_world_points) < 3:
             return {
@@ -81,9 +80,9 @@ class ContourRefinementEngine:
             matched_src = cad_contour[mask]
             matched_tgt = img_world_points[indices[mask]]
 
-            T_new = affine_solver.solve_rigid_with_fixed_scale(
-                matched_src, matched_tgt, fixed_scale,
-            )
+            # Use solve_similarity to allow scale refinement.
+            # This compensates for residual pixel_size_mm calibration error.
+            T_new = affine_solver.solve_similarity(matched_src, matched_tgt)
 
             # Compute MSE of transformed matched points
             transformed_new = affine_solver.apply(T_new, cad_contour)

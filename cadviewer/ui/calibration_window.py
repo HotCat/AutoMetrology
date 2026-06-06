@@ -646,12 +646,6 @@ class _LensCalTab(QWidget):
             label = labels[i] if i < len(labels) else f"d{i}"
             lines.append(f"  {label} = {v:.6f}")
 
-        if result.residual_map is not None and result.residual_map.is_built:
-            lines += [
-                "",
-                "Residual Distortion Map:",
-                f"  Sample points: {result.residual_map.n_samples}",
-            ]
         if result.report is not None:
             lines += ["", result.report.summary()]
 
@@ -671,11 +665,31 @@ class _LensCalTab(QWidget):
             self._camera_matrix, self._dist_coeffs,
             self._rms_error, good,
         )
-        # Persist residual distortion map
+
+        # Build and save coordinate correction model from detected corners
         if hasattr(self, "_cal_result") and self._cal_result is not None:
-            rmap = self._cal_result.residual_map
-            if rmap is not None and rmap.is_built:
-                cfg.lens_calibration.residual_map = rmap.to_dict()
+            cols = self._win._cb_col.value()
+            rows = self._win._cb_row.value()
+            cell_mm = self._win._cb_cell.value()
+
+            # Collect corners from all good images
+            good_entries = [e for e in self._collected if e.detected]
+            if good_entries:
+                from ..calibration.coordinate_correction import CoordinateTransformer
+                # Use corners from first good image for the correction model
+                corners = good_entries[0].corners.reshape(-1, 2)
+                transformer = CoordinateTransformer()
+                model_type = "homography"  # default to homography
+                success = transformer.build_from_corners(
+                    corners, cols, rows, cell_mm, model_type,
+                    image_size=(good_entries[0].image.shape[1],
+                                good_entries[0].image.shape[0]),
+                    image_count=len(good_entries),
+                )
+                if success:
+                    cfg.lens_calibration.coordinate_correction = transformer.get_model_dict()
+                    cfg.lens_calibration.correction_model_type = model_type
+
         cfg.save()
         self._status_label.setText("Calibration saved to configuration.")
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")

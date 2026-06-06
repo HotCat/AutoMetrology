@@ -1,17 +1,24 @@
 """
-Calibration module — residual distortion compensation for industrial metrology.
+Calibration module — distortion compensation for industrial metrology.
 
 Pipeline:
   Raw Image → OpenCV Calibration → Undistorted Image
-           → Residual Distortion Compensation Map
-           → Measurement Pipeline (corrected edge points)
+           → Coordinate Correction (homography/affine models)
+           → Measurement Pipeline
 
 Classes:
-  ResidualDistortionMap  — TPS-based correction map
-  CalibrationManager     — orchestrates full calibration + residual sampling
-  CalibrationReport      — error analysis and reporting
+  HomographyCalibrationModel  — projective correction from chessboard data
+  AffineCalibrationModel      — linear correction from chessboard data
+  CoordinateTransformer       — unified interface for correction models
+  CalibrationValidator        — validate by measuring known grid distances
 """
 
-from .residual_map import ResidualDistortionMap
+from .coordinate_correction import (
+    HomographyCalibrationModel,
+    AffineCalibrationModel,
+    CoordinateTransformer,
+    CalibrationValidator,
+    CalibrationMetadata,
+)
 from .calibration_manager import CalibrationManager
 from .report import CalibrationReport

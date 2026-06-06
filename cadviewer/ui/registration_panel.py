@@ -250,6 +250,8 @@ class RegistrationPanel(QWidget):
         """)
         self._method_combo.addItem("Full Silhouette", "full_silhouette")
         self._method_combo.addItem("Convex Hull (partial FOV)", "convex_hull")
+        self._method_combo.addItem("Fiducial-Based", "fiducial")
+        self._method_combo.addItem("Teach + ICP", "teach_icp")
         self._method_combo.currentIndexChanged.connect(self._on_method_changed)
         method_row.addWidget(self._method_combo)
         reg_layout.addLayout(method_row)
@@ -303,6 +305,50 @@ class RegistrationPanel(QWidget):
         self._btn_debug.setStyleSheet("color: #aaa; font-size: 10px;")
         self._btn_debug.toggled.connect(self._toggle_debug)
         reg_layout.addWidget(self._btn_debug)
+
+        # Teach pose controls
+        teach_row = QHBoxLayout()
+
+        self._btn_teach = QPushButton("Teach Initial Pose")
+        self._btn_teach.setStyleSheet("""
+            QPushButton {
+                background: #446622; color: #bbdd66; border: none;
+                padding: 4px 8px; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: #558833; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        self._btn_teach.setEnabled(False)
+        self._btn_teach.clicked.connect(self._start_teach_mode)
+        teach_row.addWidget(self._btn_teach)
+
+        self._btn_save_pose = QPushButton("Save Pose Template")
+        self._btn_save_pose.setStyleSheet("""
+            QPushButton {
+                background: #264f78; color: white; border: none;
+                padding: 4px 8px; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: #306898; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        self._btn_save_pose.setEnabled(False)
+        self._btn_save_pose.clicked.connect(self._save_pose_template)
+        teach_row.addWidget(self._btn_save_pose)
+
+        self._btn_clear_teach = QPushButton("Clear")
+        self._btn_clear_teach.setStyleSheet("""
+            QPushButton {
+                background: #553333; color: #cc8888; border: none;
+                padding: 4px 8px; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: #664444; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        self._btn_clear_teach.setEnabled(False)
+        self._btn_clear_teach.clicked.connect(self._clear_teach_points)
+        teach_row.addWidget(self._btn_clear_teach)
+
+        reg_layout.addLayout(teach_row)
 
         layout.addWidget(reg_group)
 
@@ -527,11 +573,12 @@ class RegistrationPanel(QWidget):
         if hasattr(self, '_canvas'):
             self._canvas.get_image_layer().load_from_array(frame)
             self._image_path_label.setText("<camera capture>")
-            self._pixel_size_mm = 0.01  # Default pixel size; user may adjust
+            # Keep pixel_size_mm from config (don't reset to default)
             self._btn_run_coarse.setEnabled(True)
             self._btn_run_fine.setEnabled(False)
             self._btn_run_full.setEnabled(True)
-            self._reg_status.setText("Frame captured. Ready for registration.")
+            self._btn_teach.setEnabled(True)
+            self._reg_status.setText(f"Frame captured. Ready for registration. (pixel_size={self._pixel_size_mm:.4f} mm)")
             self._canvas.update()
             bus.image_loaded.emit("<camera_capture>")
 
@@ -704,11 +751,18 @@ class RegistrationPanel(QWidget):
             if item.data(Qt.UserRole) == group_id:
                 self._group_list.setCurrentItem(item)
                 break
+        # Persist
+        if self._config is not None:
+            self._config.registration_groups = self._manager.save_groups()
+            self._config.save()
 
     @Slot(str)
     def _on_group_deleted(self, group_id: str) -> None:
         self._refresh_group_list()
         self._refresh_feature_list()
+        if self._config is not None:
+            self._config.registration_groups = self._manager.save_groups()
+            self._config.save()
 
     @Slot(str)
     def _on_group_contents_changed(self, group_id: str) -> None:
@@ -716,6 +770,10 @@ class RegistrationPanel(QWidget):
             self._refresh_feature_list()
             self._refresh_statistics()
         self._refresh_group_list()
+        # Persist groups to config whenever contents change
+        if self._config is not None:
+            self._config.registration_groups = self._manager.save_groups()
+            self._config.save()
 
     # ── selection ────────────────────────────────────────────────
 
@@ -784,9 +842,7 @@ class RegistrationPanel(QWidget):
 
     def set_repository(self, repo: FeatureRepository) -> None:
         self._repo = repo
-        self._manager.set_repository(repo)
-        self._refresh_group_list()
-        self._refresh_feature_list()
+        self._manager._repo = repo
 
     # ── image registration ────────────────────────────────────────
 
@@ -954,3 +1010,109 @@ class RegistrationPanel(QWidget):
         """Push pipeline debug data to canvas for overlay rendering."""
         if hasattr(self, '_canvas') and hasattr(self, '_pipeline'):
             self._canvas.set_debug_data(self._pipeline.get_debug_data())
+
+    # ── teach mode ──────────────────────────────────────────────────
+
+    PHASE_INSTRUCTIONS = {
+        "cad_p1": "Teach: Click CAD Point P1",
+        "cad_p2": "Teach: Click CAD Point P2",
+        "img_p1": "Teach: Click corresponding Image Point P1",
+        "img_p2": "Teach: Click corresponding Image Point P2",
+    }
+
+    def _start_teach_mode(self) -> None:
+        if not hasattr(self, '_canvas'):
+            return
+        self._canvas.start_teach_mode()
+        self._btn_teach.setEnabled(False)
+        self._btn_clear_teach.setEnabled(True)
+        self._btn_save_pose.setEnabled(False)
+        self._update_teach_status()
+        bus.teach_point_added.connect(self._on_teach_point_added)
+        bus.teach_mode_completed.connect(self._on_teach_completed)
+
+    def _clear_teach_points(self) -> None:
+        if hasattr(self, '_canvas') and self._canvas.is_teach_mode():
+            self._canvas.cancel_teach_mode()
+        self._btn_teach.setEnabled(True)
+        self._btn_clear_teach.setEnabled(False)
+        self._btn_save_pose.setEnabled(False)
+        self._reg_status.setText("Teach points cleared")
+
+    def _on_teach_point_added(self, info: dict) -> None:
+        self._update_teach_status()
+
+    def _on_teach_completed(self, info: dict) -> None:
+        self._btn_save_pose.setEnabled(True)
+        self._reg_status.setText(
+            "Teach complete. Click 'Save Pose Template' to store."
+        )
+
+    def _update_teach_status(self) -> None:
+        if hasattr(self, '_canvas'):
+            phase = self._canvas.teach_phase
+            msg = self.PHASE_INSTRUCTIONS.get(phase, "")
+            if msg:
+                self._reg_status.setText(msg)
+
+    def _save_pose_template(self) -> None:
+        """Compute transform from teach points and save as JSON template."""
+        if not hasattr(self, '_canvas') or not hasattr(self, '_pipeline'):
+            return
+
+        cad_points = self._canvas.teach_cad_points
+        img_points = self._canvas.teach_img_points
+
+        if len(cad_points) < 2 or len(img_points) < 2:
+            self._reg_status.setText("Error: need 2 CAD + 2 image points")
+            return
+
+        try:
+            from ..registration.strategy import TeachICPStrategy
+            from datetime import datetime
+
+            # Compute transform
+            T = TeachICPStrategy._compute_transform_from_points(
+                cad_points, img_points, self._pixel_size_mm,
+            )
+
+            from ..registration import affine_solver
+            params = affine_solver.extract_params(T)
+
+            group = self._get_selected_group()
+            group_id = group.group_id if group else "default"
+
+            image_path = self._canvas.get_image_layer().path
+            template = {
+                "version": 1,
+                "group_id": group_id,
+                "pixel_size_mm": self._pixel_size_mm,
+                "translation": [params["tx"], params["ty"]],
+                "rotation_deg": params["rotation_deg"],
+                "scale": params["scale_x"],
+                "cad_points": cad_points,
+                "image_points": img_points,
+                "created": datetime.now().isoformat(),
+                "image_path": image_path,
+            }
+
+            info = {"image_path": image_path, "group_id": group_id}
+            path = TeachICPStrategy._pose_template_path(info)
+            TeachICPStrategy._save_pose_template(path, template)
+
+            # Apply transform immediately so user can verify
+            T_img = self._compute_image_affine(T)
+            self._canvas.get_image_layer().set_affine_transform(T_img)
+            self._canvas.update()
+
+            self._reg_status.setText(
+                f"Pose saved to {path} "
+                f"(rot={params['rotation_deg']:.2f}°, "
+                f"scale={params['scale_x']:.6f})"
+            )
+            self._btn_save_pose.setEnabled(False)
+            self._btn_clear_teach.setEnabled(False)
+            self._btn_teach.setEnabled(True)
+
+        except Exception as e:
+            self._reg_status.setText(f"Error saving pose: {e}")

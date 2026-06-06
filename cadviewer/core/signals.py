@@ -34,6 +34,12 @@ class SignalBus(QObject):
     # ── Correspondence signals ──
     correspondence_updated = Signal()
 
+    # ── Teach pose signals ──
+    teach_point_added = Signal(dict)              # {"phase": str, "world": [x,y], "pixel": [x,y]}
+    teach_mode_started = Signal()
+    teach_mode_completed = Signal(dict)           # {"cad_points": [...], "img_points": [...]}
+    teach_mode_cancelled = Signal()
+
     # ── Measurement signals ──
     queries_evaluated = Signal(int)              # count of evaluated queries
 

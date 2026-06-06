@@ -95,6 +95,11 @@ class CircleFittingEngine:
         iy = np.clip(np.round(edge_points[:, 1]).astype(int), 0, self._h - 1)
         grad_strength = float(np.mean(self._gradient[iy, ix]))
 
+        # Reject fits where edge points have low gradient (noise, not real edges)
+        image_grad_mean = float(np.mean(self._gradient))
+        if grad_strength < max(min_gradient * 3.0, image_grad_mean * 3.0):
+            return None
+
         return CircleFitResult(
             center=center,
             radius=r,
@@ -180,28 +185,37 @@ class CircleFittingEngine:
     ) -> int | None:
         """Find the gradient peak closest to center index.
 
-        Finds all local maxima above threshold, then returns the one
-        nearest to center. Falls back to any sample above threshold.
+        Requires peaks to have PROMINENCE: the peak value must be at least
+        2x the profile mean. This rejects noise/texture and only accepts
+        real edge transitions. Falls back to any sample above the adaptive
+        threshold if no prominent peak found.
         """
         n = len(profile)
-        # Find all local maxima above threshold
+        # Adaptive threshold: must be above both min_gradient AND the
+        # profile background. This prevents the fitter from locking onto
+        # texture noise when the ROI misses the real feature edge.
+        # Use 3x the profile mean to ensure we only accept strong edges.
+        profile_mean = float(np.mean(profile))
+        adaptive_threshold = max(min_gradient, profile_mean * 3.0)
+
+        # Find all local maxima above adaptive threshold
         peaks = []
         for j in range(1, n - 1):
-            if (profile[j] >= min_gradient
+            if (profile[j] >= adaptive_threshold
                     and profile[j] >= profile[j - 1]
                     and profile[j] >= profile[j + 1]):
                 peaks.append(j)
         # Check endpoints
-        if n > 0 and profile[0] >= min_gradient and profile[0] >= profile[min(1, n - 1)]:
+        if n > 0 and profile[0] >= adaptive_threshold and profile[0] >= profile[min(1, n - 1)]:
             peaks.append(0)
-        if n > 1 and profile[-1] >= min_gradient and profile[-1] >= profile[-2]:
+        if n > 1 and profile[-1] >= adaptive_threshold and profile[-1] >= profile[-2]:
             peaks.append(n - 1)
 
         if peaks:
             return min(peaks, key=lambda j: abs(j - center))
 
-        # Fallback: any sample above threshold, closest to center
-        above = [j for j in range(n) if profile[j] >= min_gradient]
+        # Fallback: any sample above adaptive threshold, closest to center
+        above = [j for j in range(n) if profile[j] >= adaptive_threshold]
         if above:
             return min(above, key=lambda j: abs(j - center))
         return None

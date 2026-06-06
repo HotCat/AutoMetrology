@@ -120,14 +120,16 @@ class QueryPanel(QWidget):
         self._table.setRowCount(len(results))
 
         ok_count = 0
+        no_meas_count = 0
         for i, r in enumerate(results):
             query_text = r.instruction.raw_text if r.instruction else "—"
             value_text = f"{r.value:.3f}" if r.value is not None else "—"
             nominal_text = f"{r.nominal:.3f}" if r.nominal is not None else "—"
             dev_text = f"{r.deviation:+.3f}" if r.deviation is not None else "—"
+            source_text = f"{r.status} [{r.geometry_source}]"
 
             items = [
-                query_text, value_text, nominal_text, dev_text, r.status,
+                query_text, value_text, nominal_text, dev_text, source_text,
             ]
             for col, text in enumerate(items):
                 item = QTableWidgetItem(text)
@@ -136,16 +138,27 @@ class QueryPanel(QWidget):
                     item.setForeground(Qt.white)
                     if col == 4:
                         item.setForeground(Qt.green)
+                elif r.status == "no_measurement":
+                    item.setForeground(Qt.yellow)
+                    if col == 4:
+                        item.setForeground(Qt.yellow)
                 else:
                     item.setForeground(Qt.red)
                 self._table.setItem(i, col, item)
 
             if r.status == "ok":
                 ok_count += 1
+            elif r.status == "no_measurement":
+                no_meas_count += 1
 
+        error_count = len(results) - ok_count - no_meas_count
+        parts = [f"OK: {ok_count}"]
+        if no_meas_count:
+            parts.append(f"No Measurement: {no_meas_count}")
+        if error_count:
+            parts.append(f"Errors: {error_count}")
         self._summary.setText(
-            f"Evaluated: {len(results)} queries | "
-            f"OK: {ok_count} | Errors: {len(results) - ok_count}"
+            f"Evaluated: {len(results)} queries | " + " | ".join(parts)
         )
 
     @Slot()

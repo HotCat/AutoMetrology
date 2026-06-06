@@ -132,6 +132,19 @@ class ImageLayerRenderer:
         h, w = self._image.shape[:2]
         return (w, h)
 
+    def get_center_world(self) -> Tuple[float, float]:
+        """Image center (w/2, h/2) transformed to world coords via _affine.
+
+        Used as rotation pivot for manual alignment.
+        """
+        w, h = self.image_size
+        if w == 0 or h == 0:
+            return (0.0, 0.0)
+        center_px = np.array([[w / 2.0, h / 2.0]], dtype=np.float64)
+        from ..registration.affine_solver import apply
+        center_world = apply(self._affine, center_px)
+        return (float(center_world[0, 0]), float(center_world[0, 1]))
+
     def draw_image(
         self,
         painter: QPainter,

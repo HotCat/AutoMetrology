@@ -397,7 +397,7 @@ class MeasurementDebugOverlay:
 
             # Color based on confidence
             if confidence > 0.7:
-                base_color = QColor(0, 220, 100)  # green
+                base_color = QColor(0, 200, 255)  # cyan (distinct from registration green)
             elif confidence > 0.4:
                 base_color = QColor(255, 200, 0)  # yellow
             else:
@@ -411,11 +411,11 @@ class MeasurementDebugOverlay:
                     QColor(base_color.red(), base_color.green(), base_color.blue(), 100),
                 )
 
-            # 2. Draw detected edge points (small green dots)
+            # 2. Draw detected edge points (small cyan dots)
             edge_points = data.get("edge_points")
             if edge_points is not None and len(edge_points) > 0:
                 pts_world = affine_solver.apply(affine, edge_points)
-                pen = QPen(QColor(0, 255, 128, 180), 2)
+                pen = QPen(QColor(0, 200, 255, 220), 2)
                 painter.setPen(pen)
                 max_pts = 300
                 draw_pts = pts_world
@@ -442,9 +442,9 @@ class MeasurementDebugOverlay:
         lx = 10
         ly = legend_y
         legend = [
-            ("Measured ROI", QColor(100, 200, 100, 100)),
-            ("Edge points (fitted)", QColor(0, 255, 128)),
-            ("Fitted circle/line", QColor(0, 200, 255)),
+            ("Measured ROI", QColor(0, 180, 255, 100)),
+            ("Edge points (fitted)", QColor(0, 200, 255)),
+            ("Fitted circle/line", QColor(0, 180, 255)),
         ]
         for text, color in legend:
             painter.setPen(QPen(color, 2))
