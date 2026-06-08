@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import math
 import numpy as np
-from typing import Dict, List, Optional, Set, Tuple
+from typing import Dict, Iterable, List, Optional, Set, Tuple
 
 from PySide6.QtCore import Qt, Signal, QPoint, QRectF, QPointF, QSize
 from PySide6.QtGui import (
@@ -1140,12 +1140,16 @@ class CADViewerCanvas(QWidget):
     # ── signal handlers ────────────────────────────────────────────
 
     def _on_highlight_feature(self, feature_id: str) -> None:
-        self._highlighted_ids = {feature_id}
-        self._cache_dirty = True
-        self.update()
+        self.set_highlighted_features([feature_id])
 
     def _on_unhighlight_all(self) -> None:
-        self._highlighted_ids.clear()
+        self.set_highlighted_features([])
+
+    def set_highlighted_features(self, feature_ids: Iterable[str]) -> None:
+        """Highlight one or more CAD features on top of the cached base layer."""
+        self._highlighted_ids = {
+            fid for fid in feature_ids if fid in self._feature_map
+        }
         self._cache_dirty = True
         self.update()
 
@@ -1211,9 +1215,9 @@ class CADViewerCanvas(QWidget):
         self.update()
 
     def set_measurement_debug(
-        self, data: dict, affine: np.ndarray,
+        self, data: dict, affine: Optional[np.ndarray],
     ) -> None:
-        """Store measurement debug data and the pixel→world affine."""
-        self._meas_debug_data = data
+        """Store measurement debug data and the pixel->world affine."""
+        self._meas_debug_data = data or {}
         self._meas_debug_affine = affine
         self.update()

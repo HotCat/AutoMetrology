@@ -85,10 +85,11 @@ class RegistrationPanel(QWidget):
         layout.setSpacing(0)
 
         # Header
-        header = QLabel("Registration Groups")
+        header = QLabel("Auto Registration")
         header.setStyleSheet(
             "font-weight: bold; padding: 6px; background: #2d2d2d; color: #ddd;"
         )
+        self._group_header = header
         layout.addWidget(header)
 
         # Group list
@@ -171,6 +172,7 @@ class RegistrationPanel(QWidget):
             feat_btn_layout.addWidget(btn)
         feat_layout.addLayout(feat_btn_layout)
 
+        self._feat_group = feat_group
         layout.addWidget(feat_group)
 
         # Statistics section
@@ -204,6 +206,7 @@ class RegistrationPanel(QWidget):
             lbl.setStyleSheet("color: #888; font-size: 11px;")
             stats_layout.addRow(lbl, widget)
 
+        self._stats_group = stats_group
         layout.addWidget(stats_group)
 
         # ── Image Registration section ──
@@ -238,6 +241,7 @@ class RegistrationPanel(QWidget):
         # Registration method dropdown
         method_row = QHBoxLayout()
         method_label = QLabel("Method:")
+        self._method_label = method_label
         method_label.setStyleSheet("color: #aaa; font-size: 11px;")
         method_row.addWidget(method_label)
 
@@ -262,7 +266,8 @@ class RegistrationPanel(QWidget):
 
         # Anchor configuration
         anchor_row = QHBoxLayout()
-        anchor_row.addWidget(QLabel("Anchors:"))
+        self._anchor_label = QLabel("Anchors:")
+        anchor_row.addWidget(self._anchor_label)
         self._anchor_edit = QLineEdit()
         self._anchor_edit.setPlaceholderText("DXF handles, e.g. 120C3,12121")
         self._anchor_edit.setStyleSheet(
@@ -435,6 +440,20 @@ class RegistrationPanel(QWidget):
             QPushButton:hover { background: #306898; }
         """)
         layout.addWidget(self._btn_zoom)
+
+        self._hide_legacy_registration_controls()
+
+    def _hide_legacy_registration_controls(self) -> None:
+        """Keep only the production auto-registration controls visible."""
+        for widget in [
+            self._group_list, self._btn_create, self._btn_rename, self._btn_delete,
+            self._feat_group, self._stats_group, self._method_label, self._method_combo,
+            self._anchor_label, self._anchor_edit, self._btn_auto_anchors,
+            self._btn_run_coarse, self._btn_run_fine, self._btn_run_full,
+            self._btn_teach, self._btn_save_pose, self._btn_clear_teach,
+            self._btn_zoom,
+        ]:
+            widget.hide()
 
     def _setup_camera_ui(self) -> None:
         """Add camera capture section above Image Registration."""

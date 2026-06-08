@@ -65,6 +65,8 @@ class MainWindow(QMainWindow):
         self._reg_manager = RegistrationManager(self._repo)
         self._dwg_converter = DWGConverter()
         self._config = AppConfig.load()
+        self._last_measurement_debug: dict = {}
+        self._last_measurement_affine = None
 
         # Build UI
         self._setup_ui()
@@ -186,7 +188,7 @@ class MainWindow(QMainWindow):
         reg_panel_action.toggled.connect(self._toggle_reg_panel)
         view_menu.addAction(reg_panel_action)
         self._reg_panel_action = reg_panel_action
-        query_panel_action = QAction("Query Panel", self)
+        query_panel_action = QAction("Measurement Window", self)
         query_panel_action.setCheckable(True)
         query_panel_action.toggled.connect(self._toggle_query_panel)
         view_menu.addAction(query_panel_action)
@@ -232,14 +234,22 @@ class MainWindow(QMainWindow):
         # Store reference for toolbar toggle
         self._reg_dock = reg_dock
 
-        # Query panel
+        # Query window: keep measurements in a wide standalone window so
+        # operators can see many Value/Nominal/Deviation/Status rows at once.
         self._query_panel = QueryPanel()
-        query_dock = QDockWidget("Measurement Queries", self)
-        query_dock.setWidget(self._query_panel)
-        query_dock.setAllowedAreas(Qt.RightDockWidgetArea | Qt.LeftDockWidgetArea | Qt.BottomDockWidgetArea)
-        self.addDockWidget(Qt.BottomDockWidgetArea, query_dock)
-        query_dock.hide()
-        self._query_dock = query_dock
+        self._query_window = QDialog(self)
+        self._query_window.setWindowTitle("Measurement Queries")
+        self._query_window.setWindowFlags(
+            self._query_window.windowFlags() | Qt.WindowMaximizeButtonHint
+        )
+        self._query_window.resize(1280, 760)
+        query_layout = QVBoxLayout(self._query_window)
+        query_layout.setContentsMargins(0, 0, 0, 0)
+        query_layout.addWidget(self._query_panel)
+        self._query_window.rejected.connect(
+            lambda: self._query_panel_action.setChecked(False)
+        )
+        self._query_window.hide()
 
     def _connect_signals(self) -> None:
         """Connect signals between components."""
@@ -254,6 +264,7 @@ class MainWindow(QMainWindow):
         bus.features_loaded.connect(self._on_features_loaded)
         bus.feature_deselected.connect(self._on_feature_deselected)
         bus.queries_evaluated.connect(self._on_queries_evaluated)
+        self._query_panel.result_selected.connect(self._on_query_result_selected)
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -287,6 +298,9 @@ class MainWindow(QMainWindow):
 
         # Render in viewer
         self._viewer.load_repository(self._repo)
+        self._last_measurement_debug = {}
+        self._last_measurement_affine = None
+        self._viewer.set_measurement_debug({}, None)
 
         # Update registration manager with new repo
         # (set_repository on panel clears groups, so restore must come after)
@@ -367,11 +381,65 @@ class MainWindow(QMainWindow):
         results = evaluator.evaluate(query_text)
         self._query_panel.set_results(results)
 
-        # Push measurement debug overlay to canvas
+        # Push measurement debug overlay to canvas.  Keep the full set so a
+        # selected query row can temporarily narrow the overlay to its features.
         if pipeline is not None:
+            self._last_measurement_debug = dict(pipeline.get_debug_data())
+            self._last_measurement_affine = image_layer.affine
             self._viewer.set_measurement_debug(
-                pipeline.get_debug_data(), image_layer.affine,
+                self._last_measurement_debug, self._last_measurement_affine,
             )
+        else:
+            self._last_measurement_debug = {}
+            self._last_measurement_affine = None
+            self._viewer.set_measurement_debug({}, None)
+
+    @Slot(object)
+    def _on_query_result_selected(self, result) -> None:
+        """Highlight CAD and detected image features for the selected query."""
+        if result is None or result.instruction is None:
+            self._viewer.set_highlighted_features([])
+            self._viewer.set_measurement_debug(
+                self._last_measurement_debug, self._last_measurement_affine,
+            )
+            return
+
+        raw_ids = [
+            result.instruction.feature_id_1,
+            result.instruction.feature_id_2,
+        ]
+        feature_ids = [
+            fid for fid in (self._resolve_query_feature_id(raw) for raw in raw_ids)
+            if fid is not None
+        ]
+        self._viewer.set_highlighted_features(feature_ids)
+
+        selected_debug = {
+            fid: self._last_measurement_debug[fid]
+            for fid in feature_ids
+            if fid in self._last_measurement_debug
+        }
+        self._viewer.set_measurement_debug(
+            selected_debug, self._last_measurement_affine,
+        )
+
+        if feature_ids:
+            labels = ", ".join(fid[:12] for fid in feature_ids)
+            self._status_label.setText(f"Selected query features: {labels}")
+
+    def _resolve_query_feature_id(self, raw_id: str) -> Optional[str]:
+        """Resolve query IDs exactly as the measurement evaluator does."""
+        if not raw_id:
+            return None
+        if self._repo.get(raw_id):
+            return raw_id
+        feat = self._repo.get_by_handle(raw_id)
+        if feat:
+            return feat.feature_id
+        for feat in self._repo.all_features():
+            if feat.feature_id.startswith(raw_id):
+                return feat.feature_id
+        return None
 
     def _toggle_pan(self, checked: bool) -> None:
         pass  # pan is always via middle/right mouse in canvas
@@ -387,9 +455,11 @@ class MainWindow(QMainWindow):
 
     def _toggle_query_panel(self, checked: bool) -> None:
         if checked:
-            self._query_dock.show()
+            self._query_window.show()
+            self._query_window.raise_()
+            self._query_window.activateWindow()
         else:
-            self._query_dock.hide()
+            self._query_window.hide()
 
     @Slot()
     def _open_dwg(self) -> None:

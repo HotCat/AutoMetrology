@@ -14,11 +14,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import List, Optional
 
-from PySide6.QtCore import Qt, Slot
+from PySide6.QtCore import Qt, Slot, Signal, QSignalBlocker
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
-    QFileDialog, QSplitter,
+    QFileDialog, QSplitter, QAbstractItemView,
 )
 
 from ..models.query import QueryResult
@@ -28,6 +28,8 @@ from ..core.signals import bus
 
 class QueryPanel(QWidget):
     """Panel for writing and evaluating measurement queries."""
+
+    result_selected = Signal(object)  # QueryResult | None
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -60,7 +62,7 @@ class QueryPanel(QWidget):
                 padding: 4px;
             }
         """)
-        self._editor.setMaximumHeight(150)
+        self._editor.setMaximumHeight(110)
         layout.addWidget(self._editor)
 
         # Query file buttons
@@ -89,23 +91,41 @@ class QueryPanel(QWidget):
 
         # Results table
         self._table = QTableWidget(0, 5)
+        self._table.setAlternatingRowColors(True)
         self._table.setHorizontalHeaderLabels(["Query", "Value", "Nominal", "Deviation", "Status"])
+        self._table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._table.setEditTriggers(QAbstractItemView.NoEditTriggers)
         self._table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
-        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeToContents)
-        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeToContents)
+        self._table.horizontalHeader().setSectionResizeMode(1, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(2, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(3, QHeaderView.Stretch)
+        self._table.horizontalHeader().setSectionResizeMode(4, QHeaderView.Stretch)
+        self._table.verticalHeader().setDefaultSectionSize(24)
+        self._table.itemSelectionChanged.connect(self._on_selection_changed)
         self._table.setStyleSheet("""
             QTableWidget {
                 background-color: #1a1a1a; color: #cccccc;
-                border: none; font-size: 11px; gridline-color: #333;
+                alternate-background-color: #202020;
+                border: none; font-size: 12px; gridline-color: #333;
+            }
+            QTableWidget::viewport {
+                background-color: #1a1a1a;
+            }
+            QTableWidget::item:selected {
+                background-color: #264f78;
+                color: #ffffff;
             }
             QHeaderView::section {
                 background-color: #2d2d2d; color: #aaa;
                 border: 1px solid #333; padding: 4px;
             }
+            QTableCornerButton::section {
+                background-color: #2d2d2d;
+                border: 1px solid #333;
+            }
         """)
-        layout.addWidget(self._table)
+        layout.addWidget(self._table, stretch=1)
 
         # Summary
         self._summary = QLabel("No queries evaluated")
@@ -117,39 +137,41 @@ class QueryPanel(QWidget):
 
     def set_results(self, results: List[QueryResult]) -> None:
         self._results = results
-        self._table.setRowCount(len(results))
+        with QSignalBlocker(self._table):
+            self._table.clearSelection()
+            self._table.setRowCount(len(results))
 
-        ok_count = 0
-        no_meas_count = 0
-        for i, r in enumerate(results):
-            query_text = r.instruction.raw_text if r.instruction else "—"
-            value_text = f"{r.value:.3f}" if r.value is not None else "—"
-            nominal_text = f"{r.nominal:.3f}" if r.nominal is not None else "—"
-            dev_text = f"{r.deviation:+.3f}" if r.deviation is not None else "—"
-            source_text = f"{r.status} [{r.geometry_source}]"
+            ok_count = 0
+            no_meas_count = 0
+            for i, r in enumerate(results):
+                query_text = r.instruction.raw_text if r.instruction else "—"
+                value_text = f"{r.value:.3f}" if r.value is not None else "—"
+                nominal_text = f"{r.nominal:.3f}" if r.nominal is not None else "—"
+                dev_text = f"{r.deviation:+.3f}" if r.deviation is not None else "—"
+                source_text = f"{r.status} [{r.geometry_source}]"
 
-            items = [
-                query_text, value_text, nominal_text, dev_text, source_text,
-            ]
-            for col, text in enumerate(items):
-                item = QTableWidgetItem(text)
-                item.setFlags(item.flags() & ~Qt.ItemIsEditable)
-                if r.status == "ok":
-                    item.setForeground(Qt.white)
-                    if col == 4:
-                        item.setForeground(Qt.green)
-                elif r.status == "no_measurement":
-                    item.setForeground(Qt.yellow)
-                    if col == 4:
+                items = [
+                    query_text, value_text, nominal_text, dev_text, source_text,
+                ]
+                for col, text in enumerate(items):
+                    item = QTableWidgetItem(text)
+                    item.setFlags(item.flags() & ~Qt.ItemIsEditable)
+                    if r.status == "ok":
+                        item.setForeground(Qt.white)
+                        if col == 4:
+                            item.setForeground(Qt.green)
+                    elif r.status == "no_measurement":
                         item.setForeground(Qt.yellow)
-                else:
-                    item.setForeground(Qt.red)
-                self._table.setItem(i, col, item)
+                        if col == 4:
+                            item.setForeground(Qt.yellow)
+                    else:
+                        item.setForeground(Qt.red)
+                    self._table.setItem(i, col, item)
 
-            if r.status == "ok":
-                ok_count += 1
-            elif r.status == "no_measurement":
-                no_meas_count += 1
+                if r.status == "ok":
+                    ok_count += 1
+                elif r.status == "no_measurement":
+                    no_meas_count += 1
 
         error_count = len(results) - ok_count - no_meas_count
         parts = [f"OK: {ok_count}"]
@@ -160,6 +182,19 @@ class QueryPanel(QWidget):
         self._summary.setText(
             f"Evaluated: {len(results)} queries | " + " | ".join(parts)
         )
+        self.result_selected.emit(None)
+
+    @Slot()
+    def _on_selection_changed(self) -> None:
+        selected = self._table.selectionModel().selectedRows()
+        if not selected:
+            self.result_selected.emit(None)
+            return
+        row = selected[0].row()
+        if 0 <= row < len(self._results):
+            self.result_selected.emit(self._results[row])
+        else:
+            self.result_selected.emit(None)
 
     @Slot()
     def _load_query_file(self) -> None:
