@@ -1279,6 +1279,272 @@ class TeachICPStrategy(RegistrationStrategy):
         T[1, 2] = ty
         return T
 
+    @staticmethod
+    def _compute_pixel_to_world_transform(
+        registration_transform: np.ndarray,
+        pixel_size_mm: float,
+    ) -> np.ndarray:
+        """Compute pixel → CAD/world transform from CAD → image-world registration.
+
+        This mirrors RegistrationPanel._compute_image_affine so local fitting
+        projects CAD features exactly as the canvas/measurement code does.
+        """
+        T_pixel_to_imgworld = np.array([
+            [pixel_size_mm,  0,  0],
+            [0, -pixel_size_mm,  0],
+            [0,  0,  1],
+        ], dtype=np.float64)
+        return np.linalg.inv(registration_transform) @ T_pixel_to_imgworld
+
+    @staticmethod
+    def _local_rmse(
+        src_points: np.ndarray,
+        dst_points: np.ndarray,
+        transform: np.ndarray,
+    ) -> float:
+        if len(src_points) == 0 or len(dst_points) == 0:
+            return float("inf")
+        transformed = affine_solver.apply(transform, src_points)
+        dists = np.sqrt(np.sum((transformed - dst_points) ** 2, axis=1))
+        return float(np.sqrt(np.mean(dists ** 2)))
+
+    @staticmethod
+    def _clamp_transform_update(
+        candidate: np.ndarray,
+        reference: np.ndarray,
+        max_translation: float = 10.0,
+        max_rotation_deg: float = 3.0,
+    ) -> tuple[np.ndarray, bool]:
+        """Clamp a candidate similarity transform around the taught pose."""
+        ref_params = affine_solver.extract_params(reference)
+        cand_params = affine_solver.extract_params(candidate)
+        ref_scale = ref_params["scale_x"]
+        ref_rot = ref_params["rotation_deg"]
+        cand_rot = cand_params["rotation_deg"]
+
+        rot_delta = cand_rot - ref_rot
+        while rot_delta > 180:
+            rot_delta -= 360
+        while rot_delta < -180:
+            rot_delta += 360
+
+        clamped = False
+        if abs(rot_delta) > max_rotation_deg:
+            rot_delta = np.sign(rot_delta) * max_rotation_deg
+            clamped = True
+
+        tx = cand_params["tx"]
+        ty = cand_params["ty"]
+        dx = tx - ref_params["tx"]
+        dy = ty - ref_params["ty"]
+        dist = float(np.sqrt(dx * dx + dy * dy))
+        if dist > max_translation and dist > 1e-12:
+            factor = max_translation / dist
+            tx = ref_params["tx"] + dx * factor
+            ty = ref_params["ty"] + dy * factor
+            clamped = True
+
+        rot = np.radians(ref_rot + rot_delta)
+        T = np.eye(3, dtype=np.float64)
+        T[0, 0] = ref_scale * np.cos(rot)
+        T[0, 1] = -ref_scale * np.sin(rot)
+        T[1, 0] = ref_scale * np.sin(rot)
+        T[1, 1] = ref_scale * np.cos(rot)
+        T[0, 2] = tx
+        T[1, 2] = ty
+        return T, clamped
+
+    def _fit_selected_lines(
+        self,
+        features: list[CADFeature],
+        image: np.ndarray,
+        registration_transform: np.ndarray,
+        pixel_size_mm: float,
+    ) -> dict:
+        """Fit selected CAD LINE features against local image edges."""
+        if not HAS_CV2:
+            return {"success": False, "reason": "cv2 unavailable"}
+
+        line_features = [f for f in features if f.feature_type == FeatureType.LINE]
+        if len(line_features) < 2:
+            return {"success": False, "reason": "not enough line features"}
+
+        if len(image.shape) == 3:
+            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        else:
+            gray = image
+        if gray.dtype != np.uint8:
+            gray = np.clip(gray, 0, 255).astype(np.uint8)
+
+        grad_x = cv2.Scharr(gray, cv2.CV_64F, 1, 0)
+        grad_y = cv2.Scharr(gray, cv2.CV_64F, 0, 1)
+        gradient = np.sqrt(grad_x ** 2 + grad_y ** 2)
+
+        from ..measurement.line_fitter import LineFittingEngine
+        fitter = LineFittingEngine(gradient)
+
+        pixel_to_world = self._compute_pixel_to_world_transform(
+            registration_transform, pixel_size_mm,
+        )
+        world_to_pixel = np.linalg.inv(pixel_to_world)
+        img_h, img_w = gray.shape[:2]
+
+        cad_src: list[np.ndarray] = []
+        img_dst: list[np.ndarray] = []
+        fitted_edge_points: list[np.ndarray] = []
+        predicted_edge_points: list[np.ndarray] = []
+        accepted = 0
+        rejected = 0
+        fit_debug = []
+
+        for feat in line_features:
+            geom = feat.geometry
+            cad_p1 = np.array([geom["x1"], geom["y1"]], dtype=np.float64)
+            cad_p2 = np.array([geom["x2"], geom["y2"]], dtype=np.float64)
+            cad_vec = cad_p2 - cad_p1
+            cad_len2 = float(np.dot(cad_vec, cad_vec))
+            if cad_len2 < 1e-9:
+                rejected += 1
+                continue
+
+            pred_px = affine_solver.apply(world_to_pixel, np.array([cad_p1, cad_p2]))
+            pred_p1, pred_p2 = pred_px[0], pred_px[1]
+            px_vec = pred_p2 - pred_p1
+            px_len = float(np.linalg.norm(px_vec))
+            if px_len < 5.0:
+                rejected += 1
+                continue
+
+            # Keep lines that are at least partly in/near the image.
+            margin = max(80.0, px_len * 0.20)
+            if ((max(pred_p1[0], pred_p2[0]) < -margin)
+                    or (min(pred_p1[0], pred_p2[0]) > img_w + margin)
+                    or (max(pred_p1[1], pred_p2[1]) < -margin)
+                    or (min(pred_p1[1], pred_p2[1]) > img_h + margin)):
+                rejected += 1
+                continue
+
+            result = fitter.fit(
+                pred_p1, pred_p2,
+                n_scanlines=80,
+                scan_width=max(25.0, px_len * 0.08),
+                min_gradient=15.0,
+            )
+            if result is None or result.confidence < 0.20 or result.n_edge_points < 8:
+                rejected += 1
+                continue
+
+            edge_points = result.edge_points
+            if len(edge_points) == 0:
+                rejected += 1
+                continue
+
+            # Reject fits that moved implausibly far from the predicted line.
+            pred_dir = px_vec / px_len
+            pred_normal = np.array([-pred_dir[1], pred_dir[0]])
+            perp_offsets = np.abs((edge_points - pred_p1) @ pred_normal)
+            max_allowed_offset = max(60.0, px_len * 0.18)
+            if float(np.median(perp_offsets)) > max_allowed_offset:
+                rejected += 1
+                continue
+
+            # Pair each fitted image edge point with the corresponding CAD
+            # point at the same projected line parameter.
+            t = ((edge_points - pred_p1) @ pred_dir) / px_len
+            valid = (t >= -0.10) & (t <= 1.10)
+            if valid.sum() < 8:
+                rejected += 1
+                continue
+            t = np.clip(t[valid], 0.0, 1.0)
+            edge_points = edge_points[valid]
+
+            cad_points = cad_p1 + np.outer(t, cad_vec)
+            img_world = np.column_stack([
+                edge_points[:, 0] * pixel_size_mm,
+                -edge_points[:, 1] * pixel_size_mm,
+            ])
+            pred_world = np.column_stack([
+                (pred_p1[0] + t * px_vec[0]) * pixel_size_mm,
+                -(pred_p1[1] + t * px_vec[1]) * pixel_size_mm,
+            ])
+
+            cad_src.append(cad_points)
+            img_dst.append(img_world)
+            fitted_edge_points.append(img_world)
+            predicted_edge_points.append(pred_world)
+            accepted += 1
+            fit_debug.append({
+                "feature_id": feat.feature_id,
+                "n_edge_points": int(len(edge_points)),
+                "confidence": float(result.confidence),
+                "residual_px": float(result.residual),
+                "median_offset_px": float(np.median(perp_offsets)),
+            })
+
+        if not cad_src or not img_dst:
+            return {
+                "success": False,
+                "reason": "no local line fits accepted",
+                "accepted": accepted,
+                "rejected": rejected,
+            }
+
+        return {
+            "success": True,
+            "cad_points": np.vstack(cad_src),
+            "image_world_points": np.vstack(img_dst),
+            "fitted_edge_points": np.vstack(fitted_edge_points),
+            "predicted_edge_points": np.vstack(predicted_edge_points),
+            "accepted": accepted,
+            "rejected": rejected,
+            "fit_debug": fit_debug,
+        }
+
+    def _refine_from_line_fits(
+        self,
+        features: list[CADFeature],
+        image: np.ndarray,
+        initial_transform: np.ndarray,
+        pixel_size_mm: float,
+    ) -> tuple[np.ndarray, dict]:
+        """Refine a taught pose using local fits of selected CAD lines."""
+        fit = self._fit_selected_lines(
+            features, image, initial_transform, pixel_size_mm,
+        )
+        if not fit.get("success"):
+            return initial_transform, fit
+
+        cad_points = fit["cad_points"]
+        image_world = fit["image_world_points"]
+        if len(cad_points) < 12:
+            fit["success"] = False
+            fit["reason"] = "too few fitted edge points"
+            return initial_transform, fit
+
+        before_rmse = self._local_rmse(cad_points, image_world, initial_transform)
+        ref_scale = affine_solver.extract_params(initial_transform)["scale_x"]
+        candidate = affine_solver.solve_rigid_with_fixed_scale(
+            cad_points, image_world, ref_scale,
+        )
+        candidate, clamped = self._clamp_transform_update(
+            candidate, initial_transform,
+            max_translation=10.0,
+            max_rotation_deg=3.0,
+        )
+        after_rmse = self._local_rmse(cad_points, image_world, candidate)
+
+        fit["before_rmse"] = before_rmse
+        fit["after_rmse"] = after_rmse
+        fit["clamped"] = clamped
+
+        if not np.isfinite(after_rmse) or after_rmse >= before_rmse * 0.995:
+            fit["success"] = False
+            fit["reason"] = "local line fit did not improve RMSE"
+            return initial_transform, fit
+
+        fit["success"] = True
+        return candidate, fit
+
     def _refine_translation(
         self,
         cad_points: np.ndarray,
@@ -1429,11 +1695,18 @@ class TeachICPStrategy(RegistrationStrategy):
         self, ctx: RegistrationContext, coarse_transform: np.ndarray,
     ) -> FineResult:
         _print("-" * 60)
-        _print("REFINEMENT (Translation Search + Constrained ICP)")
+        _print("REFINEMENT (Selected Line Edge Fit + Constrained ICP fallback)")
 
         group, features = _resolve_features(ctx)
         if not features:
             return FineResult(transform=coarse_transform, error=float("inf"))
+
+        selected_features = features
+        if group and group.feature_ids:
+            selected_features = [
+                f for f in (ctx.repo.get(fid) for fid in group.feature_ids)
+                if f is not None
+            ]
 
         cad_pts = self._silhouette_gen.generate_point_cloud(features, density=0.5)
         if len(cad_pts) < 3:
@@ -1449,29 +1722,82 @@ class TeachICPStrategy(RegistrationStrategy):
 
         _print(f"  CAD: {len(cad_pts)} pts, Image: {len(img_edges_world)} pts")
 
-        # Phase 1: Translation grid search to fix large template errors.
-        # The 2-point teach often has 10-50mm translation error; ICP alone
-        # (with ±5mm limits) can't recover from that.
         template_rmse = _compute_image_rmse(img_edges_world, cad_pts, coarse_transform)
         _print(f"  Template RMSE: {template_rmse:.4f} mm")
 
-        if template_rmse > 3.0:
-            T_aligned, score = self._refine_translation(
-                cad_pts, img_edges_world, coarse_transform,
+        image_path = ctx.image_path or coarse_data.get("image_path", "")
+        line_fit = {"success": False, "reason": "image path unavailable"}
+        T_line = coarse_transform
+        if image_path:
+            try:
+                image = ImageFeatureExtractor.load_image(image_path)
+                T_line, line_fit = self._refine_from_line_fits(
+                    selected_features, image, coarse_transform, ctx.pixel_size_mm,
+                )
+            except Exception as e:
+                line_fit = {"success": False, "reason": f"line fit failed: {e}"}
+
+        if line_fit.get("success"):
+            line_rmse = _compute_image_rmse(img_edges_world, cad_pts, T_line)
+            _print(
+                "  Local line fit: "
+                f"{line_fit.get('accepted', 0)} accepted, "
+                f"{line_fit.get('rejected', 0)} rejected"
             )
-            aligned_rmse = _compute_image_rmse(img_edges_world, cad_pts, T_aligned)
-            _print(f"  After translation search: RMSE {template_rmse:.4f} -> "
-                   f"{aligned_rmse:.4f} mm")
-            if aligned_rmse < template_rmse:
-                icp_start = T_aligned
-            else:
-                _print("  Translation search did not improve, using template")
-                icp_start = coarse_transform
+            _print(
+                "  Local line RMSE: "
+                f"{line_fit['before_rmse']:.4f} -> "
+                f"{line_fit['after_rmse']:.4f} mm "
+                f"(global edge RMSE {line_rmse:.4f} mm)"
+            )
+            if line_fit.get("clamped"):
+                _print("  Local line update was clamped to the teach-pose bounds")
+
+            T_final = T_line
+            final_rmse = line_rmse
+
+            ctx.debug_data["fine"] = {
+                "transform": T_final,
+                "iterations": 1,
+                "error": final_rmse ** 2,
+                "converged": True,
+                "cad_contour": cad_pts,
+                "img_world": img_edges_world,
+                "strategy": "teach_icp",
+                "line_fit": line_fit,
+                "delta_translation": 0.0,
+                "delta_rotation": 0.0,
+            }
+
+            if "coarse" in ctx.debug_data:
+                ctx.debug_data["coarse"]["transform"] = T_final
+
+            return FineResult(
+                transform=T_final,
+                error=final_rmse ** 2,
+                iterations=1,
+                converged=True,
+            )
+
+        _print(f"  Local line fit unavailable: {line_fit.get('reason', 'unknown')}")
+        _print("  Falling back to translation search + constrained ICP")
+
+        # Fallback: translation grid search for legacy/non-line groups.
+        T_aligned, _ = self._refine_translation(
+            cad_pts, img_edges_world, coarse_transform,
+        )
+        aligned_rmse = _compute_image_rmse(img_edges_world, cad_pts, T_aligned)
+        _print(f"  After translation search: RMSE {template_rmse:.4f} -> "
+               f"{aligned_rmse:.4f} mm")
+        if aligned_rmse < template_rmse:
+            icp_start = T_aligned
         else:
-            _print("  Template RMSE < 3mm, skipping translation search")
+            _print("  Translation search did not improve, using template")
             icp_start = coarse_transform
 
-        # Phase 2: Constrained ICP for local refinement
+        # Constrained ICP fallback. This is intentionally not used when
+        # selected-line fitting succeeds, because repeated window grids can
+        # pull nearest-neighbor ICP to a wrong but locally dense edge set.
         result = self._refinement.refine(cad_pts, img_edges_world, icp_start)
         T_refined = result["transform"]
 
@@ -1492,7 +1818,7 @@ class TeachICPStrategy(RegistrationStrategy):
             refined_rmse = float("inf")
 
         _print(f"  ICP: {result['iterations']} iters, "
-               f"Δt={dt:.3f}mm, Δrot={drot:.2f}°, "
+               f"dt={dt:.3f}mm, drot={drot:.2f}deg, "
                f"clamped={result.get('clamped', False)}")
         _print(f"  RMSE: {icp_start_rmse:.4f} -> {refined_rmse:.4f} mm")
 
@@ -1509,12 +1835,13 @@ class TeachICPStrategy(RegistrationStrategy):
             "cad_contour": cad_pts,
             "img_world": img_edges_world,
             "strategy": "teach_icp",
+            "line_fit": line_fit,
             "delta_translation": dt,
             "delta_rotation": drot,
         }
 
-        # Update coarse transform in debug_data too so overlay uses refined transform
-        ctx.debug_data["coarse"]["transform"] = T_final
+        if "coarse" in ctx.debug_data:
+            ctx.debug_data["coarse"]["transform"] = T_final
 
         return FineResult(
             transform=T_final,

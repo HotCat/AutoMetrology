@@ -12,6 +12,7 @@ Provides:
 
 from __future__ import annotations
 
+import json
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot
@@ -58,6 +59,9 @@ class RegistrationPanel(QWidget):
         self._repo = repo
         self._config = config
         self._selected_group_id: Optional[str] = None
+        self._auto_cad_ids = ["", ""]
+        self._image_calibration_applied = False
+        self._auto_source_image_path = ""
 
         # Pixel size from config
         if config is not None:
@@ -350,6 +354,74 @@ class RegistrationPanel(QWidget):
 
         reg_layout.addLayout(teach_row)
 
+        # Automatic two-point correspondence from selected CAD circles + image ROIs
+        auto_group = QGroupBox("Auto 2-Point Correspondence")
+        auto_group.setStyleSheet(reg_group.styleSheet())
+        auto_layout = QVBoxLayout(auto_group)
+
+        auto_cad1_row = QHBoxLayout()
+        auto_cad1_row.addWidget(QLabel("CAD P1:"))
+        self._auto_cad1_edit = QLineEdit()
+        self._auto_cad1_edit.setPlaceholderText("Select CAD circle, click Use")
+        self._auto_cad1_edit.setStyleSheet(self._anchor_edit.styleSheet())
+        auto_cad1_row.addWidget(self._auto_cad1_edit)
+        self._btn_auto_cad1 = QPushButton("Use")
+        self._btn_auto_cad1.setFixedWidth(42)
+        self._btn_auto_cad1.clicked.connect(lambda: self._set_auto_cad_fiducial(0))
+        auto_cad1_row.addWidget(self._btn_auto_cad1)
+        auto_layout.addLayout(auto_cad1_row)
+
+        auto_cad2_row = QHBoxLayout()
+        auto_cad2_row.addWidget(QLabel("CAD P2:"))
+        self._auto_cad2_edit = QLineEdit()
+        self._auto_cad2_edit.setPlaceholderText("Select CAD circle, click Use")
+        self._auto_cad2_edit.setStyleSheet(self._anchor_edit.styleSheet())
+        auto_cad2_row.addWidget(self._auto_cad2_edit)
+        self._btn_auto_cad2 = QPushButton("Use")
+        self._btn_auto_cad2.setFixedWidth(42)
+        self._btn_auto_cad2.clicked.connect(lambda: self._set_auto_cad_fiducial(1))
+        auto_cad2_row.addWidget(self._btn_auto_cad2)
+        auto_layout.addLayout(auto_cad2_row)
+
+        roi1_row = QHBoxLayout()
+        roi1_row.addWidget(QLabel("ROI P1:"))
+        self._auto_roi1_edit = QLineEdit()
+        self._auto_roi1_edit.setPlaceholderText("x,y,w,h")
+        self._auto_roi1_edit.setStyleSheet(self._anchor_edit.styleSheet())
+        roi1_row.addWidget(self._auto_roi1_edit)
+        auto_layout.addLayout(roi1_row)
+
+        roi2_row = QHBoxLayout()
+        roi2_row.addWidget(QLabel("ROI P2:"))
+        self._auto_roi2_edit = QLineEdit()
+        self._auto_roi2_edit.setPlaceholderText("x,y,w,h")
+        self._auto_roi2_edit.setStyleSheet(self._anchor_edit.styleSheet())
+        roi2_row.addWidget(self._auto_roi2_edit)
+        auto_layout.addLayout(roi2_row)
+
+        auto_btn_row = QHBoxLayout()
+        self._btn_pick_auto_rois = QPushButton("Pick ROIs...")
+        self._btn_pick_auto_rois.clicked.connect(self._pick_auto_rois)
+        self._btn_auto_register = QPushButton("Auto Register")
+        self._btn_auto_register.clicked.connect(self._run_auto_correspondence)
+        self._btn_save_auto_cfg = QPushButton("Save Cfg")
+        self._btn_save_auto_cfg.clicked.connect(self._save_auto_correspondence_config)
+        self._btn_load_auto_cfg = QPushButton("Load Cfg")
+        self._btn_load_auto_cfg.clicked.connect(self._load_auto_correspondence_config)
+        for btn in [self._btn_pick_auto_rois, self._btn_auto_register, self._btn_save_auto_cfg, self._btn_load_auto_cfg]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #264f78; color: white; border: none;
+                    padding: 4px 6px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #306898; }
+                QPushButton:disabled { background: #333; color: #666; }
+            """)
+            auto_btn_row.addWidget(btn)
+        auto_layout.addLayout(auto_btn_row)
+
+        reg_layout.addWidget(auto_group)
+
         layout.addWidget(reg_group)
 
         # Zoom button
@@ -569,10 +641,14 @@ class RegistrationPanel(QWidget):
             self._camera_status.setText("No frame to capture")
             return
 
-        # Load into image layer
+        # Load into image layer, applying lens undistortion if available.
         if hasattr(self, '_canvas'):
+            from ..registration.auto_correspondence import undistort_if_calibrated
+            frame, applied = undistort_if_calibrated(frame, self._config)
+            self._image_calibration_applied = applied
             self._canvas.get_image_layer().load_from_array(frame)
-            self._image_path_label.setText("<camera capture>")
+            self._auto_source_image_path = self._canvas.get_image_layer().path
+            self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
             # Keep pixel_size_mm from config (don't reset to default)
             self._btn_run_coarse.setEnabled(True)
             self._btn_run_fine.setEnabled(False)
@@ -881,9 +957,13 @@ class RegistrationPanel(QWidget):
             if hasattr(self, '_canvas'):
                 if captured is not None:
                     self._canvas.get_image_layer().load_from_array(captured)
-                    self._image_path_label.setText("<camera capture>")
+                    self._image_calibration_applied = True
+                    self._auto_source_image_path = self._canvas.get_image_layer().path
+                    self._image_path_label.setText("<camera capture undistorted>")
                 elif path:
                     self._canvas.get_image_layer().load_image(path)
+                    self._image_calibration_applied = False
+                    self._auto_source_image_path = path
                     self._image_path_label.setText(path.split('/')[-1])
                 else:
                     return
@@ -897,6 +977,287 @@ class RegistrationPanel(QWidget):
                 bus.image_loaded.emit(path or "<camera_capture>")
             if self._config:
                 self._config.pixel_size_mm = pixel_size
+
+    def _current_auto_rois(self) -> list[Optional[tuple[int, int, int, int]]]:
+        rois: list[Optional[tuple[int, int, int, int]]] = [None, None]
+        for i, edit in enumerate([self._auto_roi1_edit, self._auto_roi2_edit]):
+            text = edit.text().strip()
+            if not text:
+                continue
+            try:
+                rois[i] = self._parse_auto_roi(text, f"ROI P{i + 1}")
+            except Exception:
+                rois[i] = None
+        return rois
+
+    def _pick_auto_rois(self) -> None:
+        try:
+            image = self._ensure_auto_detection_image()
+            from .roi_selector_dialog import ROISelectorDialog
+            dialog = ROISelectorDialog(image, self._current_auto_rois(), self)
+            if dialog.exec() != ROISelectorDialog.Accepted:
+                return
+            rois = dialog.get_rois()
+            if rois[0] is not None:
+                self._auto_roi1_edit.setText(",".join(str(v) for v in rois[0]))
+            if rois[1] is not None:
+                self._auto_roi2_edit.setText(",".join(str(v) for v in rois[1]))
+            self._reg_status.setText("Fiducial ROIs updated from image picker")
+        except Exception as e:
+            self._reg_status.setText(f"ROI picker error: {e}")
+
+    def _auto_correspondence_path(self) -> str:
+        group = self._get_selected_group()
+        group_id = group.group_id if group else "default"
+        image_path = self._auto_source_image_path
+        if not image_path and hasattr(self, '_canvas'):
+            image_path = self._canvas.get_image_layer().path
+        from ..registration.auto_correspondence import auto_config_path
+        return auto_config_path(image_path, group_id)
+
+    def _set_auto_cad_fiducial(self, index: int) -> None:
+        fid = getattr(self, '_last_highlighted_id', "")
+        feat = self._repo.get(fid) if fid else None
+        if feat is None:
+            self._reg_status.setText("Select a CAD circle first")
+            return
+        if feat.feature_type != FeatureType.CIRCLE:
+            self._reg_status.setText("Selected CAD feature is not a circle")
+            return
+        self._auto_cad_ids[index] = feat.feature_id
+        text = feat.dxf_handle or feat.feature_id[:8]
+        if index == 0:
+            self._auto_cad1_edit.setText(text)
+        else:
+            self._auto_cad2_edit.setText(text)
+        g = feat.geometry
+        self._reg_status.setText(
+            f"CAD P{index + 1}: circle at ({g['cx']:.3f}, {g['cy']:.3f})"
+        )
+
+    def _resolve_auto_cad_feature(self, index: int):
+        fid = self._auto_cad_ids[index]
+        edit = self._auto_cad1_edit if index == 0 else self._auto_cad2_edit
+        token = edit.text().strip()
+        feat = self._repo.get(fid) if fid else None
+        if feat is None and token:
+            feat = self._repo.get(token)
+        if feat is None and token:
+            feat = self._repo.get_by_handle(token)
+        if feat is None:
+            raise ValueError(f"CAD P{index + 1} circle is not configured")
+        if feat.feature_type != FeatureType.CIRCLE:
+            raise ValueError(f"CAD P{index + 1} is not a circle")
+        self._auto_cad_ids[index] = feat.feature_id
+        return feat
+
+    @staticmethod
+    def _parse_auto_roi(text: str, label: str) -> tuple[int, int, int, int]:
+        parts = [p.strip() for p in text.replace(";", ",").split(",")]
+        if len(parts) != 4:
+            raise ValueError(f"{label} must be x,y,w,h")
+        vals = [int(round(float(p))) for p in parts]
+        if vals[2] <= 0 or vals[3] <= 0:
+            raise ValueError(f"{label} width/height must be positive")
+        return vals[0], vals[1], vals[2], vals[3]
+
+    def _ensure_auto_detection_image(self):
+        if not hasattr(self, '_canvas'):
+            raise ValueError("Canvas is not available")
+        layer = self._canvas.get_image_layer()
+        image = layer.image
+        if image is None:
+            raise ValueError("Load a camera image first")
+        if not self._image_calibration_applied:
+            from ..registration.auto_correspondence import undistort_if_calibrated
+            corrected, applied = undistort_if_calibrated(image, self._config)
+            if applied:
+                layer.load_from_array(corrected)
+                layer.set_pixel_size_mm(self._pixel_size_mm)
+                self._image_calibration_applied = True
+                self._image_path_label.setText("<undistorted for registration>")
+                image = layer.image
+                self._canvas.update()
+                self._reg_status.setText("Lens calibration applied to registration image")
+        return image
+
+    def _auto_cad_points(self, f1, f2) -> list[dict]:
+        points = []
+        for label, feat in [("P1", f1), ("P2", f2)]:
+            g = feat.geometry
+            points.append({
+                "label": label,
+                "world": [float(g["cx"]), float(g["cy"])],
+                "feature_id": feat.feature_id,
+                "dxf_handle": feat.dxf_handle,
+                "radius": float(g.get("radius", 0.0)),
+            })
+        return points
+
+    def _auto_image_points(self, d1, d2) -> list[dict]:
+        return [
+            {"label": "P1", "pixel": [float(d1.center[0]), float(d1.center[1])]},
+            {"label": "P2", "pixel": [float(d2.center[0]), float(d2.center[1])]},
+        ]
+
+    def _save_auto_correspondence_config(
+        self,
+        detections: Optional[list] = None,
+        transform=None,
+        pose_path: str = "",
+    ) -> str:
+        f1 = self._resolve_auto_cad_feature(0)
+        f2 = self._resolve_auto_cad_feature(1)
+        roi1 = self._parse_auto_roi(self._auto_roi1_edit.text(), "ROI P1")
+        roi2 = self._parse_auto_roi(self._auto_roi2_edit.text(), "ROI P2")
+        group = self._get_selected_group()
+        image_path = self._canvas.get_image_layer().path if hasattr(self, '_canvas') else ""
+        data = {
+            "version": 1,
+            "group_id": group.group_id if group else "default",
+            "pixel_size_mm": self._pixel_size_mm,
+            "image_path": image_path,
+            "source_image_path": self._auto_source_image_path,
+            "calibration_applied": bool(self._image_calibration_applied),
+            "cad_fiducials": self._auto_cad_points(f1, f2),
+            "image_rois": [list(roi1), list(roi2)],
+            "pose_template_path": pose_path,
+        }
+        if detections:
+            data["detections"] = [d.to_dict() for d in detections]
+        if transform is not None:
+            from ..registration import affine_solver
+            params = affine_solver.extract_params(transform)
+            data["transform"] = {
+                "translation": [float(params["tx"]), float(params["ty"])],
+                "rotation_deg": float(params["rotation_deg"]),
+                "scale": float(params["scale_x"]),
+            }
+        path = self._auto_correspondence_path()
+        from pathlib import Path
+        Path(path).write_text(json.dumps(data, indent=2, ensure_ascii=False), encoding="utf-8")
+        self._reg_status.setText(f"Auto config saved: {path}")
+        return path
+
+    def _load_auto_correspondence_config(self) -> None:
+        try:
+            path = self._auto_correspondence_path()
+            from pathlib import Path
+            p = Path(path)
+            if not p.exists():
+                self._reg_status.setText(f"No auto config at {path}")
+                return
+            data = json.loads(p.read_text(encoding="utf-8"))
+            fiducials = data.get("cad_fiducials", [])
+            if len(fiducials) >= 2:
+                self._auto_cad_ids[0] = fiducials[0].get("feature_id", "")
+                self._auto_cad_ids[1] = fiducials[1].get("feature_id", "")
+                self._auto_cad1_edit.setText(fiducials[0].get("dxf_handle") or self._auto_cad_ids[0])
+                self._auto_cad2_edit.setText(fiducials[1].get("dxf_handle") or self._auto_cad_ids[1])
+            rois = data.get("image_rois", [])
+            if len(rois) >= 2:
+                self._auto_roi1_edit.setText(",".join(str(int(v)) for v in rois[0]))
+                self._auto_roi2_edit.setText(",".join(str(int(v)) for v in rois[1]))
+            self._reg_status.setText(f"Auto config loaded: {path}")
+        except Exception as e:
+            self._reg_status.setText(f"Error loading auto config: {e}")
+
+    def _populate_auto_debug_data(self, transform, image) -> None:
+        if not hasattr(self, '_pipeline'):
+            return
+        group = self._get_selected_group()
+        if group and group.feature_ids:
+            features = [self._repo.get(fid) for fid in group.feature_ids]
+            features = [f for f in features if f is not None]
+        else:
+            features = list(self._repo._features.values())
+        from ..registration.cad_silhouette import RegistrationContourGenerator
+        from ..registration.image_extractor import ImageFeatureExtractor
+        generator = RegistrationContourGenerator()
+        cad_points = generator.generate_point_cloud(features, density=0.5)
+        img_edges = ImageFeatureExtractor.extract_edges(image)
+        img_edges_world = img_edges.astype(np.float64)
+        img_edges_world[:, 0] *= self._pixel_size_mm
+        img_edges_world[:, 1] *= -self._pixel_size_mm
+        self._pipeline.set_debug_data("coarse", {
+            "cad_points": cad_points,
+            "cad_centroid": cad_points.mean(axis=0) if len(cad_points) > 0 else np.zeros(2),
+            "image_edges": img_edges,
+            "img_edges_world": img_edges_world,
+            "img_contour_world": img_edges_world,
+            "transform": transform,
+            "pixel_size_mm": self._pixel_size_mm,
+            "image_path": self._canvas.get_image_layer().path,
+            "strategy": "auto_correspondence",
+        })
+
+    def _run_auto_correspondence(self) -> None:
+        try:
+            from ..registration.auto_correspondence import detect_circle_in_roi
+            from ..registration.strategy import TeachICPStrategy
+            from ..registration import affine_solver
+            from datetime import datetime
+
+            f1 = self._resolve_auto_cad_feature(0)
+            f2 = self._resolve_auto_cad_feature(1)
+            roi1 = self._parse_auto_roi(self._auto_roi1_edit.text(), "ROI P1")
+            roi2 = self._parse_auto_roi(self._auto_roi2_edit.text(), "ROI P2")
+            image = self._ensure_auto_detection_image()
+
+            d1 = detect_circle_in_roi(image, roi1)
+            d2 = detect_circle_in_roi(image, roi2)
+            if d1 is None:
+                raise ValueError("No circle detected in ROI P1")
+            if d2 is None:
+                raise ValueError("No circle detected in ROI P2")
+
+            cad_points = self._auto_cad_points(f1, f2)
+            img_points = self._auto_image_points(d1, d2)
+            T = TeachICPStrategy._compute_transform_from_points(
+                cad_points, img_points, self._pixel_size_mm,
+            )
+            params = affine_solver.extract_params(T)
+
+            group = self._get_selected_group()
+            group_id = group.group_id if group else "default"
+            image_path = self._canvas.get_image_layer().path
+            pose = {
+                "version": 1,
+                "source": "auto_correspondence",
+                "group_id": group_id,
+                "pixel_size_mm": self._pixel_size_mm,
+                "translation": [params["tx"], params["ty"]],
+                "rotation_deg": params["rotation_deg"],
+                "scale": params["scale_x"],
+                "cad_points": cad_points,
+                "image_points": img_points,
+                "image_rois": [list(roi1), list(roi2)],
+                "detections": [d1.to_dict(), d2.to_dict()],
+                "calibration_applied": bool(self._image_calibration_applied),
+                "created": datetime.now().isoformat(),
+                "image_path": image_path,
+                "source_image_path": self._auto_source_image_path,
+            }
+            info = {"image_path": image_path, "group_id": group_id}
+            pose_path = TeachICPStrategy._pose_template_path(info)
+            TeachICPStrategy._save_pose_template(pose_path, pose)
+            cfg_path = self._save_auto_correspondence_config([d1, d2], T, pose_path)
+
+            T_img = self._compute_image_affine(T)
+            self._canvas.get_image_layer().set_affine_transform(T_img)
+            self._coarse_transform = T
+            self._populate_auto_debug_data(T, image)
+            self._push_debug_data()
+            self._canvas.update()
+            self._btn_run_fine.setEnabled(True)
+            bus.registration_completed.emit({"transform": T, "stage": "auto_correspondence", "error": 0.0})
+            self._reg_status.setText(
+                f"Auto registered: P1 conf={d1.confidence:.2f}, P2 conf={d2.confidence:.2f}; "
+                f"rot={params['rotation_deg']:.2f} deg, cfg={cfg_path}"
+            )
+        except Exception as e:
+            self._reg_status.setText(f"Auto registration error: {e}")
+            bus.registration_failed.emit(str(e))
 
     def _get_anchor_handles(self) -> list[str]:
         text = self._anchor_edit.text().strip()
@@ -1094,6 +1455,7 @@ class RegistrationPanel(QWidget):
                 "image_points": img_points,
                 "created": datetime.now().isoformat(),
                 "image_path": image_path,
+                "source_image_path": self._auto_source_image_path,
             }
 
             info = {"image_path": image_path, "group_id": group_id}

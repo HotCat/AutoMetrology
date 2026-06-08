@@ -191,7 +191,54 @@ class DebugOverlay:
                 path.closeSubpath()
                 painter.drawPath(path)
 
-        # 4. Draw minAreaRect for CAD (yellow dashed)
+        # 4. Draw selected-line fitting correspondences for Teach+ICP.
+        # Fitted points are image-world coordinates, so transform them back
+        # through the final registration matrix before drawing in CAD space.
+        line_fit = fine.get("line_fit", {})
+        fine_T_for_lines = fine.get("transform", T_coarse)
+        if line_fit.get("success") and fine_T_for_lines is not None:
+            try:
+                T_inv_lines = np.linalg.inv(fine_T_for_lines)
+                fitted = line_fit.get("fitted_edge_points")
+                predicted = line_fit.get("predicted_edge_points")
+                cad_fit_pts = line_fit.get("cad_points")
+
+                if fitted is not None and len(fitted) > 0:
+                    fitted_cad = affine_solver.apply(T_inv_lines, fitted)
+                    if len(fitted_cad) > 500:
+                        idx = np.linspace(0, len(fitted_cad) - 1, 500, dtype=int)
+                        fitted_cad = fitted_cad[idx]
+                    pen = QPen(QColor(255, 60, 60, 210), 3)
+                    painter.setPen(pen)
+                    for pt in fitted_cad:
+                        sx, sy = world_to_screen(pt[0], pt[1])
+                        painter.drawPoint(QPointF(sx, sy))
+
+                if predicted is not None and len(predicted) > 0:
+                    predicted_cad = affine_solver.apply(T_inv_lines, predicted)
+                    if len(predicted_cad) > 300:
+                        idx = np.linspace(0, len(predicted_cad) - 1, 300, dtype=int)
+                        predicted_cad = predicted_cad[idx]
+                    pen = QPen(QColor(255, 190, 40, 170), 2)
+                    painter.setPen(pen)
+                    for pt in predicted_cad:
+                        sx, sy = world_to_screen(pt[0], pt[1])
+                        painter.drawPoint(QPointF(sx, sy))
+
+                if cad_fit_pts is not None and len(cad_fit_pts) > 0:
+                    pts = cad_fit_pts
+                    if len(pts) > 300:
+                        idx = np.linspace(0, len(pts) - 1, 300, dtype=int)
+                        pts = pts[idx]
+                    pen = QPen(QColor(60, 220, 255, 180), 2)
+                    painter.setPen(pen)
+                    for pt in pts:
+                        sx, sy = world_to_screen(pt[0], pt[1])
+                        painter.drawPoint(QPointF(sx, sy))
+            except Exception:
+                pass
+
+        # 5. Draw minAreaRect for CAD (yellow dashed)
         if rect_info:
             cad_center = rect_info.get("cad_center")
             cad_size = rect_info.get("cad_size")
