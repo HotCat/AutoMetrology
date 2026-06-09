@@ -27,6 +27,7 @@ from PySide6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QProgressBar, QDockWidget, QDialog,
 )
 
+from ..models.feature import FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
 from ..parsers.dxf_importer import DXFImporter
@@ -67,6 +68,8 @@ class MainWindow(QMainWindow):
         self._config = AppConfig.load()
         self._last_measurement_debug: dict = {}
         self._last_measurement_affine = None
+        self._query_pair_pick_mode: Optional[str] = None
+        self._query_pair_pick_ids: list[str] = []
 
         # Build UI
         self._setup_ui()
@@ -265,6 +268,8 @@ class MainWindow(QMainWindow):
         bus.feature_deselected.connect(self._on_feature_deselected)
         bus.queries_evaluated.connect(self._on_queries_evaluated)
         self._query_panel.result_selected.connect(self._on_query_result_selected)
+        self._query_panel.pair_pick_requested.connect(self._on_query_pair_pick_requested)
+        self._query_panel.pair_pick_cancelled.connect(self._on_query_pair_pick_cancelled)
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -301,6 +306,7 @@ class MainWindow(QMainWindow):
         self._last_measurement_debug = {}
         self._last_measurement_affine = None
         self._viewer.set_measurement_debug({}, None)
+        self._cancel_query_pair_pick(update_panel=True)
 
         # Update registration manager with new repo
         # (set_repository on panel clears groups, so restore must come after)
@@ -331,6 +337,9 @@ class MainWindow(QMainWindow):
         """Handle feature selection from tree."""
         feature = self._repo.get(feature_id)
         if feature:
+            if self._query_pair_pick_mode is not None:
+                self._handle_query_pair_feature(feature_id)
+                return
             self._status_label.setText(f"Selected: {feature.display_name}")
 
     @Slot()
@@ -344,6 +353,8 @@ class MainWindow(QMainWindow):
         """Handle feature click in viewer — sync with tree."""
         self._tree_panel.select_feature(feature_id)
         bus.property_update.emit({"feature_id": feature_id})
+        if self._query_pair_pick_mode is not None:
+            self._handle_query_pair_feature(feature_id)
 
     @Slot(int)
     def _on_features_loaded(self, count: int) -> None:
@@ -393,6 +404,131 @@ class MainWindow(QMainWindow):
             self._last_measurement_debug = {}
             self._last_measurement_affine = None
             self._viewer.set_measurement_debug({}, None)
+
+    @Slot(str)
+    def _on_query_pair_pick_requested(self, mode: str) -> None:
+        """Start interactive pair selection for query expression generation."""
+        if mode not in ("lines", "circles", "circle", "arcs"):
+            return
+        self._query_pair_pick_mode = mode
+        self._query_pair_pick_ids = []
+        self._viewer.set_highlighted_features([])
+        self._query_panel.set_pair_pick_active(mode, 0)
+        label = self._query_pick_feature_label(mode)
+        if mode in ("circle", "arcs"):
+            self._status_label.setText(f"Select {label} for measurement query")
+        else:
+            self._status_label.setText(f"Select first {label} for measurement query")
+
+    @Slot()
+    def _on_query_pair_pick_cancelled(self) -> None:
+        self._cancel_query_pair_pick(update_panel=False)
+        self._status_label.setText("Measurement query pair selection cancelled")
+
+    def _cancel_query_pair_pick(self, update_panel: bool = True) -> None:
+        self._query_pair_pick_mode = None
+        self._query_pair_pick_ids = []
+        self._viewer.set_highlighted_features([])
+        if update_panel and hasattr(self, "_query_panel"):
+            self._query_panel.set_pair_pick_active(None)
+
+    def _handle_query_pair_feature(self, feature_id: str) -> None:
+        """Consume one feature selection while the query pair picker is active."""
+        mode = self._query_pair_pick_mode
+        if mode is None:
+            return
+
+        feature = self._repo.get(feature_id)
+        if feature is None:
+            return
+
+        expected_type = self._query_pick_feature_type(mode)
+        expected_label = self._query_pick_feature_label(mode)
+        if feature.feature_type != expected_type:
+            message = f"Pick a {expected_label}; selected {feature.feature_type.name.lower()}"
+            self._query_panel.set_pair_pick_message(message)
+            self._status_label.setText(message)
+            self._set_query_pair_highlight(self._query_pair_pick_ids)
+            return
+
+        if feature_id in self._query_pair_pick_ids:
+            message = f"Pick a different second {expected_label}"
+            self._query_panel.set_pair_pick_message(message)
+            self._status_label.setText(message)
+            self._set_query_pair_highlight(self._query_pair_pick_ids)
+            return
+
+        self._query_pair_pick_ids.append(feature_id)
+        self._set_query_pair_highlight(self._query_pair_pick_ids)
+
+        target_count = 1 if mode in ("circle", "arcs") else 2
+        if len(self._query_pair_pick_ids) < target_count:
+            self._query_panel.set_pair_pick_active(mode, len(self._query_pair_pick_ids))
+            self._status_label.setText(f"Selected first {expected_label}; select second {expected_label}")
+            return
+
+        if mode in ("circle", "arcs"):
+            fid = self._query_pair_pick_ids[0]
+            feat = self._repo.get(fid)
+            if feat is None:
+                self._cancel_query_pair_pick(update_panel=True)
+                return
+            func = "circle" if mode == "circle" else "arcs"
+            expression = f"{func}({self._query_token_for_feature(feat)})"
+            self._query_panel.append_query_expression(expression)
+            self._query_panel.set_pair_pick_active(None)
+            self._query_panel.set_pair_pick_message(f"Added {expression}")
+            self._status_label.setText(f"Added measurement query: {expression}")
+            self._query_pair_pick_mode = None
+            self._query_pair_pick_ids = []
+            self._set_query_pair_highlight([fid])
+            return
+
+        fid1, fid2 = self._query_pair_pick_ids[:2]
+        feat1 = self._repo.get(fid1)
+        feat2 = self._repo.get(fid2)
+        if feat1 is None or feat2 is None:
+            self._cancel_query_pair_pick(update_panel=True)
+            return
+
+        func = "lines" if mode == "lines" else "circles"
+        token1 = self._query_token_for_feature(feat1)
+        token2 = self._query_token_for_feature(feat2)
+        expression = f"{func}({token1}, {token2})"
+        self._query_panel.append_query_expression(expression)
+        self._query_panel.set_pair_pick_active(None)
+        self._query_panel.set_pair_pick_message(f"Added {expression}")
+        self._status_label.setText(f"Added measurement query: {expression}")
+        self._query_pair_pick_mode = None
+        self._query_pair_pick_ids = []
+        self._set_query_pair_highlight([fid1, fid2])
+
+    def _set_query_pair_highlight(self, feature_ids: list[str]) -> None:
+        ids = list(feature_ids)
+        self._viewer.set_highlighted_features(ids)
+        QTimer.singleShot(0, lambda ids=ids: self._viewer.set_highlighted_features(ids))
+
+    @staticmethod
+    def _query_pick_feature_type(mode: str):
+        if mode == "lines":
+            return FeatureType.LINE
+        if mode in ("circles", "circle"):
+            return FeatureType.CIRCLE
+        return FeatureType.ARC
+
+    @staticmethod
+    def _query_pick_feature_label(mode: str) -> str:
+        if mode == "lines":
+            return "line"
+        if mode in ("circles", "circle"):
+            return "circle"
+        return "arc"
+
+    @staticmethod
+    def _query_token_for_feature(feature) -> str:
+        if feature.dxf_handle:
+            return feature.dxf_handle
+        return feature.feature_id.split("-", 1)[0]
 
     @Slot(object)
     def _on_query_result_selected(self, result) -> None:

@@ -69,27 +69,37 @@ class QueryEvaluator:
     def _evaluate_instruction(self, inst: QueryInstruction) -> QueryResult:
         """Evaluate a single measurement query instruction."""
         fid1 = self._resolve_id(inst.feature_id_1)
-        fid2 = self._resolve_id(inst.feature_id_2)
+        needs_second_feature = inst.query_type in (
+            QueryType.CIRCLE_DISTANCE, QueryType.LINE_DISTANCE,
+        )
+        fid2 = self._resolve_id(inst.feature_id_2) if needs_second_feature else None
 
         if not fid1:
             return QueryResult(
                 instruction=inst, status="error",
                 error_message=f"Cannot resolve ID: {inst.feature_id_1}",
             )
-        if not fid2:
+        if needs_second_feature and not fid2:
             return QueryResult(
                 instruction=inst, status="error",
                 error_message=f"Cannot resolve ID: {inst.feature_id_2}",
             )
 
         _audit(f"Query: {inst.raw_text}")
-        _audit(f"  Resolved IDs: {fid1[:12]}..., {fid2[:12]}...")
+        if needs_second_feature:
+            _audit(f"  Resolved IDs: {fid1[:12]}..., {fid2[:12]}...")
+        else:
+            _audit(f"  Resolved ID: {fid1[:12]}...")
 
         # Compute nominal from CAD geometry (reference value only)
         if inst.query_type == QueryType.CIRCLE_DISTANCE:
             nominal = self._nominal_circle_distance(fid1, fid2)
         elif inst.query_type == QueryType.LINE_DISTANCE:
             nominal = self._nominal_line_distance(fid1, fid2)
+        elif inst.query_type == QueryType.ARC_RADIUS:
+            nominal = self._nominal_radius(fid1)
+        elif inst.query_type == QueryType.CIRCLE_RADIUS:
+            nominal = self._nominal_radius(fid1)
         else:
             return QueryResult(
                 instruction=inst, status="error",
@@ -105,9 +115,12 @@ class QueryEvaluator:
         _audit(f"  Nominal (CAD): {nominal:.4f} mm")
 
         # Compute measured from image-fitted geometry
-        measured, audit_data = self._measured_dimension_with_audit(
-            inst.query_type, fid1, fid2,
-        )
+        if inst.query_type in (QueryType.ARC_RADIUS, QueryType.CIRCLE_RADIUS):
+            measured, audit_data = self._measured_radius_with_audit(fid1)
+        else:
+            measured, audit_data = self._measured_dimension_with_audit(
+                inst.query_type, fid1, fid2,
+            )
 
         if measured is not None:
             deviation = round(measured - nominal, 4)
@@ -210,6 +223,43 @@ class QueryEvaluator:
         audit["measured_value"] = result
         return result, audit
 
+    def _measured_radius_with_audit(
+        self, fid: str,
+    ) -> tuple[Optional[float], dict]:
+        """Compute measured arc radius and return full audit trail."""
+        audit: Dict = {
+            "fid1": fid[:12],
+            "pipeline_available": self._pipeline is not None,
+        }
+
+        if self._pipeline is None:
+            audit["failure_reason"] = "no_measurement_pipeline"
+            return None, audit
+
+        mf = self._pipeline.measure_feature(fid)
+        if mf is None:
+            audit["failure_reason"] = f"feature1_not_measured (id={fid[:12]})"
+            _audit(f"  Feature 1 ({fid[:12]}): fitting returned None")
+            return None, audit
+
+        self._audit_feature("Feature 1", fid, mf, audit)
+
+        if not mf.is_valid():
+            audit["failure_reason"] = (
+                f"feature1_invalid "
+                f"(conf={mf.confidence:.2f}, resid={mf.residual_error:.2f})"
+            )
+            _audit(
+                f"  Feature 1 INVALID: "
+                f"confidence={mf.confidence:.2f} (need >0.2), "
+                f"residual={mf.residual_error:.2f} (need <5.0)"
+            )
+            return None, audit
+
+        result = self._measured_radius(mf)
+        audit["measured_value"] = result
+        return result, audit
+
     def _audit_feature(
         self, label: str, fid: str, mf: MeasuredFeature, audit: dict,
     ) -> None:
@@ -273,6 +323,14 @@ class QueryEvaluator:
         dy = g2["cy"] - g1["cy"]
         return math.sqrt(dx * dx + dy * dy)
 
+    def _measured_radius(self, mf: MeasuredFeature) -> float:
+        """Radius from fitted image geometry."""
+        g = mf.fitted_geometry_world
+        assert mf.source_type in ("IMAGE_EDGE", "FITTED", "MEASURED"), (
+            f"Data contract violation: Feature source_type={mf.source_type}"
+        )
+        return float(g["radius"])
+
     def _measured_line_distance(
         self, mf1: MeasuredFeature, mf2: MeasuredFeature,
     ) -> float:
@@ -308,6 +366,13 @@ class QueryEvaluator:
         dx = g2.get("cx", 0) - g1.get("cx", 0)
         dy = g2.get("cy", 0) - g1.get("cy", 0)
         return math.sqrt(dx * dx + dy * dy)
+
+    def _nominal_radius(self, fid: str) -> Optional[float]:
+        g = self._get_cad_geometry(fid)
+        if g is None:
+            return None
+        radius = g.get("radius")
+        return float(radius) if radius is not None else None
 
     def _nominal_line_distance(self, fid1: str, fid2: str) -> Optional[float]:
         g1 = self._get_cad_geometry(fid1)

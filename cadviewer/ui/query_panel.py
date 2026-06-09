@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import List, Optional
 
 from PySide6.QtCore import Qt, Slot, Signal, QSignalBlocker
+from PySide6.QtGui import QTextCursor
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
@@ -30,10 +31,13 @@ class QueryPanel(QWidget):
     """Panel for writing and evaluating measurement queries."""
 
     result_selected = Signal(object)  # QueryResult | None
+    pair_pick_requested = Signal(str)  # "lines" or "circles"
+    pair_pick_cancelled = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._results: List[QueryResult] = []
+        self._pair_pick_mode: Optional[str] = None
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -54,6 +58,8 @@ class QueryPanel(QWidget):
             "# Enter measurement queries, one per line:\n"
             "# circles(ID1, ID2)   — center distance\n"
             "# lines(ID1, ID2)     — perpendicular distance\n"
+            "# circle(ID)          — circle radius\n"
+            "# arcs(ID)            — arc radius\n"
         )
         self._editor.setStyleSheet("""
             QTextEdit {
@@ -88,6 +94,36 @@ class QueryPanel(QWidget):
             """)
             btn_layout.addWidget(btn)
         layout.addLayout(btn_layout)
+
+        # Interactive query pair builder
+        pick_layout = QHBoxLayout()
+        pick_layout.setSpacing(4)
+        self._btn_pick_lines = QPushButton("Pick Lines Pair")
+        self._btn_pick_lines.clicked.connect(lambda: self._start_pair_pick("lines"))
+        self._btn_pick_circles = QPushButton("Pick Circles Pair")
+        self._btn_pick_circles.clicked.connect(lambda: self._start_pair_pick("circles"))
+        self._btn_pick_circle = QPushButton("Pick Circle")
+        self._btn_pick_circle.clicked.connect(lambda: self._start_pair_pick("circle"))
+        self._btn_pick_arc = QPushButton("Pick Arc")
+        self._btn_pick_arc.clicked.connect(lambda: self._start_pair_pick("arcs"))
+        self._btn_cancel_pick = QPushButton("Cancel Pick")
+        self._btn_cancel_pick.clicked.connect(self._cancel_pair_pick)
+        self._btn_cancel_pick.setEnabled(False)
+        self._pair_pick_status = QLabel("Pair picker idle")
+        self._pair_pick_status.setStyleSheet("color: #888; font-size: 10px; padding: 4px;")
+
+        for btn in [self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle, self._btn_pick_arc, self._btn_cancel_pick]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 4px 10px; border-radius: 3px; font-size: 11px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:disabled { background: #252525; color: #666; }
+            """)
+            pick_layout.addWidget(btn)
+        pick_layout.addWidget(self._pair_pick_status, stretch=1)
+        layout.addLayout(pick_layout)
 
         # Results table
         self._table = QTableWidget(0, 5)
@@ -134,6 +170,37 @@ class QueryPanel(QWidget):
 
     def get_query_text(self) -> str:
         return self._editor.toPlainText()
+
+    def append_query_expression(self, expression: str) -> None:
+        """Append one generated query expression to the editor."""
+        current = self._editor.toPlainText().rstrip()
+        next_text = f"{current}\n{expression}\n" if current else f"{expression}\n"
+        self._editor.setPlainText(next_text)
+        cursor = self._editor.textCursor()
+        cursor.movePosition(QTextCursor.End)
+        self._editor.setTextCursor(cursor)
+
+    def set_pair_pick_active(self, mode: Optional[str], selected_count: int = 0) -> None:
+        self._pair_pick_mode = mode
+        active = mode is not None
+        self._btn_pick_lines.setEnabled(not active)
+        self._btn_pick_circles.setEnabled(not active)
+        self._btn_pick_circle.setEnabled(not active)
+        self._btn_pick_arc.setEnabled(not active)
+        self._btn_cancel_pick.setEnabled(active)
+        if mode == "lines":
+            self._pair_pick_status.setText(f"Picking lines: {selected_count}/2")
+        elif mode == "circles":
+            self._pair_pick_status.setText(f"Picking circles: {selected_count}/2")
+        elif mode == "circle":
+            self._pair_pick_status.setText(f"Picking circle: {selected_count}/1")
+        elif mode == "arcs":
+            self._pair_pick_status.setText(f"Picking arc: {selected_count}/1")
+        else:
+            self._pair_pick_status.setText("Pair picker idle")
+
+    def set_pair_pick_message(self, message: str) -> None:
+        self._pair_pick_status.setText(message)
 
     def set_results(self, results: List[QueryResult]) -> None:
         self._results = results
@@ -195,6 +262,16 @@ class QueryPanel(QWidget):
             self.result_selected.emit(self._results[row])
         else:
             self.result_selected.emit(None)
+
+    @Slot()
+    def _start_pair_pick(self, mode: str) -> None:
+        self.set_pair_pick_active(mode, 0)
+        self.pair_pick_requested.emit(mode)
+
+    @Slot()
+    def _cancel_pair_pick(self) -> None:
+        self.set_pair_pick_active(None)
+        self.pair_pick_cancelled.emit()
 
     @Slot()
     def _load_query_file(self) -> None:

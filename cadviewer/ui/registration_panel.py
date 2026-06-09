@@ -1223,8 +1223,10 @@ class RegistrationPanel(QWidget):
             roi2 = self._parse_auto_roi(self._auto_roi2_edit.text(), "ROI P2")
             image = self._ensure_auto_detection_image()
 
-            d1 = detect_circle_in_roi(image, roi1)
-            d2 = detect_circle_in_roi(image, roi2)
+            expected_r1 = float(f1.geometry.get("radius", 0.0)) / max(self._pixel_size_mm, 1e-9)
+            expected_r2 = float(f2.geometry.get("radius", 0.0)) / max(self._pixel_size_mm, 1e-9)
+            d1 = detect_circle_in_roi(image, roi1, expected_radius_px=expected_r1)
+            d2 = detect_circle_in_roi(image, roi2, expected_radius_px=expected_r2)
             if d1 is None:
                 raise ValueError("No circle detected in ROI P1")
             if d2 is None:

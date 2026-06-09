@@ -18,6 +18,8 @@ from typing import Optional
 class QueryType(Enum):
     CIRCLE_DISTANCE = auto()  # circles(ID1, ID2) → center distance
     LINE_DISTANCE = auto()    # lines(ID1, ID2) → perpendicular distance
+    ARC_RADIUS = auto()       # arcs(ID) → fitted arc radius
+    CIRCLE_RADIUS = auto()    # circle(ID) → fitted circle radius
 
 
 @dataclass
