@@ -1,0 +1,16 @@
+# Windows 10 deployment dependencies for AutoMetrology.
+#
+# Install from an activated Python 3.11 conda environment:
+#   pip install -r requirements-windows.txt
+#
+# DIPLib is used for stronger fiducial/arc detection. If pip cannot install it
+# on a target workstation, install the rest first and see the deployment guide
+# for the OpenCV-only fallback note.
+
+PySide6>=6.6,<7
+numpy>=1.26
+opencv-python>=4.8
+ezdxf>=1.3
+scipy>=1.11
+diplib>=3.4
+pyinstaller>=6.0
