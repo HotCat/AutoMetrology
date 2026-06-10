@@ -730,12 +730,14 @@ class MeasurementPipeline:
             return None
 
         center = pixel_center.astype(np.float64)
-        arc_fit = self._fit_arc_radius_from_dip_contours(
-            center, pixel_radius, arc_px, (xmin, ymin, xmax, ymax),
+        # Prefer radial profiles for arcs so the inner edge along the CAD
+        # radius is considered before larger, high-support outer contours.
+        arc_fit = self._fit_arc_radius_from_radial_edges(
+            center, pixel_radius, arc_px,
         )
         if arc_fit is None:
-            arc_fit = self._fit_arc_radius_from_radial_edges(
-                center, pixel_radius, arc_px,
+            arc_fit = self._fit_arc_radius_from_dip_contours(
+                center, pixel_radius, arc_px, (xmin, ymin, xmax, ymax),
             )
         if arc_fit is not None:
             radius = float(arc_fit["radius"])
@@ -1220,6 +1222,7 @@ class MeasurementPipeline:
             })
 
         return {
+            "method": "arc_radial_profile_inner",
             "radius": radius,
             "edge_points": points,
             "candidate_edge_points": np.array(
@@ -1316,7 +1319,13 @@ class MeasurementPipeline:
             closeness = max(0.0, 1.0 - abs(radius - predicted_radius) / search_scale)
             support_score = len(items) / max_count if max_count > 0 else 0.0
             grad_score = float(np.mean(grads)) / max_grad if max_grad > 0 else 0.0
-            score = 0.65 * closeness * closeness + 0.25 * support_score + 0.10 * grad_score
+            inner_score = 1.0 if radius <= predicted_radius else 0.0
+            score = (
+                0.65 * closeness * closeness
+                + 0.20 * inner_score
+                + 0.10 * grad_score
+                + 0.05 * support_score
+            )
             clusters.append({
                 "items": items,
                 "score": float(score),

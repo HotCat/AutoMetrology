@@ -343,6 +343,7 @@ class MeasurementDebugOverlay:
         from ..registration import affine_solver
 
         legend_y = 10
+        fitted_color = QColor(0, 220, 80)
 
         for cad_id, data in meas_data.items():
             feat_type = data.get("type", "")
@@ -380,13 +381,13 @@ class MeasurementDebugOverlay:
                     painter.drawPoint(QPointF(sx, sy))
 
             # 3. Draw fitted geometry
-            if feat_type == "circle":
+            if feat_type in ("circle", "arc"):
                 self._draw_fitted_circle(
-                    painter, data, affine, world_to_screen, scale, base_color,
+                    painter, data, affine, world_to_screen, scale, fitted_color,
                 )
             elif feat_type == "line":
                 self._draw_fitted_line(
-                    painter, data, affine, world_to_screen, scale, base_color,
+                    painter, data, affine, world_to_screen, scale, fitted_color,
                 )
 
         # Legend
@@ -397,7 +398,7 @@ class MeasurementDebugOverlay:
         legend = [
             ("Measured ROI", QColor(0, 180, 255, 100)),
             ("Edge points (fitted)", QColor(0, 200, 255)),
-            ("Fitted circle/line", QColor(0, 180, 255)),
+            ("Fitted geometry", fitted_color),
         ]
         for text, color in legend:
             painter.setPen(QPen(color, 2))
