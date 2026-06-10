@@ -26,6 +26,7 @@ from ..models.feature import FeatureType
 from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
 from ..core.signals import bus
+from ..core.i18n import retranslate_widget_tree, tr
 from .image_load_dialog import ImageLoadDialog
 
 # Optional camera import
@@ -555,7 +556,7 @@ class RegistrationPanel(QWidget):
             return
         name = name.strip()
         if not name:
-            self._reg_status.setText("Production profile name is empty")
+            self._reg_status.setText(tr("Production profile name is empty"))
             return
         self._upsert_production_profile(self._snapshot_production_profile(name))
 
@@ -870,26 +871,26 @@ class RegistrationPanel(QWidget):
         self._btn_capture.setEnabled(False)
         self._btn_focus_preview.setEnabled(False)
         self._camera_preview.set_placeholder_text("Camera closed")
-        self._camera_status.setText("Camera closed")
+        self._camera_status.setText(tr("Camera closed"))
         if self._live_window is not None:
             self._live_window.clear()
 
     def _capture_from_camera(self) -> bool:
         """Capture current frame and load it as the image layer."""
         if not HAS_CAMERA or self._camera is None:
-            self._reg_status.setText("Camera support is not available")
+            self._reg_status.setText(tr("Camera support is not available"))
             return False
         if not self._camera_open:
-            self._reg_status.setText("Camera is not open")
+            self._reg_status.setText(tr("Camera is not open"))
             return False
         if not hasattr(self, '_canvas'):
-            self._reg_status.setText("Canvas is not available")
+            self._reg_status.setText(tr("Canvas is not available"))
             return False
 
         frame = self._camera_preview.get_latest_frame()
         if frame is None:
-            self._camera_status.setText("No frame to capture")
-            self._reg_status.setText("No frame to capture")
+            self._camera_status.setText(tr("No frame to capture"))
+            self._reg_status.setText(tr("No frame to capture"))
             return False
 
         # Load into image layer, applying lens undistortion if available.
@@ -1029,6 +1030,7 @@ class RegistrationPanel(QWidget):
             camera=camera,
             config=self._config,
         )
+        retranslate_widget_tree(dialog)
         if dialog.exec() == ImageLoadDialog.Accepted:
             path, pixel_size = dialog.get_values()
             captured = dialog.get_captured_frame()
@@ -1050,7 +1052,7 @@ class RegistrationPanel(QWidget):
                 self._btn_run_coarse.setEnabled(True)
                 self._btn_run_fine.setEnabled(False)
                 self._btn_run_full.setEnabled(True)
-                self._reg_status.setText("Image loaded. Ready for registration.")
+                self._reg_status.setText(tr("Image loaded. Ready for registration."))
                 self._canvas.update()
                 bus.image_loaded.emit(path or "<camera_capture>")
             if self._config:
@@ -1073,6 +1075,7 @@ class RegistrationPanel(QWidget):
             image = self._ensure_auto_detection_image()
             from .roi_selector_dialog import ROISelectorDialog
             dialog = ROISelectorDialog(image, self._current_auto_rois(), self)
+            retranslate_widget_tree(dialog)
             if dialog.exec() != ROISelectorDialog.Accepted:
                 return
             rois = dialog.get_rois()
@@ -1080,7 +1083,7 @@ class RegistrationPanel(QWidget):
                 self._auto_roi1_edit.setText(",".join(str(v) for v in rois[0]))
             if rois[1] is not None:
                 self._auto_roi2_edit.setText(",".join(str(v) for v in rois[1]))
-            self._reg_status.setText("Fiducial ROIs updated from image picker")
+            self._reg_status.setText(tr("Fiducial ROIs updated from image picker"))
         except Exception as e:
             self._reg_status.setText(f"ROI picker error: {e}")
 
@@ -1096,10 +1099,10 @@ class RegistrationPanel(QWidget):
         fid = getattr(self, '_last_highlighted_id', "")
         feat = self._repo.get(fid) if fid else None
         if feat is None:
-            self._reg_status.setText("Select a CAD circle first")
+            self._reg_status.setText(tr("Select a CAD circle first"))
             return
         if feat.feature_type != FeatureType.CIRCLE:
-            self._reg_status.setText("Selected CAD feature is not a circle")
+            self._reg_status.setText(tr("Selected CAD feature is not a circle"))
             return
         self._auto_cad_ids[index] = feat.feature_id
         text = feat.dxf_handle or feat.feature_id[:8]
@@ -1155,7 +1158,7 @@ class RegistrationPanel(QWidget):
                 self._image_path_label.setText("<undistorted for registration>")
                 image = layer.image
                 self._canvas.update()
-                self._reg_status.setText("Lens calibration applied to registration image")
+                self._reg_status.setText(tr("Lens calibration applied to registration image"))
         return image
 
     def _auto_cad_points(self, f1, f2) -> list[dict]:
@@ -1369,7 +1372,7 @@ class RegistrationPanel(QWidget):
     def _run_coarse(self) -> None:
         group_id = "default"
         if not hasattr(self, '_pipeline'):
-            self._reg_status.setText("Error: pipeline not initialized")
+            self._reg_status.setText(tr("Error: pipeline not initialized"))
             return
         try:
             result = self._pipeline.run_coarse(
@@ -1402,7 +1405,7 @@ class RegistrationPanel(QWidget):
             info = ", ".join([f"{c['handle']}@({c['cx']:.0f},{c['cy']:.0f})" for c in candidates[:2]])
             self._reg_status.setText(f"Auto anchors: {info}")
         else:
-            self._reg_status.setText("No anchor candidates found")
+            self._reg_status.setText(tr("No anchor candidates found"))
 
     def _run_fine(self) -> None:
         group_id = "default"
@@ -1491,7 +1494,7 @@ class RegistrationPanel(QWidget):
         self._btn_teach.setEnabled(True)
         self._btn_clear_teach.setEnabled(False)
         self._btn_save_pose.setEnabled(False)
-        self._reg_status.setText("Teach points cleared")
+        self._reg_status.setText(tr("Teach points cleared"))
 
     def _on_teach_point_added(self, info: dict) -> None:
         self._update_teach_status()
@@ -1518,7 +1521,7 @@ class RegistrationPanel(QWidget):
         img_points = self._canvas.teach_img_points
 
         if len(cad_points) < 2 or len(img_points) < 2:
-            self._reg_status.setText("Error: need 2 CAD + 2 image points")
+            self._reg_status.setText(tr("Error: need 2 CAD + 2 image points"))
             return
 
         try:

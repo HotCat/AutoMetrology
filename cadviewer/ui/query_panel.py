@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 from ..models.query import QueryResult
 from ..measurement.result_writer import ResultWriter
 from ..core.signals import bus
+from ..core.i18n import tr
 
 
 class QueryPanel(QWidget):
@@ -306,15 +307,15 @@ class QueryPanel(QWidget):
         self._btn_pick_arc.setEnabled(not active)
         self._btn_cancel_pick.setEnabled(active)
         if mode == "lines":
-            self._pair_pick_status.setText(f"Picking lines: {selected_count}/2")
+            self._pair_pick_status.setText(f"{tr('Picking lines')}: {selected_count}/2")
         elif mode == "circles":
-            self._pair_pick_status.setText(f"Picking circles: {selected_count}/2")
+            self._pair_pick_status.setText(f"{tr('Picking circles')}: {selected_count}/2")
         elif mode == "circle":
-            self._pair_pick_status.setText(f"Picking circle: {selected_count}/1")
+            self._pair_pick_status.setText(f"{tr('Picking circle')}: {selected_count}/1")
         elif mode == "arcs":
-            self._pair_pick_status.setText(f"Picking arc: {selected_count}/1")
+            self._pair_pick_status.setText(f"{tr('Picking arc')}: {selected_count}/1")
         else:
-            self._pair_pick_status.setText("Pair picker idle")
+            self._pair_pick_status.setText(tr("Pair picker idle"))
 
     def set_pair_pick_message(self, message: str) -> None:
         self._pair_pick_status.setText(message)
@@ -389,15 +390,15 @@ class QueryPanel(QWidget):
 
         self._updating_table = False
         error_count = len(results) - ok_count - ng_count - no_meas_count
-        parts = [f"OK: {ok_count}"]
+        parts = [f"{tr('OK')}: {ok_count}"]
         if ng_count:
-            parts.append(f"NG: {ng_count}")
+            parts.append(f"{tr('NG')}: {ng_count}")
         if no_meas_count:
-            parts.append(f"No Measurement: {no_meas_count}")
+            parts.append(f"{tr('No Measurement')}: {no_meas_count}")
         if error_count:
-            parts.append(f"Errors: {error_count}")
+            parts.append(f"{tr('Errors')}: {error_count}")
         self._summary.setText(
-            f"Evaluated: {len(results)} queries | " + " | ".join(parts)
+            f"{tr('Evaluated')}: {len(results)} {tr('Query')} | " + " | ".join(parts)
         )
         self.result_selected.emit(None)
 

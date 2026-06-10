@@ -84,6 +84,7 @@ class AppConfig:
     production_profiles: list = field(default_factory=list)
     active_production_profile: str = ""
     last_dxf_file: str = ""
+    language: str = "en"
 
     @staticmethod
     def load() -> AppConfig:

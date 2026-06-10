@@ -25,6 +25,7 @@ from PySide6.QtWidgets import (
 
 from ..measurement.production_log import ProductionLogStore
 from ..models.query import QueryResult
+from ..core.i18n import tr
 
 
 class ProductionLogViewer(QWidget):
@@ -145,7 +146,7 @@ class ProductionLogViewer(QWidget):
         ok = sum(v["ok"] for v in counts.values())
         ng = sum(v["ng"] for v in counts.values())
         self._month_summary.setText(
-            f"{year:04d}-{month:02d}: {total} records | OK {ok} | NG {ng}"
+            f"{year:04d}-{month:02d}: {total} {tr('records')} | {tr('OK')} {ok} | {tr('NG')} {ng}"
         )
 
         for date_text, info in counts.items():
@@ -166,8 +167,8 @@ class ProductionLogViewer(QWidget):
         records = self._store.records_for_day(date_text)
         self._records.clear()
         groups = {
-            "ok": QTreeWidgetItem(["OK", "", ""]),
-            "ng": QTreeWidgetItem(["NG", "", ""]),
+            "ok": QTreeWidgetItem([tr("OK"), "", ""]),
+            "ng": QTreeWidgetItem([tr("NG"), "", ""]),
         }
         for group in groups.values():
             group.setFlags(group.flags() & ~Qt.ItemIsSelectable)
@@ -217,15 +218,16 @@ class ProductionLogViewer(QWidget):
         self._results = self._store.get_results(record_id)
         self._populate_results(self._results)
         status = str(record["overall_status"]).upper()
+        status_label = tr("OK") if status == "OK" else tr("NG")
         self._record_title.setText(
-            f"{status} | {record['created_at'].replace('T', ' ')}"
+            f"{status_label} | {record['created_at'].replace('T', ' ')}"
         )
         self._record_meta.setText(
             f"CAD: {record.get('cad_filename', '')} | "
-            f"Image: {Path(record.get('image_path', '')).name} | "
-            f"OK {record.get('ok_count', 0)} | NG {record.get('ng_count', 0)} | "
-            f"No measurement {record.get('no_measurement_count', 0)} | "
-            f"Errors {record.get('error_count', 0)}"
+            f"{tr('Image')}: {Path(record.get('image_path', '')).name} | "
+            f"{tr('OK')} {record.get('ok_count', 0)} | {tr('NG')} {record.get('ng_count', 0)} | "
+            f"{tr('No measurement')} {record.get('no_measurement_count', 0)} | "
+            f"{tr('Errors')} {record.get('error_count', 0)}"
         )
         self.record_selected.emit(record_id)
         self.result_selected.emit(None)
@@ -233,7 +235,7 @@ class ProductionLogViewer(QWidget):
     def _clear_record(self) -> None:
         self._current_record_id = ""
         self._results = []
-        self._record_title.setText("No production records for selected day")
+        self._record_title.setText(tr("No production records for selected day"))
         self._record_meta.setText("")
         self._table.setRowCount(0)
         self.result_selected.emit(None)

@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot, QSize, Signal, QObject, QTimer
-from PySide6.QtGui import QAction, QKeySequence, QIcon
+from PySide6.QtGui import QAction, QActionGroup, QKeySequence, QIcon
 from PySide6.QtWidgets import (
     QMainWindow, QApplication, QSplitter, QToolBar,
     QFileDialog, QStatusBar, QMessageBox, QLabel, QWidget,
@@ -44,6 +44,7 @@ from ..converters.converter_config import ConversionConfig
 from ..converters.oda_cli import ODACLI
 from ..core.signals import bus
 from ..core.config import AppConfig
+from ..core.i18n import LANG_EN, LANG_ZH_CN, i18n, retranslate_widget_tree, set_language, tr
 from ..measurement.production_log import ProductionLogStore
 from ..ui.production_log_dialog import ProductionLogViewer
 
@@ -68,6 +69,7 @@ class MainWindow(QMainWindow):
         self._reg_manager = RegistrationManager(self._repo)
         self._dwg_converter = DWGConverter()
         self._config = AppConfig.load()
+        set_language(getattr(self._config, "language", LANG_EN))
         self._production_log_store = ProductionLogStore()
         self._production_log_viewer = None
         self._last_measurement_debug: dict = {}
@@ -83,6 +85,7 @@ class MainWindow(QMainWindow):
         self._setup_dock_widgets()
         self._connect_signals()
         self._check_dwg_converter()
+        self.retranslate_ui()
 
         # Auto-load last DXF if available
         if self._config.last_dxf_path and Path(self._config.last_dxf_path).exists():
@@ -207,6 +210,21 @@ class MainWindow(QMainWindow):
         oda_config_action.triggered.connect(self._show_dwg_settings)
         settings_menu.addAction(oda_config_action)
         settings_menu.addSeparator()
+        language_menu = settings_menu.addMenu("Language")
+        self._language_menu = language_menu
+        self._language_group = QActionGroup(self)
+        self._language_group.setExclusive(True)
+        self._english_action = QAction("English", self)
+        self._english_action.setCheckable(True)
+        self._english_action.setData(LANG_EN)
+        self._chinese_action = QAction("Simplified Chinese", self)
+        self._chinese_action.setCheckable(True)
+        self._chinese_action.setData(LANG_ZH_CN)
+        for action in [self._english_action, self._chinese_action]:
+            self._language_group.addAction(action)
+            language_menu.addAction(action)
+        self._language_group.triggered.connect(self._on_language_action_triggered)
+        settings_menu.addSeparator()
         cal_action = QAction("Camera Calibration...", self)
         cal_action.triggered.connect(self._open_calibration_window)
         settings_menu.addAction(cal_action)
@@ -281,6 +299,34 @@ class MainWindow(QMainWindow):
             self._production_log_viewer.result_selected.connect(self._on_query_result_selected)
         self._query_panel.pair_pick_requested.connect(self._on_query_pair_pick_requested)
         self._query_panel.pair_pick_cancelled.connect(self._on_query_pair_pick_cancelled)
+        i18n.language_changed.connect(self._on_language_changed)
+
+    def retranslate_ui(self) -> None:
+        retranslate_widget_tree(self)
+        self._sync_language_actions()
+        if hasattr(self, "_query_window"):
+            self._query_window.setWindowTitle(tr("Measurement Queries"))
+        if hasattr(self, "_reg_dock"):
+            self._reg_dock.setWindowTitle(tr("Registration"))
+        if hasattr(self, "_feature_count_label"):
+            self._feature_count_label.setText(tr("Features: 0") if self._repo.count() == 0 else f"{tr('Features')}: {self._repo.count()}")
+
+    def _sync_language_actions(self) -> None:
+        if not hasattr(self, "_english_action"):
+            return
+        self._english_action.setChecked(i18n.language == LANG_EN)
+        self._chinese_action.setChecked(i18n.language == LANG_ZH_CN)
+
+    @Slot(object)
+    def _on_language_action_triggered(self, action) -> None:
+        language = action.data() if action is not None else LANG_EN
+        set_language(str(language))
+
+    @Slot(str)
+    def _on_language_changed(self, language: str) -> None:
+        self._config.language = language
+        self._config.save()
+        self.retranslate_ui()
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -296,15 +342,15 @@ class MainWindow(QMainWindow):
 
     def _load_dxf(self, path: str) -> None:
         """Load and render a DXF file."""
-        self._status_label.setText(f"Loading {Path(path).name}...")
+        self._status_label.setText(f"{tr('Loading')} {Path(path).name}...")
         QApplication.processEvents()
 
         # Parse
         self._repo = self._importer.import_file(path)
         count = self._repo.count()
 
-        self._status_label.setText(f"Loaded {count} features from {Path(path).name}")
-        self._feature_count_label.setText(f"Features: {count}")
+        self._status_label.setText(f"{tr('Loaded')} {count} {tr('features from')} {Path(path).name}")
+        self._feature_count_label.setText(f"{tr('Features')}: {count}")
 
         # Populate tree
         self._tree_panel.populate(self._repo)
@@ -353,7 +399,7 @@ class MainWindow(QMainWindow):
     def _on_feature_deselected(self) -> None:
         """Handle feature deselection."""
         self._property_panel.clear()
-        self._status_label.setText("Ready")
+        self._status_label.setText(tr("Ready"))
 
     @Slot(str)
     def _on_viewer_click(self, feature_id: str) -> None:
@@ -365,7 +411,7 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_features_loaded(self, count: int) -> None:
-        self._feature_count_label.setText(f"Features: {count}")
+        self._feature_count_label.setText(f"{tr('Features')}: {count}")
 
     @Slot(int)
     def _on_queries_evaluated(self, _count: int) -> None:
@@ -423,19 +469,19 @@ class MainWindow(QMainWindow):
         if self._query_pair_pick_mode is not None:
             self._cancel_query_pair_pick(update_panel=True)
 
-        self._status_label.setText("Production cycle: capturing camera frame...")
+        self._status_label.setText(tr("Production cycle: capturing camera frame..."))
         QApplication.processEvents()
         if not self._reg_panel.capture_current_frame_for_production():
-            self._status_label.setText("Production cycle failed during camera capture")
+            self._status_label.setText(tr("Production cycle failed during camera capture"))
             return
 
-        self._status_label.setText("Production cycle: applying auto registration...")
+        self._status_label.setText(tr("Production cycle: applying auto registration..."))
         QApplication.processEvents()
         if not self._reg_panel.run_auto_registration_for_production():
-            self._status_label.setText("Production cycle failed during auto registration")
+            self._status_label.setText(tr("Production cycle failed during auto registration"))
             return
 
-        self._status_label.setText("Production cycle: evaluating measurement queries...")
+        self._status_label.setText(tr("Production cycle: evaluating measurement queries..."))
         QApplication.processEvents()
         count = self._evaluate_current_queries()
         record_id = self._save_current_production_log()
@@ -571,7 +617,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_query_pair_pick_cancelled(self) -> None:
         self._cancel_query_pair_pick(update_panel=False)
-        self._status_label.setText("Measurement query pair selection cancelled")
+        self._status_label.setText(tr("Measurement query pair selection cancelled"))
 
     def _cancel_query_pair_pick(self, update_panel: bool = True) -> None:
         self._query_pair_pick_mode = None
@@ -766,7 +812,7 @@ class MainWindow(QMainWindow):
     def _open_dwg(self) -> None:
         """Open a DWG file, convert to DXF, then load."""
         path, _ = QFileDialog.getOpenFileName(
-            self, "Import DWG File", str(Path.cwd()),
+            self, tr("Import DWG File"), str(Path.cwd()),
             "DWG Files (*.dwg);;All Files (*)"
         )
         if not path:
@@ -783,8 +829,8 @@ class MainWindow(QMainWindow):
         info = self._dwg_converter.validate_installation()
         if not info.installed:
             QMessageBox.warning(
-                self, "DWG Converter Not Found",
-                "No DWG converter is installed.\n\n"
+                self, tr("DWG Converter Not Found"),
+                tr("No DWG converter is installed.") + "\n\n"
                 "Install one of:\n"
                 "  • ODA File Converter: https://www.opendesign.com/guestfiles/oda_file_converter\n"
                 "  • libredwg: sudo apt install libredwg-utils\n\n"
@@ -794,6 +840,7 @@ class MainWindow(QMainWindow):
 
         # Show progress dialog
         dialog = DWGImportDialog(self)
+        retranslate_widget_tree(dialog)
         dialog.show()
         QApplication.processEvents()
 
@@ -850,6 +897,7 @@ class MainWindow(QMainWindow):
     def _show_dwg_settings(self) -> None:
         """Open DWG converter settings dialog."""
         dialog = DWGSettingsDialog(self)
+        retranslate_widget_tree(dialog)
         if dialog.exec() == QDialog.Accepted:
             path = dialog.get_converter_path()
             if path:
@@ -889,6 +937,7 @@ class MainWindow(QMainWindow):
             config=self._config,
             camera=camera if camera_open else None,
         )
+        retranslate_widget_tree(win)
         win.exec()
         # Persist updated chessboard params
         params = win.get_chessboard_params()
