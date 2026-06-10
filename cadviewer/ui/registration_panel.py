@@ -2,17 +2,15 @@
 RegistrationPanel — dockable panel for managing registration groups.
 
 Provides:
-  - Group list with color swatches
-  - Create / Rename / Delete group buttons
-  - Feature list for selected group
-  - Add/remove features from groups
-  - Group statistics (type counts, centroid, feature count)
-  - Zoom to Group button
+  - Named production parameter profiles
+  - Two-point CAD/image correspondence setup
+  - Fiducial ROI picking and automatic registration
 """
 
 from __future__ import annotations
 
 import json
+from dataclasses import asdict
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot
@@ -21,11 +19,12 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QGroupBox, QFormLayout, QLineEdit,
     QInputDialog, QAbstractItemView, QSplitter, QComboBox, QCheckBox,
+    QMessageBox,
 )
 
 from ..models.feature import FeatureType
 from ..models.repository import FeatureRepository
-from ..models.registration import RegistrationGroup, RegistrationManager
+from ..models.registration import RegistrationManager
 from ..core.signals import bus
 from .image_load_dialog import ImageLoadDialog
 
@@ -45,7 +44,7 @@ import numpy as np
 
 
 class RegistrationPanel(QWidget):
-    """Panel for creating and managing registration groups."""
+    """Panel for production image registration parameters."""
 
     def __init__(
         self,
@@ -58,10 +57,11 @@ class RegistrationPanel(QWidget):
         self._manager = manager
         self._repo = repo
         self._config = config
-        self._selected_group_id: Optional[str] = None
         self._auto_cad_ids = ["", ""]
         self._image_calibration_applied = False
         self._auto_source_image_path = ""
+        self._last_auto_registration = {}
+        self._loading_profile_combo = False
 
         # Pixel size from config
         if config is not None:
@@ -92,49 +92,8 @@ class RegistrationPanel(QWidget):
         self._group_header = header
         layout.addWidget(header)
 
-        # Group list
-        self._group_list = QListWidget()
-        self._group_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._group_list.currentItemChanged.connect(self._on_group_selected)
-        self._group_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1e1e1e;
-                color: #cccccc;
-                border: none;
-                font-size: 12px;
-            }
-            QListWidget::item:selected {
-                background-color: #264f78;
-            }
-        """)
-        layout.addWidget(self._group_list)
-
-        # Group CRUD buttons
-        btn_layout = QHBoxLayout()
-        btn_layout.setSpacing(4)
-
-        self._btn_create = QPushButton("New")
-        self._btn_create.clicked.connect(self._create_group)
-        self._btn_rename = QPushButton("Rename")
-        self._btn_rename.clicked.connect(self._rename_group)
-        self._btn_delete = QPushButton("Delete")
-        self._btn_delete.clicked.connect(self._delete_group)
-
-        for btn in [self._btn_create, self._btn_rename, self._btn_delete]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #333; color: #ccc; border: 1px solid #555;
-                    padding: 4px 10px; border-radius: 3px;
-                }
-                QPushButton:hover { background: #444; }
-            """)
-            btn_layout.addWidget(btn)
-
-        layout.addLayout(btn_layout)
-
-        # Feature management section
-        feat_group = QGroupBox("Group Features")
-        feat_group.setStyleSheet("""
+        profile_group = QGroupBox("Production Parameters")
+        profile_group.setStyleSheet("""
             QGroupBox {
                 color: #aaa; font-weight: bold; font-size: 11px;
                 border: 1px solid #333; border-radius: 4px;
@@ -144,70 +103,60 @@ class RegistrationPanel(QWidget):
                 subcontrol-origin: margin; left: 8px; padding: 0 4px;
             }
         """)
-        feat_layout = QVBoxLayout(feat_group)
+        profile_layout = QVBoxLayout(profile_group)
 
-        self._feature_list = QListWidget()
-        self._feature_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._feature_list.setStyleSheet("""
-            QListWidget {
-                background-color: #1a1a1a; color: #bbb;
-                border: none; font-size: 11px;
+        profile_row = QHBoxLayout()
+        profile_label = QLabel("Profile:")
+        profile_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        profile_row.addWidget(profile_label)
+
+        self._profile_combo = QComboBox()
+        self._profile_combo.setStyleSheet("""
+            QComboBox {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px; border-radius: 3px; min-width: 150px;
+            }
+            QComboBox:drop-down { border: none; }
+            QComboBox QAbstractItemView {
+                background: #333; color: #ccc; selection-background-color: #264f78;
             }
         """)
-        feat_layout.addWidget(self._feature_list)
+        self._profile_combo.currentIndexChanged.connect(
+            self._on_production_profile_selected
+        )
+        profile_row.addWidget(self._profile_combo)
+        profile_layout.addLayout(profile_row)
 
-        feat_btn_layout = QHBoxLayout()
-        self._btn_add = QPushButton("Add Selected Feature")
-        self._btn_add.clicked.connect(self._add_selected_feature)
-        self._btn_remove = QPushButton("Remove")
-        self._btn_remove.clicked.connect(self._remove_feature)
-        for btn in [self._btn_add, self._btn_remove]:
-            btn.setStyleSheet("""
-                QPushButton {
-                    background: #333; color: #ccc; border: 1px solid #555;
-                    padding: 3px 8px; border-radius: 3px; font-size: 11px;
-                }
-                QPushButton:hover { background: #444; }
-            """)
-            feat_btn_layout.addWidget(btn)
-        feat_layout.addLayout(feat_btn_layout)
-
-        self._feat_group = feat_group
-        layout.addWidget(feat_group)
-
-        # Statistics section
-        stats_group = QGroupBox("Statistics")
-        stats_group.setStyleSheet("""
-            QGroupBox {
-                color: #aaa; font-weight: bold; font-size: 11px;
-                border: 1px solid #333; border-radius: 4px;
-                margin-top: 8px; padding-top: 14px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin; left: 8px; padding: 0 4px;
-            }
-        """)
-        stats_layout = QFormLayout(stats_group)
-        stats_layout.setLabelAlignment(Qt.AlignRight)
-
-        self._stats_label = QLabel("—")
-        self._stats_label.setStyleSheet("color: #ddd; font-size: 11px;")
-        self._centroid_label = QLabel("—")
-        self._centroid_label.setStyleSheet("color: #ddd; font-size: 11px;")
-        self._types_label = QLabel("—")
-        self._types_label.setStyleSheet("color: #ddd; font-size: 11px;")
-
-        for label, widget in [
-            ("Features:", self._stats_label),
-            ("Centroid:", self._centroid_label),
-            ("Types:", self._types_label),
+        profile_btn_row = QHBoxLayout()
+        self._btn_save_profile = QPushButton("Save")
+        self._btn_save_profile.clicked.connect(self._save_selected_production_profile)
+        self._btn_save_as_profile = QPushButton("Save As...")
+        self._btn_save_as_profile.clicked.connect(self._save_production_profile_as)
+        self._btn_delete_profile = QPushButton("Delete")
+        self._btn_delete_profile.clicked.connect(self._delete_selected_production_profile)
+        for btn in [
+            self._btn_save_profile, self._btn_save_as_profile,
+            self._btn_delete_profile,
         ]:
-            lbl = QLabel(label)
-            lbl.setStyleSheet("color: #888; font-size: 11px;")
-            stats_layout.addRow(lbl, widget)
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 4px 8px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:disabled { background: #252525; color: #666; }
+            """)
+            profile_btn_row.addWidget(btn)
+        profile_layout.addLayout(profile_btn_row)
 
-        self._stats_group = stats_group
-        layout.addWidget(stats_group)
+        self._profile_hint = QLabel("Saves camera settings, fiducials, and ROIs.")
+        self._profile_hint.setStyleSheet("color: #777; font-size: 10px;")
+        self._profile_hint.setWordWrap(True)
+        profile_layout.addWidget(self._profile_hint)
+
+        layout.addWidget(profile_group)
+        self._profile_group = profile_group
+        self._refresh_production_profile_combo()
 
         # ── Image Registration section ──
         reg_group = QGroupBox("Image Registration")
@@ -409,11 +358,7 @@ class RegistrationPanel(QWidget):
         self._btn_pick_auto_rois.clicked.connect(self._pick_auto_rois)
         self._btn_auto_register = QPushButton("Auto Register")
         self._btn_auto_register.clicked.connect(self._run_auto_correspondence)
-        self._btn_save_auto_cfg = QPushButton("Save Cfg")
-        self._btn_save_auto_cfg.clicked.connect(self._save_auto_correspondence_config)
-        self._btn_load_auto_cfg = QPushButton("Load Cfg")
-        self._btn_load_auto_cfg.clicked.connect(self._load_auto_correspondence_config)
-        for btn in [self._btn_pick_auto_rois, self._btn_auto_register, self._btn_save_auto_cfg, self._btn_load_auto_cfg]:
+        for btn in [self._btn_pick_auto_rois, self._btn_auto_register]:
             btn.setStyleSheet("""
                 QPushButton {
                     background: #264f78; color: white; border: none;
@@ -429,29 +374,308 @@ class RegistrationPanel(QWidget):
 
         layout.addWidget(reg_group)
 
-        # Zoom button
-        self._btn_zoom = QPushButton("Zoom to Group")
-        self._btn_zoom.clicked.connect(self._zoom_to_group)
-        self._btn_zoom.setStyleSheet("""
-            QPushButton {
-                background: #264f78; color: white; border: none;
-                padding: 6px; border-radius: 3px; font-weight: bold;
-            }
-            QPushButton:hover { background: #306898; }
-        """)
-        layout.addWidget(self._btn_zoom)
-
         self._hide_legacy_registration_controls()
+
+    def _production_profiles(self) -> list[dict]:
+        if self._config is None:
+            return []
+        profiles = getattr(self._config, "production_profiles", [])
+        if not isinstance(profiles, list):
+            profiles = []
+            self._config.production_profiles = profiles
+        return profiles
+
+    def _default_production_profile(self) -> dict:
+        camera = asdict(self._config.camera) if self._config is not None else {}
+        return {
+            "version": 1,
+            "name": "Default",
+            "camera": camera,
+            "auto_correspondence": {
+                "cad_fiducials": [],
+                "image_rois": [None, None],
+                "roi_texts": ["", ""],
+                "source_image_path": "",
+                "image_path": "",
+            },
+        }
+
+    def _ensure_production_profiles(self) -> list[dict]:
+        profiles = self._production_profiles()
+        if not profiles and self._config is not None:
+            profiles.append(self._default_production_profile())
+            self._config.active_production_profile = "Default"
+        return profiles
+
+    def _find_production_profile(self, name: str) -> Optional[dict]:
+        needle = name.strip().lower()
+        for profile in self._ensure_production_profiles():
+            if str(profile.get("name", "")).strip().lower() == needle:
+                return profile
+        return None
+
+    def _refresh_production_profile_combo(self, select_name: str = "") -> None:
+        if not hasattr(self, "_profile_combo"):
+            return
+        profiles = self._ensure_production_profiles()
+        active = select_name
+        if not active and self._config is not None:
+            active = getattr(self._config, "active_production_profile", "")
+        if not active and profiles:
+            active = str(profiles[0].get("name", ""))
+
+        self._loading_profile_combo = True
+        self._profile_combo.clear()
+        selected_index = 0
+        for i, profile in enumerate(profiles):
+            name = str(profile.get("name", "")).strip() or f"Profile {i + 1}"
+            profile["name"] = name
+            self._profile_combo.addItem(name, name)
+            if name == active:
+                selected_index = i
+        if profiles:
+            self._profile_combo.setCurrentIndex(selected_index)
+        self._loading_profile_combo = False
+
+        enabled = bool(profiles) and self._config is not None
+        self._btn_save_profile.setEnabled(enabled)
+        self._btn_delete_profile.setEnabled(enabled)
+        self._btn_save_as_profile.setEnabled(self._config is not None)
+
+    def _current_profile_name(self) -> str:
+        if not hasattr(self, "_profile_combo"):
+            return "Default"
+        name = self._profile_combo.currentData()
+        if not name:
+            name = self._profile_combo.currentText()
+        return str(name).strip() or "Default"
+
+    def _camera_profile_dict(self) -> dict:
+        cam = self._camera_settings_for_config()
+        if cam is None and self._config is not None:
+            cam = self._config.camera
+        return asdict(cam) if cam is not None else {}
+
+    def _fiducial_profile_entry(self, index: int) -> dict:
+        edit = self._auto_cad1_edit if index == 0 else self._auto_cad2_edit
+        entry = {
+            "label": f"P{index + 1}",
+            "feature_id": self._auto_cad_ids[index],
+            "edit_text": edit.text().strip(),
+        }
+        feat = None
+        try:
+            if entry["feature_id"] or entry["edit_text"]:
+                feat = self._resolve_auto_cad_feature(index)
+        except Exception:
+            feat = None
+        if feat is not None:
+            g = feat.geometry
+            entry.update({
+                "feature_id": feat.feature_id,
+                "dxf_handle": feat.dxf_handle,
+                "world": [float(g["cx"]), float(g["cy"])],
+                "radius": float(g.get("radius", 0.0)),
+            })
+        return entry
+
+    def _auto_correspondence_profile(self) -> dict:
+        roi_edits = [self._auto_roi1_edit, self._auto_roi2_edit]
+        roi_texts = [edit.text().strip() for edit in roi_edits]
+        parsed_rois = []
+        for i, text in enumerate(roi_texts):
+            if not text:
+                parsed_rois.append(None)
+                continue
+            try:
+                parsed_rois.append(list(self._parse_auto_roi(text, f"ROI P{i + 1}")))
+            except Exception:
+                parsed_rois.append(None)
+        image_path = ""
+        if hasattr(self, "_canvas"):
+            image_path = self._canvas.get_image_layer().path
+        data = {
+            "cad_fiducials": [
+                self._fiducial_profile_entry(0),
+                self._fiducial_profile_entry(1),
+            ],
+            "image_rois": parsed_rois,
+            "roi_texts": roi_texts,
+            "source_image_path": self._auto_source_image_path,
+            "image_path": image_path,
+        }
+        if self._last_auto_registration:
+            data["last_registration"] = dict(self._last_auto_registration)
+        return data
+
+    def _snapshot_production_profile(self, name: str) -> dict:
+        return {
+            "version": 1,
+            "name": name,
+            "camera": self._camera_profile_dict(),
+            "auto_correspondence": self._auto_correspondence_profile(),
+        }
+
+    def _upsert_production_profile(self, profile: dict, silent: bool = False) -> None:
+        if self._config is None:
+            return
+        name = str(profile.get("name", "")).strip() or "Default"
+        profile["name"] = name
+        profiles = [
+            p for p in self._ensure_production_profiles()
+            if str(p.get("name", "")).strip().lower() != name.lower()
+        ]
+        profiles.append(profile)
+        profiles.sort(key=lambda p: str(p.get("name", "")).lower())
+        self._config.production_profiles = profiles
+        self._config.active_production_profile = name
+        from ..core.config import CameraConfig
+        camera_data = profile.get("camera", {})
+        if isinstance(camera_data, dict):
+            allowed = CameraConfig.__dataclass_fields__.keys()
+            filtered = {k: camera_data[k] for k in allowed if k in camera_data}
+            self._config.camera = CameraConfig(**filtered)
+        self._config.save()
+        self._refresh_production_profile_combo(name)
+        if not silent:
+            self._reg_status.setText(f"Production profile saved: {name}")
+
+    def _save_selected_production_profile(self, silent: bool = False) -> None:
+        name = self._current_profile_name()
+        self._upsert_production_profile(
+            self._snapshot_production_profile(name), silent=silent,
+        )
+
+    def _save_production_profile_as(self) -> None:
+        default = self._current_profile_name()
+        name, ok = QInputDialog.getText(
+            self, "Save Production Parameters", "Profile name:", text=default,
+        )
+        if not ok:
+            return
+        name = name.strip()
+        if not name:
+            self._reg_status.setText("Production profile name is empty")
+            return
+        self._upsert_production_profile(self._snapshot_production_profile(name))
+
+    def _delete_selected_production_profile(self) -> None:
+        if self._config is None:
+            return
+        name = self._current_profile_name()
+        answer = QMessageBox.question(
+            self,
+            "Delete Production Profile",
+            f"Delete production profile '{name}'?",
+            QMessageBox.Yes | QMessageBox.No,
+            QMessageBox.No,
+        )
+        if answer != QMessageBox.Yes:
+            return
+        profiles = [
+            p for p in self._ensure_production_profiles()
+            if str(p.get("name", "")).strip().lower() != name.lower()
+        ]
+        if not profiles:
+            profiles = [self._default_production_profile()]
+        self._config.production_profiles = profiles
+        self._config.active_production_profile = str(profiles[0].get("name", "Default"))
+        self._config.save()
+        self._refresh_production_profile_combo(self._config.active_production_profile)
+        self.apply_active_production_profile()
+        self._reg_status.setText(f"Production profile deleted: {name}")
+
+    def _apply_camera_profile(self, camera_data: dict) -> None:
+        if self._config is None or not isinstance(camera_data, dict):
+            return
+        from ..core.config import CameraConfig
+        allowed = CameraConfig.__dataclass_fields__.keys()
+        filtered = {k: camera_data[k] for k in allowed if k in camera_data}
+        try:
+            self._config.camera = CameraConfig(**filtered)
+        except Exception:
+            return
+        if HAS_CAMERA and self._camera is not None and self._camera_open:
+            try:
+                self._camera.apply_settings(CameraSettings(**asdict(self._config.camera)))
+            except Exception as e:
+                self._reg_status.setText(f"Camera profile apply error: {e}")
+
+    def _apply_auto_correspondence_profile(self, auto_data: dict) -> None:
+        if not isinstance(auto_data, dict):
+            return
+        fiducials = auto_data.get("cad_fiducials", [])
+        edits = [self._auto_cad1_edit, self._auto_cad2_edit]
+        for i in range(2):
+            if i >= len(fiducials) or not isinstance(fiducials[i], dict):
+                self._auto_cad_ids[i] = ""
+                edits[i].clear()
+                continue
+            item = fiducials[i]
+            self._auto_cad_ids[i] = str(item.get("feature_id", ""))
+            edits[i].setText(
+                str(
+                    item.get("edit_text")
+                    or item.get("dxf_handle")
+                    or item.get("feature_id")
+                    or ""
+                )
+            )
+
+        roi_texts = auto_data.get("roi_texts", [])
+        rois = auto_data.get("image_rois", [])
+        for i, edit in enumerate([self._auto_roi1_edit, self._auto_roi2_edit]):
+            text = ""
+            if i < len(roi_texts):
+                text = str(roi_texts[i] or "")
+            if not text and i < len(rois) and rois[i]:
+                text = ",".join(str(int(v)) for v in rois[i])
+            edit.setText(text)
+
+        self._auto_source_image_path = str(auto_data.get("source_image_path", ""))
+
+    def _apply_production_profile(self, profile: dict) -> None:
+        if self._config is None or not isinstance(profile, dict):
+            return
+        self._apply_camera_profile(profile.get("camera", {}))
+
+        self._apply_auto_correspondence_profile(
+            profile.get("auto_correspondence", {})
+        )
+        self._config.active_production_profile = str(profile.get("name", ""))
+        self._config.save()
+        if hasattr(self, "_canvas"):
+            self._canvas.update()
+
+    def apply_active_production_profile(self) -> None:
+        if self._config is None:
+            return
+        name = getattr(self._config, "active_production_profile", "")
+        profile = self._find_production_profile(name) if name else None
+        if profile is None and self._ensure_production_profiles():
+            profile = self._ensure_production_profiles()[0]
+        if profile is None:
+            return
+        self._refresh_production_profile_combo(str(profile.get("name", "")))
+        self._apply_production_profile(profile)
+
+    def _on_production_profile_selected(self, index: int) -> None:
+        if self._loading_profile_combo or index < 0 or self._config is None:
+            return
+        name = self._current_profile_name()
+        profile = self._find_production_profile(name)
+        if profile is None:
+            return
+        self._apply_production_profile(profile)
+        self._reg_status.setText(f"Production profile active: {name}")
 
     def _hide_legacy_registration_controls(self) -> None:
         """Keep only the production auto-registration controls visible."""
         for widget in [
-            self._group_list, self._btn_create, self._btn_rename, self._btn_delete,
-            self._feat_group, self._stats_group, self._method_label, self._method_combo,
+            self._method_label, self._method_combo,
             self._anchor_label, self._anchor_edit, self._btn_auto_anchors,
             self._btn_run_coarse, self._btn_run_fine, self._btn_run_full,
             self._btn_teach, self._btn_save_pose, self._btn_clear_teach,
-            self._btn_zoom,
         ]:
             widget.hide()
 
@@ -650,32 +874,43 @@ class RegistrationPanel(QWidget):
         if self._live_window is not None:
             self._live_window.clear()
 
-    def _capture_from_camera(self) -> None:
+    def _capture_from_camera(self) -> bool:
         """Capture current frame and load it as the image layer."""
         if not HAS_CAMERA or self._camera is None:
-            return
+            self._reg_status.setText("Camera support is not available")
+            return False
+        if not self._camera_open:
+            self._reg_status.setText("Camera is not open")
+            return False
+        if not hasattr(self, '_canvas'):
+            self._reg_status.setText("Canvas is not available")
+            return False
 
         frame = self._camera_preview.get_latest_frame()
         if frame is None:
             self._camera_status.setText("No frame to capture")
-            return
+            self._reg_status.setText("No frame to capture")
+            return False
 
         # Load into image layer, applying lens undistortion if available.
-        if hasattr(self, '_canvas'):
-            from ..registration.auto_correspondence import undistort_if_calibrated
-            frame, applied = undistort_if_calibrated(frame, self._config)
-            self._image_calibration_applied = applied
-            self._canvas.get_image_layer().load_from_array(frame)
-            self._auto_source_image_path = self._canvas.get_image_layer().path
-            self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
-            # Keep pixel_size_mm from config (don't reset to default)
-            self._btn_run_coarse.setEnabled(True)
-            self._btn_run_fine.setEnabled(False)
-            self._btn_run_full.setEnabled(True)
-            self._btn_teach.setEnabled(True)
-            self._reg_status.setText(f"Frame captured. Ready for registration. (pixel_size={self._pixel_size_mm:.4f} mm)")
-            self._canvas.update()
-            bus.image_loaded.emit("<camera_capture>")
+        from ..registration.auto_correspondence import undistort_if_calibrated
+        frame, applied = undistort_if_calibrated(frame, self._config)
+        self._image_calibration_applied = applied
+        self._canvas.get_image_layer().load_from_array(frame)
+        self._auto_source_image_path = self._canvas.get_image_layer().path
+        self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
+        # Keep pixel_size_mm from config (don't reset to default)
+        self._btn_run_coarse.setEnabled(True)
+        self._btn_run_fine.setEnabled(False)
+        self._btn_run_full.setEnabled(True)
+        self._btn_teach.setEnabled(True)
+        self._reg_status.setText(f"Frame captured. Ready for registration. (pixel_size={self._pixel_size_mm:.4f} mm)")
+        self._canvas.update()
+        bus.image_loaded.emit("<camera_capture>")
+        return True
+
+    def capture_current_frame_for_production(self) -> bool:
+        return self._capture_from_camera()
 
     def _open_focus_preview(self) -> None:
         """Open a dedicated full-size live preview window for focus adjustment."""
@@ -747,197 +982,21 @@ class RegistrationPanel(QWidget):
             return None
 
     def _connect_signals(self) -> None:
-        bus.group_created.connect(self._on_group_created)
-        bus.group_deleted.connect(self._on_group_deleted)
-        bus.group_contents_changed.connect(self._on_group_contents_changed)
         bus.highlight_feature.connect(self._on_feature_highlighted)
 
-    # ── group CRUD ────────────────────────────────────────────────
-
-    @Slot()
-    def _create_group(self) -> None:
-        name, ok = QInputDialog.getText(
-            self, "Create Group", "Group name:",
-            text=f"Group {self._manager.group_count() + 1}",
-        )
-        if ok and name:
-            group = self._manager.create_group(name)
-            bus.group_created.emit(group.group_id)
-
-    @Slot()
-    def _rename_group(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
-        name, ok = QInputDialog.getText(
-            self, "Rename Group", "New name:", text=group.name,
-        )
-        if ok and name:
-            self._manager.rename_group(group.group_id, name)
-            bus.group_renamed.emit(group.group_id)
-            bus.group_contents_changed.emit(group.group_id)
-
-    @Slot()
-    def _delete_group(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
-        self._manager.delete_group(group.group_id)
-        self._selected_group_id = None
-        bus.group_deleted.emit(group.group_id)
-
-    # ── feature management ────────────────────────────────────────
-
-    @Slot()
-    def _add_selected_feature(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
-        # Use the currently highlighted feature
-        if not hasattr(self, '_last_highlighted_id') or not self._last_highlighted_id:
-            return
-        fid = self._last_highlighted_id
-        if self._manager.add_feature_to_group(group.group_id, fid):
-            bus.group_contents_changed.emit(group.group_id)
-
-    @Slot()
-    def _remove_feature(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
-        item = self._feature_list.currentItem()
-        if not item:
-            return
-        fid = item.data(Qt.UserRole)
-        self._manager.remove_feature_from_group(group.group_id, fid)
-        bus.group_contents_changed.emit(group.group_id)
-
-    @Slot()
-    def _zoom_to_group(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
-        bbox = group.bbox(self._repo)
-        if not bbox:
-            return
-        fmin_x, fmin_y, fmax_x, fmax_y = bbox
-        pad = max(fmax_x - fmin_x, fmax_y - fmin_y) * 0.3
-        if pad < 10:
-            pad = 30
-        dx = (fmax_x - fmin_x) + pad * 2
-        dy = (fmax_y - fmin_y) + pad * 2
-        w, h = self.width(), self.height()
-        if w == 0 or h == 0:
-            return
-        bus.view_fit_all.emit()
-
-    # ── signal handlers ──────────────────────────────────────────
+    # ── removed registration feature groups ───────────────────────
 
     @Slot(str)
     def _on_feature_highlighted(self, feature_id: str) -> None:
         self._last_highlighted_id = feature_id
 
-    @Slot(str)
-    def _on_group_created(self, group_id: str) -> None:
-        self._refresh_group_list()
-        # Select the new group
-        for i in range(self._group_list.count()):
-            item = self._group_list.item(i)
-            if item.data(Qt.UserRole) == group_id:
-                self._group_list.setCurrentItem(item)
-                break
-        # Persist
-        if self._config is not None:
-            self._config.registration_groups = self._manager.save_groups()
-            self._config.save()
-
-    @Slot(str)
-    def _on_group_deleted(self, group_id: str) -> None:
-        self._refresh_group_list()
-        self._refresh_feature_list()
-        if self._config is not None:
-            self._config.registration_groups = self._manager.save_groups()
-            self._config.save()
-
-    @Slot(str)
-    def _on_group_contents_changed(self, group_id: str) -> None:
-        if group_id == self._selected_group_id:
-            self._refresh_feature_list()
-            self._refresh_statistics()
-        self._refresh_group_list()
-        # Persist groups to config whenever contents change
-        if self._config is not None:
-            self._config.registration_groups = self._manager.save_groups()
-            self._config.save()
-
-    # ── selection ────────────────────────────────────────────────
-
-    def _on_group_selected(self, current, previous) -> None:
-        if current:
-            self._selected_group_id = current.data(Qt.UserRole)
-        else:
-            self._selected_group_id = None
-        self._refresh_feature_list()
-        self._refresh_statistics()
-
-    def _get_selected_group(self) -> Optional[RegistrationGroup]:
-        if not self._selected_group_id:
-            return None
-        return self._manager.get_group(self._selected_group_id)
-
-    # ── refresh helpers ──────────────────────────────────────────
-
-    def _refresh_group_list(self) -> None:
-        selected_id = self._selected_group_id
-        self._group_list.clear()
-        for group in self._manager.all_groups():
-            item = QListWidgetItem(f"  {group.name} ({group.feature_count})")
-            item.setData(Qt.UserRole, group.group_id)
-            # Color swatch via text color
-            item.setForeground(group.color)
-            font = item.font()
-            font.setBold(True)
-            item.setFont(font)
-            self._group_list.addItem(item)
-            if group.group_id == selected_id:
-                self._group_list.setCurrentItem(item)
-
-    def _refresh_feature_list(self) -> None:
-        self._feature_list.clear()
-        group = self._get_selected_group()
-        if not group:
-            return
-        for fid in group.feature_ids:
-            feat = self._repo.get(fid)
-            if feat:
-                item = QListWidgetItem(feat.display_name)
-                item.setData(Qt.UserRole, fid)
-                self._feature_list.addItem(item)
-
-    def _refresh_statistics(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            self._stats_label.setText("—")
-            self._centroid_label.setText("—")
-            self._types_label.setText("—")
-            return
-
-        self._stats_label.setText(str(group.feature_count))
-        centroid = group.centroid(self._repo)
-        if centroid:
-            self._centroid_label.setText(f"({centroid[0]:.2f}, {centroid[1]:.2f})")
-        else:
-            self._centroid_label.setText("—")
-        stats = group.type_statistics(self._repo)
-        if stats:
-            parts = [f"{ft.name}: {c}" for ft, c in sorted(stats.items(), key=lambda x: x[0].name)]
-            self._types_label.setText(", ".join(parts))
-        else:
-            self._types_label.setText("—")
+    def _get_selected_group(self):
+        return None
 
     def set_repository(self, repo: FeatureRepository) -> None:
         self._repo = repo
         self._manager._repo = repo
+        self._manager.clear()
 
     # ── image registration ────────────────────────────────────────
 
@@ -1026,8 +1085,7 @@ class RegistrationPanel(QWidget):
             self._reg_status.setText(f"ROI picker error: {e}")
 
     def _auto_correspondence_path(self) -> str:
-        group = self._get_selected_group()
-        group_id = group.group_id if group else "default"
+        group_id = "default"
         image_path = self._auto_source_image_path
         if not image_path and hasattr(self, '_canvas'):
             image_path = self._canvas.get_image_layer().path
@@ -1129,11 +1187,10 @@ class RegistrationPanel(QWidget):
         f2 = self._resolve_auto_cad_feature(1)
         roi1 = self._parse_auto_roi(self._auto_roi1_edit.text(), "ROI P1")
         roi2 = self._parse_auto_roi(self._auto_roi2_edit.text(), "ROI P2")
-        group = self._get_selected_group()
         image_path = self._canvas.get_image_layer().path if hasattr(self, '_canvas') else ""
         data = {
             "version": 1,
-            "group_id": group.group_id if group else "default",
+            "group_id": "default",
             "pixel_size_mm": self._pixel_size_mm,
             "image_path": image_path,
             "source_image_path": self._auto_source_image_path,
@@ -1184,12 +1241,7 @@ class RegistrationPanel(QWidget):
     def _populate_auto_debug_data(self, transform, image) -> None:
         if not hasattr(self, '_pipeline'):
             return
-        group = self._get_selected_group()
-        if group and group.feature_ids:
-            features = [self._repo.get(fid) for fid in group.feature_ids]
-            features = [f for f in features if f is not None]
-        else:
-            features = list(self._repo._features.values())
+        features = list(self._repo._features.values())
         from ..registration.cad_silhouette import RegistrationContourGenerator
         from ..registration.image_extractor import ImageFeatureExtractor
         generator = RegistrationContourGenerator()
@@ -1210,7 +1262,7 @@ class RegistrationPanel(QWidget):
             "strategy": "auto_correspondence",
         })
 
-    def _run_auto_correspondence(self) -> None:
+    def _run_auto_correspondence(self) -> bool:
         try:
             from ..registration.auto_correspondence import detect_circle_in_roi
             from ..registration.strategy import TeachICPStrategy
@@ -1239,8 +1291,7 @@ class RegistrationPanel(QWidget):
             )
             params = affine_solver.extract_params(T)
 
-            group = self._get_selected_group()
-            group_id = group.group_id if group else "default"
+            group_id = "default"
             image_path = self._canvas.get_image_layer().path
             pose = {
                 "version": 1,
@@ -1262,7 +1313,19 @@ class RegistrationPanel(QWidget):
             info = {"image_path": image_path, "group_id": group_id}
             pose_path = TeachICPStrategy._pose_template_path(info)
             TeachICPStrategy._save_pose_template(pose_path, pose)
-            cfg_path = self._save_auto_correspondence_config([d1, d2], T, pose_path)
+            self._last_auto_registration = {
+                "pose_template_path": pose_path,
+                "detections": [d1.to_dict(), d2.to_dict()],
+                "transform": {
+                    "translation": [float(params["tx"]), float(params["ty"])],
+                    "rotation_deg": float(params["rotation_deg"]),
+                    "scale": float(params["scale_x"]),
+                },
+                "image_path": image_path,
+                "source_image_path": self._auto_source_image_path,
+            }
+            self._save_selected_production_profile(silent=True)
+            profile_name = self._current_profile_name()
 
             T_img = self._compute_image_affine(T)
             self._canvas.get_image_layer().set_affine_transform(T_img)
@@ -1274,11 +1337,28 @@ class RegistrationPanel(QWidget):
             bus.registration_completed.emit({"transform": T, "stage": "auto_correspondence", "error": 0.0})
             self._reg_status.setText(
                 f"Auto registered: P1 conf={d1.confidence:.2f}, P2 conf={d2.confidence:.2f}; "
-                f"rot={params['rotation_deg']:.2f} deg, cfg={cfg_path}"
+                f"rot={params['rotation_deg']:.2f} deg, profile={profile_name}"
             )
+            return True
         except Exception as e:
             self._reg_status.setText(f"Auto registration error: {e}")
             bus.registration_failed.emit(str(e))
+            return False
+
+    def run_auto_registration_for_production(self) -> bool:
+        return self._run_auto_correspondence()
+
+    def production_profile_snapshot(self) -> dict:
+        return self._snapshot_production_profile(self._current_profile_name())
+
+    def last_auto_registration_snapshot(self) -> dict:
+        return dict(self._last_auto_registration)
+
+    def production_pixel_size_mm(self) -> float:
+        return float(self._pixel_size_mm)
+
+    def image_calibration_applied(self) -> bool:
+        return bool(self._image_calibration_applied)
 
     def _get_anchor_handles(self) -> list[str]:
         text = self._anchor_edit.text().strip()
@@ -1287,17 +1367,14 @@ class RegistrationPanel(QWidget):
         return [h.strip() for h in text.split(",") if h.strip()]
 
     def _run_coarse(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            self._reg_status.setText("Error: select a group first")
-            return
+        group_id = "default"
         if not hasattr(self, '_pipeline'):
             self._reg_status.setText("Error: pipeline not initialized")
             return
         try:
             result = self._pipeline.run_coarse(
                 self._canvas.get_image_layer().path,
-                group.group_id,
+                group_id,
                 self._pixel_size_mm,
                 anchor_handles=self._get_anchor_handles(),
             )
@@ -1328,14 +1405,12 @@ class RegistrationPanel(QWidget):
             self._reg_status.setText("No anchor candidates found")
 
     def _run_fine(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            return
+        group_id = "default"
         if not hasattr(self, '_pipeline') or not hasattr(self, '_coarse_transform'):
             return
         try:
             result = self._pipeline.run_fine(
-                self._coarse_transform, group.group_id,
+                self._coarse_transform, group_id,
             )
             T_img = self._compute_image_affine(result["transform"])
             self._canvas.get_image_layer().set_affine_transform(T_img)
@@ -1352,16 +1427,13 @@ class RegistrationPanel(QWidget):
             bus.registration_failed.emit(str(e))
 
     def _run_full(self) -> None:
-        group = self._get_selected_group()
-        if not group:
-            self._reg_status.setText("Error: select a group first")
-            return
+        group_id = "default"
         if not hasattr(self, '_pipeline'):
             return
         try:
             result = self._pipeline.run_full(
                 self._canvas.get_image_layer().path,
-                group.group_id,
+                group_id,
                 self._pixel_size_mm,
                 anchor_handles=self._get_anchor_handles(),
             )
@@ -1461,8 +1533,7 @@ class RegistrationPanel(QWidget):
             from ..registration import affine_solver
             params = affine_solver.extract_params(T)
 
-            group = self._get_selected_group()
-            group_id = group.group_id if group else "default"
+            group_id = "default"
 
             image_path = self._canvas.get_image_layer().path
             template = {

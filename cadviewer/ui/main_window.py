@@ -44,6 +44,8 @@ from ..converters.converter_config import ConversionConfig
 from ..converters.oda_cli import ODACLI
 from ..core.signals import bus
 from ..core.config import AppConfig
+from ..measurement.production_log import ProductionLogStore
+from ..ui.production_log_dialog import ProductionLogViewer
 
 
 class _DWGResultBridge(QObject):
@@ -66,6 +68,8 @@ class MainWindow(QMainWindow):
         self._reg_manager = RegistrationManager(self._repo)
         self._dwg_converter = DWGConverter()
         self._config = AppConfig.load()
+        self._production_log_store = ProductionLogStore()
+        self._production_log_viewer = None
         self._last_measurement_debug: dict = {}
         self._last_measurement_affine = None
         self._query_pair_pick_mode: Optional[str] = None
@@ -240,6 +244,8 @@ class MainWindow(QMainWindow):
         # Query window: keep measurements in a wide standalone window so
         # operators can see many Value/Nominal/Deviation/Status rows at once.
         self._query_panel = QueryPanel()
+        self._production_log_viewer = ProductionLogViewer(self._production_log_store)
+        self._query_panel.set_production_log_viewer(self._production_log_viewer)
         self._query_window = QDialog(self)
         self._query_window.setWindowTitle("Measurement Queries")
         self._query_window.setWindowFlags(
@@ -268,6 +274,11 @@ class MainWindow(QMainWindow):
         bus.feature_deselected.connect(self._on_feature_deselected)
         bus.queries_evaluated.connect(self._on_queries_evaluated)
         self._query_panel.result_selected.connect(self._on_query_result_selected)
+        self._query_panel.production_run_requested.connect(self._run_production_measurement_cycle)
+        self._query_panel.production_log_requested.connect(self._show_production_log_viewer)
+        if self._production_log_viewer is not None:
+            self._production_log_viewer.record_selected.connect(self._on_production_log_record_selected)
+            self._production_log_viewer.result_selected.connect(self._on_query_result_selected)
         self._query_panel.pair_pick_requested.connect(self._on_query_pair_pick_requested)
         self._query_panel.pair_pick_cancelled.connect(self._on_query_pair_pick_cancelled)
 
@@ -308,18 +319,14 @@ class MainWindow(QMainWindow):
         self._viewer.set_measurement_debug({}, None)
         self._cancel_query_pair_pick(update_panel=True)
 
-        # Update registration manager with new repo
-        # (set_repository on panel clears groups, so restore must come after)
+        # Update registration manager with new repo. Feature groups are no longer
+        # exposed or persisted; auto correspondence uses the full CAD context.
         self._reg_panel.set_repository(self._repo)
-        self._reg_manager.restore_groups(self._config.registration_groups)
-        self._reg_panel._refresh_group_list()
-        self._reg_panel._refresh_feature_list()
-        self._tree_panel.set_registration_manager(self._reg_manager)
-        self._viewer.set_registration_manager(self._reg_manager)
 
         # Create registration pipeline for new repo
         self._pipeline = RegistrationPipeline(self._repo, self._reg_manager)
         self._reg_panel.set_pipeline(self._pipeline)
+        self._reg_panel.apply_active_production_profile()
 
         # Track last DXF path for auto-restore
         self._last_dxf_path = path
@@ -362,7 +369,10 @@ class MainWindow(QMainWindow):
 
     @Slot(int)
     def _on_queries_evaluated(self, _count: int) -> None:
-        """Evaluate measurement queries using MeasuredFeature data."""
+        self._evaluate_current_queries()
+
+    def _evaluate_current_queries(self) -> int:
+        """Evaluate measurement queries using current image and registration."""
         from ..measurement.evaluator import QueryEvaluator
         from ..measurement.measurement_pipeline import MeasurementPipeline
         import numpy as np
@@ -392,7 +402,7 @@ class MainWindow(QMainWindow):
         results = evaluator.evaluate(query_text)
         self._query_panel.set_results(results)
 
-        # Push measurement debug overlay to canvas.  Keep the full set so a
+        # Push measurement debug overlay to canvas. Keep the full set so a
         # selected query row can temporarily narrow the overlay to its features.
         if pipeline is not None:
             self._last_measurement_debug = dict(pipeline.get_debug_data())
@@ -401,6 +411,144 @@ class MainWindow(QMainWindow):
                 self._last_measurement_debug, self._last_measurement_affine,
             )
         else:
+            self._last_measurement_debug = {}
+            self._last_measurement_affine = None
+            self._viewer.set_measurement_debug({}, None)
+
+        return len(results)
+
+    @Slot()
+    def _run_production_measurement_cycle(self) -> None:
+        """Capture camera frame, auto-register, and evaluate loaded queries."""
+        if self._query_pair_pick_mode is not None:
+            self._cancel_query_pair_pick(update_panel=True)
+
+        self._status_label.setText("Production cycle: capturing camera frame...")
+        QApplication.processEvents()
+        if not self._reg_panel.capture_current_frame_for_production():
+            self._status_label.setText("Production cycle failed during camera capture")
+            return
+
+        self._status_label.setText("Production cycle: applying auto registration...")
+        QApplication.processEvents()
+        if not self._reg_panel.run_auto_registration_for_production():
+            self._status_label.setText("Production cycle failed during auto registration")
+            return
+
+        self._status_label.setText("Production cycle: evaluating measurement queries...")
+        QApplication.processEvents()
+        count = self._evaluate_current_queries()
+        record_id = self._save_current_production_log()
+        if record_id:
+            if self._production_log_viewer is not None:
+                self._production_log_viewer.refresh()
+            self._status_label.setText(
+                f"Production cycle complete — evaluated {count} queries; log {record_id[:8]}"
+            )
+        else:
+            self._status_label.setText(
+                f"Production cycle complete — evaluated {count} queries; log save failed"
+            )
+
+    def _save_current_production_log(self) -> str:
+        """Persist the current production result set and replay context."""
+        try:
+            image_layer = self._viewer.get_image_layer()
+            affine = image_layer.affine if image_layer.has_image else None
+            calibration = {
+                "pixel_size_mm": self._config.pixel_size_mm,
+                "lens_calibration": getattr(self._config, "lens_calibration", None),
+                "calibration_applied": self._reg_panel.image_calibration_applied(),
+            }
+            camera = getattr(self._config, "camera", {})
+            return self._production_log_store.create_record(
+                results=self._query_panel.results(),
+                query_text=self._query_panel.get_query_text(),
+                cad_path=getattr(self, "_last_dxf_path", self._config.last_dxf_path),
+                source_image_path=image_layer.path,
+                image=image_layer.image,
+                pixel_size_mm=self._reg_panel.production_pixel_size_mm(),
+                affine=affine,
+                registration=self._reg_panel.last_auto_registration_snapshot(),
+                production_profile=self._reg_panel.production_profile_snapshot(),
+                calibration=calibration,
+                camera=camera,
+            )
+        except Exception as e:
+            self._status_label.setText(f"Production log save error: {e}")
+            return ""
+
+    @Slot()
+    def _show_production_log_viewer(self) -> None:
+        self._query_panel.show_production_log_view()
+        if self._production_log_viewer is not None and self._production_log_viewer.current_record_id():
+            self._on_production_log_record_selected(
+                self._production_log_viewer.current_record_id()
+            )
+
+    @Slot(str)
+    def _on_production_log_record_selected(self, record_id: str) -> None:
+        record = self._production_log_store.get_record(record_id)
+        if record is None:
+            return
+        results = self._production_log_store.get_results(record_id)
+        if not self._load_production_log_context(record, results):
+            return
+        self._status_label.setText(
+            f"Loaded production log {record_id[:8]} from {record.get('created_at', '')}"
+        )
+
+    def _load_production_log_context(self, record: dict, results: list) -> bool:
+        cad_path = record.get("cad_path", "")
+        image_path = record.get("image_path", "")
+        if cad_path and Path(cad_path).exists() and cad_path != getattr(self, "_last_dxf_path", ""):
+            self._load_dxf(cad_path)
+        elif not self._repo.count() and cad_path and Path(cad_path).exists():
+            self._load_dxf(cad_path)
+
+        image_layer = self._viewer.get_image_layer()
+        if image_path and Path(image_path).exists():
+            image_layer.load_image(image_path)
+        affine = record.get("affine")
+        if affine is not None:
+            import numpy as np
+            image_layer.set_affine_transform(np.array(affine, dtype=float))
+        pixel_size = record.get("pixel_size_mm")
+        if pixel_size is not None:
+            image_layer.set_pixel_size_mm(float(pixel_size))
+        self._viewer.update()
+        self._regenerate_log_measurement_debug(record, results)
+        return True
+
+    def _regenerate_log_measurement_debug(self, record: dict, results: list) -> None:
+        try:
+            from ..measurement.evaluator import QueryEvaluator
+            from ..measurement.measurement_pipeline import MeasurementPipeline
+            import cv2
+            import numpy as np
+
+            image_layer = self._viewer.get_image_layer()
+            if image_layer.image is None or record.get("affine") is None:
+                self._last_measurement_debug = {}
+                self._last_measurement_affine = None
+                self._viewer.set_measurement_debug({}, None)
+                return
+            gray = cv2.cvtColor(image_layer.image, cv2.COLOR_BGR2GRAY)
+            affine = np.array(record["affine"], dtype=float)
+            pipeline = MeasurementPipeline(
+                self._repo, gray, affine,
+                pixel_size_mm=float(record.get("pixel_size_mm") or self._config.pixel_size_mm),
+            )
+            query_text = "\n".join(
+                r.instruction.raw_text for r in results if r.instruction is not None
+            )
+            QueryEvaluator(self._repo, pipeline).evaluate(query_text)
+            self._last_measurement_debug = dict(pipeline.get_debug_data())
+            self._last_measurement_affine = affine
+            self._viewer.set_measurement_debug(
+                self._last_measurement_debug, self._last_measurement_affine,
+            )
+        except Exception:
             self._last_measurement_debug = {}
             self._last_measurement_affine = None
             self._viewer.set_measurement_debug({}, None)
@@ -475,7 +623,8 @@ class MainWindow(QMainWindow):
                 return
             func = "circle" if mode == "circle" else "arcs"
             expression = f"{func}({self._query_token_for_feature(feat)})"
-            self._query_panel.append_query_expression(expression)
+            tolerance = self._auto_query_tolerance(expression)
+            self._query_panel.append_query_expression(expression, tolerance)
             self._query_panel.set_pair_pick_active(None)
             self._query_panel.set_pair_pick_message(f"Added {expression}")
             self._status_label.setText(f"Added measurement query: {expression}")
@@ -495,13 +644,29 @@ class MainWindow(QMainWindow):
         token1 = self._query_token_for_feature(feat1)
         token2 = self._query_token_for_feature(feat2)
         expression = f"{func}({token1}, {token2})"
-        self._query_panel.append_query_expression(expression)
+        tolerance = self._auto_query_tolerance(expression)
+        self._query_panel.append_query_expression(expression, tolerance)
         self._query_panel.set_pair_pick_active(None)
         self._query_panel.set_pair_pick_message(f"Added {expression}")
         self._status_label.setText(f"Added measurement query: {expression}")
         self._query_pair_pick_mode = None
         self._query_pair_pick_ids = []
         self._set_query_pair_highlight([fid1, fid2])
+
+    def _auto_query_tolerance(self, expression: str) -> Optional[float]:
+        """Compute absolute tolerance from the query panel percentage setting."""
+        try:
+            from ..measurement.query_parser import QueryParser
+            from ..measurement.evaluator import QueryEvaluator
+            insts = QueryParser().parse(expression)
+            if not insts:
+                return None
+            nominal = QueryEvaluator(self._repo).nominal_for_instruction(insts[0])
+            if nominal is None:
+                return None
+            return round(abs(nominal) * self._query_panel.tolerance_percent() / 100.0, 4)
+        except Exception:
+            return None
 
     def _set_query_pair_highlight(self, feature_ids: list[str]) -> None:
         ids = list(feature_ids)
@@ -757,8 +922,6 @@ class MainWindow(QMainWindow):
                     self._config.camera = cam
             if hasattr(self._reg_panel, 'cleanup'):
                 self._reg_panel.cleanup()
-        # Persist registration groups
-        self._config.registration_groups = self._reg_manager.save_groups()
         self._config.save()
         event.accept()
 

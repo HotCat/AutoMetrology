@@ -127,12 +127,17 @@ class QueryEvaluator:
             _audit(f"  Measured (IMAGE): {measured:.4f} mm")
             _audit(f"  Deviation: {deviation:.4f} mm")
             _audit(f"  Source: MEASURED (image-fitted geometry)")
+            tolerance = inst.tolerance_abs
+            status = "ok"
+            if tolerance is not None and abs(deviation) > tolerance:
+                status = "ng"
             return QueryResult(
                 instruction=inst,
                 value=round(measured, 4),
-                status="ok",
+                status=status,
                 nominal=round(nominal, 4),
                 deviation=deviation,
+                tolerance_abs=tolerance,
                 geometry_source="MEASURED",
                 feature_geometry_audit=audit_data,
             )
@@ -151,6 +156,7 @@ class QueryEvaluator:
             ),
             nominal=round(nominal, 4),
             deviation=None,
+            tolerance_abs=inst.tolerance_abs,
             geometry_source="NONE",
             feature_geometry_audit=audit_data,
         )
@@ -355,6 +361,23 @@ class QueryEvaluator:
         d1 = abs((lx1 - x1) * nx + (ly1 - y1) * ny)
         d2 = abs((lx2 - x1) * nx + (ly2 - y1) * ny)
         return (d1 + d2) / 2
+
+    def nominal_for_instruction(self, inst: QueryInstruction) -> Optional[float]:
+        """Return the CAD nominal value for one parsed instruction."""
+        fid1 = self._resolve_id(inst.feature_id_1)
+        needs_second_feature = inst.query_type in (
+            QueryType.CIRCLE_DISTANCE, QueryType.LINE_DISTANCE,
+        )
+        fid2 = self._resolve_id(inst.feature_id_2) if needs_second_feature else None
+        if not fid1 or (needs_second_feature and not fid2):
+            return None
+        if inst.query_type == QueryType.CIRCLE_DISTANCE:
+            return self._nominal_circle_distance(fid1, fid2)
+        if inst.query_type == QueryType.LINE_DISTANCE:
+            return self._nominal_line_distance(fid1, fid2)
+        if inst.query_type in (QueryType.ARC_RADIUS, QueryType.CIRCLE_RADIUS):
+            return self._nominal_radius(fid1)
+        return None
 
     # ── Nominal (CAD) dimension computation ───────────────────────
 

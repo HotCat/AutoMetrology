@@ -81,7 +81,8 @@ class AppConfig:
     camera: CameraConfig = field(default_factory=CameraConfig)
     calibration: CalibrationConfig = field(default_factory=CalibrationConfig)
     lens_calibration: LensCalibrationConfig = field(default_factory=LensCalibrationConfig)
-    registration_groups: list = field(default_factory=list)
+    production_profiles: list = field(default_factory=list)
+    active_production_profile: str = ""
     last_dxf_file: str = ""
 
     @staticmethod
@@ -93,14 +94,22 @@ class AppConfig:
             cam_data = data.pop("camera", {})
             cal_data = data.pop("calibration", {})
             lens_data = data.pop("lens_calibration", {})
-            reg_groups = data.pop("registration_groups", [])
+            data.pop("registration_groups", None)
+            production_profiles = data.pop("production_profiles", [])
+            active_production_profile = data.pop("active_production_profile", "")
             # Backward compat: remove old TPS residual_map field
             lens_data.pop("residual_map", None)
             cfg = AppConfig(**data)
             cfg.camera = CameraConfig(**cam_data)
             cfg.calibration = CalibrationConfig(**cal_data)
             cfg.lens_calibration = LensCalibrationConfig(**lens_data)
-            cfg.registration_groups = reg_groups
+            cfg.production_profiles = (
+                production_profiles if isinstance(production_profiles, list) else []
+            )
+            cfg.active_production_profile = (
+                active_production_profile
+                if isinstance(active_production_profile, str) else ""
+            )
             return cfg
         except Exception:
             return AppConfig()

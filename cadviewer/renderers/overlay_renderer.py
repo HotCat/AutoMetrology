@@ -1,7 +1,6 @@
 """
-Overlay renderers for registration groups and debug visualization.
+Overlay renderers for debug visualization.
 
-RegistrationGroupOverlay — draws group boundaries, fills, and anchors.
 DebugOverlay — draws CAD silhouette, image silhouette, minAreaRect,
                contour alignment.
 MeasurementDebugOverlay — draws measured feature ROIs, edge points,
@@ -20,99 +19,6 @@ from PySide6.QtGui import (
 )
 
 from ..models.feature import CADFeature, FeatureType
-from ..models.repository import FeatureRepository
-from ..models.registration import RegistrationGroup, RegistrationManager
-
-
-class RegistrationGroupOverlay:
-    """Renders visual overlays for registration groups on the canvas."""
-
-    def __init__(self) -> None:
-        self._label_font = QFont("Arial", 10, QFont.Bold)
-        self._dash_pen = QPen()
-        self._dash_pen.setStyle(Qt.DashLine)
-        self._dash_pen.setWidth(1.5)
-
-    def draw_group_overlays(
-        self,
-        painter: QPainter,
-        groups: List[RegistrationGroup],
-        repo: FeatureRepository,
-        world_to_screen: Callable[[float, float], Tuple[float, float]],
-        scale: float,
-        feature_map: Dict[str, CADFeature],
-    ) -> None:
-        for group in groups:
-            if not group.feature_ids:
-                continue
-            self._draw_single_group(painter, group, repo, world_to_screen, scale)
-
-    def _draw_single_group(
-        self,
-        painter: QPainter,
-        group: RegistrationGroup,
-        repo: FeatureRepository,
-        world_to_screen: Callable[[float, float], Tuple[float, float]],
-        scale: float,
-    ) -> None:
-        bbox = group.bbox(repo)
-        if not bbox:
-            return
-
-        min_x, min_y, max_x, max_y = bbox
-        sx1, sy1 = world_to_screen(min_x, max_y)
-        sx2, sy2 = world_to_screen(max_x, min_y)
-
-        rect = QRectF(
-            min(sx1, sx2), min(sy1, sy2),
-            abs(sx2 - sx1), abs(sy2 - sy1),
-        )
-
-        color = group.color
-
-        # Semi-transparent fill
-        fill_color = QColor(color)
-        fill_color.setAlpha(30)
-        painter.setBrush(QBrush(fill_color))
-        painter.setPen(Qt.NoPen)
-        painter.drawRect(rect)
-
-        # Dashed boundary
-        dash_color = QColor(color)
-        dash_color.setAlpha(160)
-        self._dash_pen.setColor(dash_color)
-        painter.setBrush(Qt.NoBrush)
-        painter.setPen(self._dash_pen)
-        painter.drawRect(rect)
-
-        # Centroid marker (diamond)
-        centroid = group.centroid(repo)
-        if centroid:
-            cx, cy = world_to_screen(centroid[0], centroid[1])
-            diamond_size = 6
-            diamond = QPolygonF([
-                QPointF(cx, cy - diamond_size),
-                QPointF(cx + diamond_size, cy),
-                QPointF(cx, cy + diamond_size),
-                QPointF(cx - diamond_size, cy),
-            ])
-            anchor_color = QColor(color)
-            anchor_color.setAlpha(200)
-            painter.setBrush(QBrush(anchor_color))
-            painter.setPen(QPen(anchor_color.darker(120), 1))
-            painter.drawPolygon(diamond)
-
-            # Group label
-            painter.setFont(self._label_font)
-            painter.setPen(QPen(QColor(color.red(), color.green(), color.blue(), 220)))
-            painter.drawText(QPointF(cx + diamond_size + 4, cy - 2), group.name)
-            painter.setPen(QPen(QColor(180, 180, 180, 160)))
-            small_font = QFont("Arial", 8)
-            painter.setFont(small_font)
-            painter.drawText(
-                QPointF(cx + diamond_size + 4, cy + 12),
-                f"{group.feature_count} features",
-            )
 
 
 class DebugOverlay:

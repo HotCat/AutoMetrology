@@ -29,6 +29,7 @@ class QueryInstruction:
     feature_id_1: str = ""
     feature_id_2: str = ""
     line_number: int = 0
+    tolerance_abs: Optional[float] = None  # absolute allowed deviation in mm
 
 
 @dataclass
@@ -36,10 +37,11 @@ class QueryResult:
     instruction: Optional[QueryInstruction] = None
     value: Optional[float] = None  # mm (from image-fitted geometry only)
     unit: str = "mm"
-    status: str = "pending"  # "ok", "error", "no_measurement"
+    status: str = "pending"  # "ok", "ng", "error", "no_measurement"
     error_message: str = ""
     nominal: Optional[float] = None  # CAD nominal value
     deviation: Optional[float] = None  # measured - nominal
+    tolerance_abs: Optional[float] = None  # absolute allowed deviation in mm
     geometry_source: str = "NONE"  # "MEASURED", "NONE" — never "CAD"
     # Audit trail: which geometry was used for each feature
     feature_geometry_audit: Optional[dict] = None

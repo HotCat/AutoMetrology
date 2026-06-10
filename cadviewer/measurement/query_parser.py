@@ -5,10 +5,11 @@ Grammar:
   query_file  := query_line*
   query_line  := instruction | comment | blank
   instruction := pair_instruction | arc_instruction
-  pair_instruction := ('circles' | 'lines') '(' id ',' id ')'
-  radius_instruction := ('circle' | 'arcs') '(' id ')'
+  pair_instruction := ('circles' | 'lines') '(' id ',' id ')' [',' threshold]
+  radius_instruction := ('circle' | 'arcs') '(' id ')' [',' threshold]
   func_name   := 'circles' | 'lines' | 'circle' | 'arcs'
   id          := [A-Za-z0-9_-]+
+  threshold   := non-negative decimal absolute deviation in mm
   comment     := '#' ...
 """
 
@@ -20,11 +21,12 @@ from typing import List
 from ..models.query import QueryInstruction, QueryType
 
 # Regexes for parsing a single instruction line
+_NUMBER_RE = r'(?:\d+(?:\.\d*)?|\.\d+)'
 _PAIR_INSTRUCTION_RE = re.compile(
-    r'^\s*(circles|lines)\s*\(\s*([A-Za-z0-9_-]+)\s*,\s*([A-Za-z0-9_-]+)\s*\)\s*$'
+    rf'^\s*(circles|lines)\s*\(\s*([A-Za-z0-9_-]+)\s*,\s*([A-Za-z0-9_-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
 )
 _RADIUS_INSTRUCTION_RE = re.compile(
-    r'^\s*(circle|arcs)\s*\(\s*([A-Za-z0-9_-]+)\s*\)\s*$'
+    rf'^\s*(circle|arcs)\s*\(\s*([A-Za-z0-9_-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
 )
 
 
@@ -43,7 +45,8 @@ class QueryParser:
             else:
                 raise ValueError(
                     f"Syntax error at line {line_no}: '{line}'\n"
-                    f"Expected: circles(ID1, ID2), lines(ID1, ID2), circle(ID), or arcs(ID)"
+                    f"Expected: circles(ID1, ID2), T; lines(ID1, ID2), T; "
+                    f"circle(ID), T; or arcs(ID), T"
                 )
         return instructions
 
@@ -55,6 +58,7 @@ class QueryParser:
         m = _PAIR_INSTRUCTION_RE.match(line)
         if m:
             func_name, id1, id2 = m.group(1), m.group(2), m.group(3)
+            tolerance = self._parse_tolerance(m.group(4), line_no)
             query_type = (
                 QueryType.CIRCLE_DISTANCE if func_name == "circles"
                 else QueryType.LINE_DISTANCE
@@ -65,11 +69,13 @@ class QueryParser:
                 feature_id_1=id1,
                 feature_id_2=id2,
                 line_number=line_no,
+                tolerance_abs=tolerance,
             )
 
         m = _RADIUS_INSTRUCTION_RE.match(line)
         if m:
             func_name, fid = m.group(1), m.group(2)
+            tolerance = self._parse_tolerance(m.group(3), line_no)
             query_type = (
                 QueryType.CIRCLE_RADIUS if func_name == "circle"
                 else QueryType.ARC_RADIUS
@@ -80,6 +86,16 @@ class QueryParser:
                 feature_id_1=fid,
                 feature_id_2="",
                 line_number=line_no,
+                tolerance_abs=tolerance,
             )
 
         return None
+
+    @staticmethod
+    def _parse_tolerance(text: str | None, line_no: int) -> float | None:
+        if text is None or text == "":
+            return None
+        value = float(text)
+        if value < 0:
+            raise ValueError(f"Tolerance at line {line_no} must be non-negative")
+        return value
