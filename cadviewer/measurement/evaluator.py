@@ -177,9 +177,15 @@ class QueryEvaluator:
             audit["failure_reason"] = "no_measurement_pipeline"
             return None, audit
 
-        # Ensure both features are measured
-        mf1 = self._pipeline.measure_feature(fid1)
-        mf2 = self._pipeline.measure_feature(fid2)
+        # Ensure both features are measured. Line-distance queries use
+        # pair-aware fitting so adjacent double-edge line art resolves to the
+        # inward edge deterministically instead of whichever edge is closest
+        # to a slightly drifting registration pose.
+        if query_type == QueryType.LINE_DISTANCE and hasattr(self._pipeline, "measure_line_pair"):
+            mf1, mf2 = self._pipeline.measure_line_pair(fid1, fid2)
+        else:
+            mf1 = self._pipeline.measure_feature(fid1)
+            mf2 = self._pipeline.measure_feature(fid2)
 
         if mf1 is None:
             audit["failure_reason"] = f"feature1_not_measured (id={fid1[:12]})"

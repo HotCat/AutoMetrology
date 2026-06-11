@@ -158,6 +158,28 @@ class MeasurementPipeline:
 
         return None
 
+    def measure_line_pair(
+        self, cad_feature_id_1: str, cad_feature_id_2: str,
+    ) -> tuple[Optional[MeasuredFeature], Optional[MeasuredFeature]]:
+        """Measure a line pair with deterministic inward edge preference.
+
+        Adjacent printed/etched lines often produce two parallel gradient peaks.
+        For pair distance queries, the useful edge is the one facing the paired
+        CAD line, which also minimizes the pair distance without depending on
+        small registration drift. Pair fits are not cached globally because the
+        preferred side is query-context specific.
+        """
+        feat1 = self._repo.get(cad_feature_id_1)
+        feat2 = self._repo.get(cad_feature_id_2)
+        if feat1 is None or feat2 is None:
+            return None, None
+        if feat1.feature_type != FeatureType.LINE or feat2.feature_type != FeatureType.LINE:
+            return self.measure_feature(cad_feature_id_1), self.measure_feature(cad_feature_id_2)
+        return (
+            self._measure_line(feat1, paired_geometry=feat2.geometry, cache=False),
+            self._measure_line(feat2, paired_geometry=feat1.geometry, cache=False),
+        )
+
     def measure_features(
         self, cad_feature_ids: list[str],
     ) -> list[MeasuredFeature]:
@@ -1373,7 +1395,12 @@ class MeasurementPipeline:
             keep[start:start + chunk_size] = near_curve & away_from_caps
         return points[keep]
 
-    def _measure_line(self, feat: CADFeature) -> Optional[MeasuredFeature]:
+    def _measure_line(
+        self,
+        feat: CADFeature,
+        paired_geometry: Optional[dict] = None,
+        cache: bool = True,
+    ) -> Optional[MeasuredFeature]:
         """Measure a line feature via perpendicular scanline sampling."""
         if self._line_engine is None:
             return None
@@ -1384,12 +1411,65 @@ class MeasurementPipeline:
             return None
         roi, pixel_p1, pixel_p2 = roi_result
 
+        preferred_side_point = None
+        max_scan_width = None
+        prefer_extreme_side = False
+        lock_line_direction = False
+        if paired_geometry is not None:
+            paired_roi = self._roi_predictor.predict_line_roi(paired_geometry, padding=50)
+            if paired_roi is not None:
+                _, paired_p1, paired_p2 = paired_roi
+                own_center = (pixel_p1 + pixel_p2) / 2.0
+                paired_center = (paired_p1 + paired_p2) / 2.0
+                line_vec = pixel_p2 - pixel_p1
+                line_len = float(np.linalg.norm(line_vec))
+                paired_vec = paired_p2 - paired_p1
+                paired_len = float(np.linalg.norm(paired_vec))
+                if line_len > 1e-6 and paired_len > 1e-6:
+                    line_dir = line_vec / line_len
+                    paired_dir = paired_vec / paired_len
+                    # Pair-side fitting is only meaningful for near-parallel
+                    # line-distance queries. Non-parallel line pairs keep the
+                    # normal closest-edge behavior.
+                    if abs(float(np.dot(line_dir, paired_dir))) > 0.95:
+                        lock_line_direction = True
+                        line_normal = np.array([-line_dir[1], line_dir[0]])
+                        pair_gap_px = abs(float((paired_center - own_center) @ line_normal))
+                        # Only close line pairs should force the inward
+                        # edge. Distant line-distance queries are independent
+                        # features; using the other line as a side target can
+                        # pull the fit onto unrelated internal window edges.
+                        if 1e-6 < pair_gap_px <= 250.0:
+                            preferred_side_point = paired_center
+                            max_scan_width = max(12.0, pair_gap_px * 0.45)
+                            prefer_extreme_side = True
+
         # Fit — wide search to handle registration errors up to ~5mm
         result: Optional[LineFitResult] = self._line_engine.fit(
             pixel_p1, pixel_p2,
             scan_width=50.0,
             min_gradient=15.0,
+            preferred_side_point=preferred_side_point,
+            max_scan_width=max_scan_width,
+            prefer_extreme_side=prefer_extreme_side,
+            lock_direction=lock_line_direction,
         )
+        if result is None and preferred_side_point is not None:
+            result = self._line_engine.fit(
+                pixel_p1, pixel_p2,
+                scan_width=50.0,
+                min_gradient=15.0,
+                preferred_side_point=preferred_side_point,
+                max_scan_width=None,
+                prefer_extreme_side=prefer_extreme_side,
+                lock_direction=True,
+            )
+        if result is None and preferred_side_point is not None:
+            result = self._line_engine.fit(
+                pixel_p1, pixel_p2,
+                scan_width=50.0,
+                min_gradient=15.0,
+            )
         if result is None:
             _print(f"  Line {feat.feature_id[:12]}: NO EDGE FOUND "
                    f"(predicted=({pixel_p1[0]:.1f},{pixel_p1[1]:.1f})-"
@@ -1444,7 +1524,8 @@ class MeasurementPipeline:
             detection_method="perpendicular_scanline",
             source_type="FITTED",
         )
-        self._store.add(mf)
+        if cache:
+            self._store.add(mf)
 
         self._debug_data[feat.feature_id] = {
             "type": "line",
@@ -1456,6 +1537,7 @@ class MeasurementPipeline:
             "fitted_p2": result.p2,
             "residual": result.residual,
             "confidence": result.confidence,
+            "pair_side_fit": paired_geometry is not None,
         }
 
         return mf
