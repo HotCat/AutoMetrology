@@ -29,18 +29,18 @@ except ImportError:
     HAS_CV2 = False
 
 
-def _undistort(frame: np.ndarray, config) -> np.ndarray:
+def _undistort(frame: np.ndarray, config) -> tuple[np.ndarray, bool]:
     """Apply lens undistortion if calibration data is available."""
     if not HAS_CV2 or config is None:
-        return frame
+        return frame, False
     lc = config.lens_calibration
     if not lc.calibrated:
-        return frame
+        return frame, False
     mtx = lc.get_camera_matrix()
     dist = lc.get_dist_coeffs()
     if mtx is None or dist is None:
-        return frame
-    return cv2.undistort(frame, mtx, dist)
+        return frame, False
+    return cv2.undistort(frame, mtx, dist), True
 
 
 def _frame_to_pixmap(frame: np.ndarray, max_h: int = 200) -> QPixmap:
@@ -72,6 +72,7 @@ class ImageLoadDialog(QDialog):
         self._camera = camera
         self._config = config
         self._captured_frame: Optional[np.ndarray] = None
+        self._captured_calibration_applied: bool = False
         self._latest_cam_frame: Optional[np.ndarray] = None
 
         self.setWindowTitle("Load Telecentric Image")
@@ -210,8 +211,9 @@ class ImageLoadDialog(QDialog):
         if frame.ndim == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
         # Apply lens undistortion
-        corrected = _undistort(frame, self._config)
+        corrected, applied = _undistort(frame, self._config)
         self._captured_frame = corrected
+        self._captured_calibration_applied = applied
         self._preview.setPixmap(_frame_to_pixmap(corrected, 200))
 
     def _browse(self) -> None:
@@ -222,6 +224,7 @@ class ImageLoadDialog(QDialog):
         if path:
             self._path_edit.setText(path)
             self._captured_frame = None
+            self._captured_calibration_applied = False
             img = cv2.imread(path)
             if img is not None:
                 self._preview.setPixmap(_frame_to_pixmap(img, 200))
@@ -230,8 +233,11 @@ class ImageLoadDialog(QDialog):
         return self._path_edit.text(), self._pixel_size.value()
 
     def get_captured_frame(self) -> Optional[np.ndarray]:
-        """Return the camera-captured (undistorted) frame, or None."""
+        """Return the camera-captured frame, or None."""
         return self._captured_frame
+
+    def calibration_applied(self) -> bool:
+        return bool(self._captured_calibration_applied)
 
     def closeEvent(self, event) -> None:
         if self._camera is not None:

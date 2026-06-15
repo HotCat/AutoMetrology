@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Any
 
 try:
     import numpy as np
@@ -19,6 +19,21 @@ except ImportError:
 
 _CONFIG_DIR = Path.home() / ".config" / "cadviewer"
 _CONFIG_FILE = _CONFIG_DIR / "settings.json"
+
+
+
+
+def _json_safe(value: Any) -> Any:
+    if HAS_NUMPY:
+        if isinstance(value, np.ndarray):
+            return [_json_safe(v) for v in value.tolist()]
+        if isinstance(value, np.generic):
+            return value.item()
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
 
 
 @dataclass
@@ -49,6 +64,7 @@ class LensCalibrationConfig:
     image_count: int = 0
     coordinate_correction: dict = field(default_factory=dict)
     correction_model_type: str = "none"  # "none", "affine", "homography"
+    residual_map: dict = field(default_factory=dict)
 
     def get_camera_matrix(self):
         if HAS_NUMPY and len(self.camera_matrix) == 9:
@@ -98,8 +114,6 @@ class AppConfig:
             data.pop("registration_groups", None)
             production_profiles = data.pop("production_profiles", [])
             active_production_profile = data.pop("active_production_profile", "")
-            # Backward compat: remove old TPS residual_map field
-            lens_data.pop("residual_map", None)
             cfg = AppConfig(**data)
             cfg.camera = CameraConfig(**cam_data)
             cfg.calibration = CalibrationConfig(**cal_data)
@@ -117,7 +131,7 @@ class AppConfig:
 
     def save(self) -> None:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
-        data = asdict(self)
+        data = _json_safe(asdict(self))
         _CONFIG_FILE.write_text(
             json.dumps(data, indent=2, ensure_ascii=False),
             encoding="utf-8",

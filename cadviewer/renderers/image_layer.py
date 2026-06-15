@@ -157,44 +157,41 @@ class ImageLayerRenderer:
             return
 
         img_w, img_h = self.image_size
+        if img_w <= 0 or img_h <= 0:
+            return
 
-        # Get 4 image corners in world coords
-        corners_pixel = np.array([
-            [0, 0], [img_w, 0], [img_w, img_h], [0, img_h]
+        # Compose the full pixel -> CAD -> screen matrix.  The stored matrix is
+        # allowed to be projective; using only three corners here would silently
+        # collapse calibrated homography registration back to an affine display.
+        cx = widget_width / 2.0
+        cy = widget_height / 2.0
+        wx0, wy0 = world_to_screen_fn(0.0, 0.0)
+        wx1, wy1 = world_to_screen_fn(1.0, 0.0)
+        wx2, wy2 = world_to_screen_fn(0.0, 1.0)
+        world_to_screen = np.array([
+            [wx1 - wx0, wx2 - wx0, wx0],
+            [wy1 - wy0, wy2 - wy0, wy0],
+            [0.0, 0.0, 1.0],
         ], dtype=np.float64)
-
-        # Apply affine: pixel → world
-        from ..registration.affine_solver import apply
-        corners_world = apply(self._affine, corners_pixel)
-
-        # Convert to screen coords
-        corners_screen = [
-            world_to_screen_fn(c[0], c[1]) for c in corners_world
-        ]
-
-        # Use QPainter transform to map image
-        painter.save()
-        painter.setOpacity(self._opacity)
-
-        # Build a QTransform from the quadrilateral mapping
-        # Source: image corners (0,0), (w,0), (0,h)
-        # Target: screen coords of first 3 corners
-        sx1, sy1 = corners_screen[0]
-        sx2, sy2 = corners_screen[1]
-        sx3, sy3 = corners_screen[3]
+        pixel_to_screen = world_to_screen @ np.asarray(self._affine, dtype=np.float64)
+        if not np.all(np.isfinite(pixel_to_screen)):
+            return
 
         transform = QTransform()
-        # Map (0,0)->(sx1,sy1), (img_w,0)->(sx2,sy2), (0,img_h)->(sx3,sy3)
         transform.setMatrix(
-            (sx2 - sx1) / img_w if img_w else 1,
-            (sy2 - sy1) / img_w if img_w else 0,
-            0,
-            (sx3 - sx1) / img_h if img_h else 0,
-            (sy3 - sy1) / img_h if img_h else 1,
-            0,
-            sx1, sy1, 1,
+            float(pixel_to_screen[0, 0]),
+            float(pixel_to_screen[1, 0]),
+            float(pixel_to_screen[2, 0]),
+            float(pixel_to_screen[0, 1]),
+            float(pixel_to_screen[1, 1]),
+            float(pixel_to_screen[2, 1]),
+            float(pixel_to_screen[0, 2]),
+            float(pixel_to_screen[1, 2]),
+            float(pixel_to_screen[2, 2]),
         )
 
+        painter.save()
+        painter.setOpacity(self._opacity)
         painter.setTransform(transform, True)
         painter.drawImage(QPointF(0, 0), self._qimage)
         painter.restore()

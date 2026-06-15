@@ -259,6 +259,40 @@ class CalibrationManager:
         return np.column_stack([ideal_x, ideal_y])
 
     @staticmethod
+    def _compute_projective_ideal_grid(
+        detected: np.ndarray, cols: int, rows: int,
+    ) -> Optional[np.ndarray]:
+        """Compute per-image ideal corner positions using a homography.
+
+        This removes chessboard pose, perspective, and camera tilt from the
+        residual samples. The remaining vector field is the local residual
+        after the best projective explanation of that single board image.
+        """
+        if not HAS_CV2:
+            return None
+        n = cols * rows
+        corners = np.asarray(detected, dtype=np.float64).reshape(-1, 2)
+        if len(corners) != n:
+            return None
+
+        grid = np.zeros((n, 2), dtype=np.float64)
+        for r in range(rows):
+            for c in range(cols):
+                grid[r * cols + c] = [c, r]
+
+        H, _ = cv2.findHomography(
+            grid.astype(np.float32),
+            corners.astype(np.float32),
+            0,
+        )
+        if H is None or not np.all(np.isfinite(H)):
+            return None
+        projected = cv2.perspectiveTransform(
+            grid.reshape(-1, 1, 2).astype(np.float32), H,
+        )
+        return projected.reshape(-1, 2).astype(np.float64)
+
+    @staticmethod
     def _to_gray(image: np.ndarray) -> np.ndarray:
         if image.ndim == 2:
             return image

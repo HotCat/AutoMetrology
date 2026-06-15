@@ -183,3 +183,36 @@ class ResidualDistortionMap:
             # Rebuild with light smoothing for numerical stability on reload
             m.build(pts_arr, corr_arr, img_size, smoothing=0.001)
         return m
+
+
+def is_residual_map_safe(residual_map: ResidualDistortionMap) -> bool:
+    """Return True only for small residual lens correction fields."""
+    if residual_map is None or not residual_map.is_built:
+        return False
+    corrections = getattr(residual_map, "_corrections", None)
+    if corrections is None or not len(corrections):
+        return False
+    mag = np.linalg.norm(np.asarray(corrections, dtype=np.float64), axis=1)
+    return float(np.percentile(mag, 95)) <= 5.0 and float(np.max(mag)) <= 15.0
+
+
+def residual_map_from_config(config) -> Optional[ResidualDistortionMap]:
+    """Load the persisted grid residual correction map from AppConfig."""
+    if config is None:
+        return None
+    lc = getattr(config, "lens_calibration", None)
+    data = getattr(lc, "residual_map", None) if lc is not None else None
+    if not isinstance(data, dict) or not data:
+        return None
+    try:
+        residual_map = ResidualDistortionMap.from_dict(data)
+    except Exception:
+        return None
+    if not residual_map.is_built:
+        return None
+    # Residual lens-map corrections should be small after OpenCV
+    # calibration. Larger fields usually mean the map absorbed chessboard
+    # pose/perspective instead of residual distortion, which is unsafe.
+    if not is_residual_map_safe(residual_map):
+        return None
+    return residual_map

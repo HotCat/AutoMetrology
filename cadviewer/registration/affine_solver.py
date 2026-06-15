@@ -279,6 +279,23 @@ def apply(T: np.ndarray, points: np.ndarray) -> np.ndarray:
     return transformed[:, :2]
 
 
+def apply_projective(T: np.ndarray, points: np.ndarray) -> np.ndarray:
+    """
+    Apply a 3x3 affine or projective transform to Nx2 points.
+
+    Unlike apply(), this divides by the homogeneous coordinate and is therefore
+    safe for homographies.
+    """
+    if points.ndim != 2 or points.shape[1] != 2:
+        return points
+    n = points.shape[0]
+    homogeneous = np.hstack([points, np.ones((n, 1), dtype=np.float64)])
+    transformed = (np.asarray(T, dtype=np.float64) @ homogeneous.T).T
+    denom = transformed[:, 2:3]
+    safe = np.where(np.abs(denom) > 1e-12, denom, np.nan)
+    return transformed[:, :2] / safe
+
+
 def extract_params(T: np.ndarray) -> dict:
     """Extract human-readable affine parameters."""
     return {

@@ -19,6 +19,7 @@ from PySide6.QtGui import (
 )
 
 from ..models.feature import CADFeature, FeatureType
+from ..registration import affine_solver
 
 
 class DebugOverlay:
@@ -35,8 +36,6 @@ class DebugOverlay:
         scale: float,
     ) -> None:
         """Draw all debug layers for the new silhouette-based pipeline."""
-        from ..registration import affine_solver
-
         coarse = debug_data.get("coarse", {})
         fine = debug_data.get("fine", {})
 
@@ -340,7 +339,8 @@ class MeasurementDebugOverlay:
             world_to_screen: world→screen coordinate transform
             scale: current zoom scale (pixels per mm)
         """
-        from ..registration import affine_solver
+        def _apply(matrix: np.ndarray, points: np.ndarray) -> np.ndarray:
+            return affine_solver.apply_projective(matrix, points)
 
         legend_y = 10
         fitted_color = QColor(0, 220, 80)
@@ -368,7 +368,7 @@ class MeasurementDebugOverlay:
             # 2. Draw detected edge points (small cyan dots)
             edge_points = data.get("edge_points")
             if edge_points is not None and len(edge_points) > 0:
-                pts_world = affine_solver.apply(affine, edge_points)
+                pts_world = _apply(affine, edge_points)
                 pen = QPen(QColor(0, 200, 255, 220), 2)
                 painter.setPen(pen)
                 max_pts = 300
@@ -417,12 +417,11 @@ class MeasurementDebugOverlay:
         color: QColor,
     ) -> None:
         """Draw ROI bounding box transformed to world coordinates."""
-        from ..registration import affine_solver
         xmin, ymin, xmax, ymax = roi
         corners = np.array([
             [xmin, ymin], [xmax, ymin], [xmax, ymax], [xmin, ymax],
         ], dtype=np.float64)
-        corners_world = affine_solver.apply(affine, corners)
+        corners_world = affine_solver.apply_projective(affine, corners)
 
         pen = QPen(color, 1, Qt.DashLine)
         painter.setPen(pen)
@@ -444,17 +443,16 @@ class MeasurementDebugOverlay:
         color: QColor,
     ) -> None:
         """Draw fitted circle in world coordinates."""
-        from ..registration import affine_solver
         center = data.get("fitted_center")
         radius = data.get("fitted_radius")
         if center is None or radius is None:
             return
 
         # Transform center to world
-        center_world = affine_solver.apply(affine, center.reshape(1, 2))[0]
+        center_world = affine_solver.apply_projective(affine, center.reshape(1, 2))[0]
         # Transform radius point to get world radius
         edge_pt = np.array([[center[0] + radius, center[1]]])
-        edge_world = affine_solver.apply(affine, edge_pt)[0]
+        edge_world = affine_solver.apply_projective(affine, edge_pt)[0]
         r_world = float(np.linalg.norm(edge_world - center_world))
 
         sx, sy = world_to_screen(center_world[0], center_world[1])
@@ -481,14 +479,13 @@ class MeasurementDebugOverlay:
         color: QColor,
     ) -> None:
         """Draw fitted line in world coordinates."""
-        from ..registration import affine_solver
         p1 = data.get("fitted_p1")
         p2 = data.get("fitted_p2")
         if p1 is None or p2 is None:
             return
 
         pixel_pts = np.array([p1, p2])
-        world_pts = affine_solver.apply(affine, pixel_pts)
+        world_pts = affine_solver.apply_projective(affine, pixel_pts)
 
         pen = QPen(color, 2)
         painter.setPen(pen)

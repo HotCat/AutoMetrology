@@ -75,6 +75,15 @@ _DARK_STYLE = """
 
 # ── Helpers ─────────────────────────────────────────────────────────────
 
+
+
+def _to_gray_image(arr: np.ndarray) -> np.ndarray:
+    if arr.ndim == 2:
+        return arr
+    if arr.ndim == 3 and arr.shape[2] == 1:
+        return arr[:, :, 0]
+    return cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
+
 def _numpy_to_pixmap(arr: np.ndarray, max_size: int = 400) -> QPixmap:
     """Convert numpy array (BGR or grayscale) to QPixmap, scaled to fit max_size."""
     if arr.ndim == 2 or (arr.ndim == 3 and arr.shape[2] == 1):
@@ -328,8 +337,10 @@ class _PixelSizeTab(QWidget):
                 v_dists.append(d)
 
         avg_px = (np.mean(h_dists) + np.mean(v_dists)) / 2.0
-        pixel_size = cell_mm / avg_px
+        pixel_size = float(cell_mm / avg_px)
         self._computed_pixel_size = pixel_size
+        self._win._config.pixel_size_mm = pixel_size
+        self._win._config.save()
 
         # Draw corners on preview
         vis = img.copy()
@@ -657,6 +668,13 @@ class _LensCalTab(QWidget):
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
 
     def _save_to_config(self) -> None:
+        try:
+            self._save_to_config_impl()
+        except Exception as e:
+            self._status_label.setText(f"Calibration save error: {e}")
+            self._status_label.setStyleSheet("color: #ef5350;")
+
+    def _save_to_config_impl(self) -> None:
         if self._camera_matrix is None:
             return
         cfg = self._win._config
@@ -672,19 +690,55 @@ class _LensCalTab(QWidget):
             rows = self._win._cb_row.value()
             cell_mm = self._win._cb_cell.value()
 
-            # Collect corners from all good images
+            # Build correction models in undistorted-pixel space, because
+            # production registration first applies OpenCV undistortion.
             good_entries = [e for e in self._collected if e.detected]
-            if good_entries:
+            undistorted_sets = self._undistorted_corner_sets(
+                good_entries, cols, rows, self._camera_matrix, self._dist_coeffs,
+            )
+            if undistorted_sets:
                 from ..calibration.coordinate_correction import CoordinateTransformer
-                # Use corners from first good image for the correction model
-                corners = good_entries[0].corners.reshape(-1, 2)
+                from ..calibration.residual_map import (
+                    ResidualDistortionMap, is_residual_map_safe,
+                )
+
+                samples = []
+                corrections = []
+                from ..calibration.calibration_manager import CalibrationManager
+                for corners in undistorted_sets:
+                    ideal = CalibrationManager._compute_projective_ideal_grid(
+                        corners, cols, rows,
+                    )
+                    if ideal is None:
+                        continue
+                    samples.append(corners)
+                    corrections.append(ideal - corners)
+
+                residual_map = None
+                if samples:
+                    candidate_map = ResidualDistortionMap()
+                    candidate_map.build(
+                        np.vstack(samples), np.vstack(corrections),
+                        image_size=(good_entries[0].image.shape[1],
+                                    good_entries[0].image.shape[0]),
+                        smoothing=0.01,
+                    )
+                    if is_residual_map_safe(candidate_map):
+                        residual_map = candidate_map
+                        cfg.lens_calibration.residual_map = residual_map.to_dict()
+                    else:
+                        cfg.lens_calibration.residual_map = {}
+
                 transformer = CoordinateTransformer()
-                model_type = "homography"  # default to homography
+                model_type = "homography"
+                first_corners = undistorted_sets[0]
+                if residual_map is not None and residual_map.is_built:
+                    first_corners = residual_map.correct(first_corners)
                 success = transformer.build_from_corners(
-                    corners, cols, rows, cell_mm, model_type,
+                    first_corners, cols, rows, cell_mm, model_type,
                     image_size=(good_entries[0].image.shape[1],
                                 good_entries[0].image.shape[0]),
-                    image_count=len(good_entries),
+                    image_count=len(undistorted_sets),
                 )
                 if success:
                     cfg.lens_calibration.coordinate_correction = transformer.get_model_dict()
@@ -693,6 +747,37 @@ class _LensCalTab(QWidget):
         cfg.save()
         self._status_label.setText("Calibration saved to configuration.")
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+
+    def _undistorted_corner_sets(
+        self, entries: list, cols: int, rows: int, camera_matrix, dist_coeffs,
+    ) -> list[np.ndarray]:
+        if camera_matrix is None or dist_coeffs is None:
+            return []
+        sets: list[np.ndarray] = []
+        for entry in entries:
+            undistorted = cv2.undistort(entry.image, camera_matrix, dist_coeffs)
+            gray = _to_gray_image(undistorted)
+            found, corners = cv2.findChessboardCorners(
+                gray, (cols, rows),
+                cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
+            )
+            if found:
+                corners = cv2.cornerSubPix(
+                    gray, corners, (11, 11), (-1, -1),
+                    (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
+                )
+                sets.append(corners.reshape(-1, 2).astype(np.float64))
+                continue
+            if entry.corners is None:
+                continue
+            undistorted_pts = cv2.undistortPoints(
+                entry.corners.astype(np.float32),
+                camera_matrix, dist_coeffs,
+                P=camera_matrix,
+            )
+            sets.append(undistorted_pts.reshape(-1, 2).astype(np.float64))
+        return sets
 
     # ── Cleanup ──────────────────────────────────────────────────────
 
@@ -774,9 +859,9 @@ class CalibrationWindow(QDialog):
 
     def get_chessboard_params(self) -> dict:
         return {
-            "cols": self._cb_col.value(),
-            "rows": self._cb_row.value(),
-            "cell_mm": self._cb_cell.value(),
+            "cols": int(self._cb_col.value()),
+            "rows": int(self._cb_row.value()),
+            "cell_mm": float(self._cb_cell.value()),
         }
 
     def get_computed_pixel_size(self) -> Optional[float]:

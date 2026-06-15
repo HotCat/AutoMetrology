@@ -52,10 +52,11 @@ class FeatureROIPredictor:
     def __init__(self, affine: np.ndarray) -> None:
         """
         Args:
-            affine: 3x3 matrix mapping pixel → CAD world coords
+            affine: 3x3 matrix mapping pixel → CAD world coords. The matrix
+                may be affine or projective.
         """
-        self._affine = affine
-        self._inv_affine = affine_solver.invert(affine)
+        self._affine = np.asarray(affine, dtype=np.float64)
+        self._inv_affine = affine_solver.invert(self._affine)
 
     def predict_circle_roi(
         self, cad_geometry: dict, padding: float = 15.0,
@@ -73,14 +74,18 @@ class FeatureROIPredictor:
         cy = cad_geometry.get("cy", 0.0)
         r = cad_geometry.get("radius", 1.0)
 
-        pixel_center = affine_solver.apply(
-            self._inv_affine, np.array([[cx, cy]]),
+        pixel_center = affine_solver.apply_projective(
+            self._inv_affine, np.array([[cx, cy]], dtype=np.float64),
         )[0]
 
-        offset_pt = affine_solver.apply(
-            self._inv_affine, np.array([[cx + r, cy]]),
-        )[0]
-        pixel_radius = abs(offset_pt[0] - pixel_center[0])
+        sample_world = np.array([
+            [cx + r, cy],
+            [cx - r, cy],
+            [cx, cy + r],
+            [cx, cy - r],
+        ], dtype=np.float64)
+        sample_px = affine_solver.apply_projective(self._inv_affine, sample_world)
+        pixel_radius = float(np.mean(np.linalg.norm(sample_px - pixel_center, axis=1)))
         if pixel_radius < 3:
             pixel_radius = 30.0
 
@@ -109,8 +114,8 @@ class FeatureROIPredictor:
         x2 = cad_geometry.get("x2", 0.0)
         y2 = cad_geometry.get("y2", 0.0)
 
-        pixel_pts = affine_solver.apply(
-            self._inv_affine, np.array([[x1, y1], [x2, y2]]),
+        pixel_pts = affine_solver.apply_projective(
+            self._inv_affine, np.array([[x1, y1], [x2, y2]], dtype=np.float64),
         )
 
         px_min = min(pixel_pts[0, 0], pixel_pts[1, 0])
@@ -131,8 +136,8 @@ class FeatureROIPredictor:
 
     def project_point(self, world_pt: np.ndarray) -> np.ndarray:
         """Project CAD world point to pixel coordinates."""
-        return affine_solver.apply(self._inv_affine, world_pt.reshape(1, 2))[0]
+        return affine_solver.apply_projective(self._inv_affine, world_pt.reshape(1, 2))[0]
 
     def to_world(self, pixel_pt: np.ndarray) -> np.ndarray:
         """Convert pixel coordinates to CAD world coordinates."""
-        return affine_solver.apply(self._affine, pixel_pt.reshape(1, 2))[0]
+        return affine_solver.apply_projective(self._affine, pixel_pt.reshape(1, 2))[0]

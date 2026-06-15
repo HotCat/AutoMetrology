@@ -76,6 +76,7 @@ class MeasurementPipeline:
         affine: np.ndarray,
         pixel_size_mm: float = 0.01,
         residual_map: Optional[ResidualDistortionMap] = None,
+        pixel_to_world_transform: Optional[np.ndarray] = None,
     ) -> None:
         """
         Args:
@@ -84,18 +85,42 @@ class MeasurementPipeline:
             affine: 3x3 matrix mapping pixel → CAD world
             pixel_size_mm: mm per pixel
             residual_map: optional residual distortion map for sub-pixel correction
+            pixel_to_world_transform: optional 3x3 affine/projective matrix used
+                for ROI prediction and final fitted pixel -> CAD world geometry
+                after safety validation.
         """
         self._repo = repo
         self._image = image
         self._affine = affine
         self._pixel_size_mm = pixel_size_mm
         self._residual_map = residual_map
+        self._pixel_to_world_transform = None
+        if pixel_to_world_transform is not None:
+            candidate = np.asarray(pixel_to_world_transform, dtype=np.float64)
+            image_size = None
+            if image is not None:
+                image_size = (int(image.shape[1]), int(image.shape[0]))
+            try:
+                from ..calibration.transform_safety import validate_pixel_to_world_transform
+                safety = validate_pixel_to_world_transform(
+                    candidate, float(pixel_size_mm), image_size=image_size,
+                )
+                if safety.safe:
+                    self._pixel_to_world_transform = candidate
+                else:
+                    _audit(f"Rejected measurement transform: {safety.reason}")
+            except Exception as exc:
+                _audit(f"Rejected measurement transform: {exc}")
 
         # Image source assertion: must be raw camera image
         self._assert_image_source(image)
 
         self._store = MeasuredFeatureStore()
-        self._roi_predictor = FeatureROIPredictor(affine)
+        roi_transform = (
+            self._pixel_to_world_transform
+            if self._pixel_to_world_transform is not None else self._affine
+        )
+        self._roi_predictor = FeatureROIPredictor(roi_transform)
 
         # Precompute gradient magnitude from RAW IMAGE
         self._gradient: Optional[np.ndarray] = None
@@ -137,6 +162,14 @@ class MeasurementPipeline:
     @property
     def store(self) -> MeasuredFeatureStore:
         return self._store
+
+    @property
+    def measurement_transform(self) -> np.ndarray:
+        """Return the transform used for measurement/world conversion."""
+        return (
+            self._pixel_to_world_transform
+            if self._pixel_to_world_transform is not None else self._affine
+        )
 
     def measure_feature(self, cad_feature_id: str) -> Optional[MeasuredFeature]:
         """Measure a single feature. Returns cached result if available."""
@@ -220,6 +253,14 @@ class MeasurementPipeline:
             return self._residual_map.correct(points)
         return points
 
+    def _pixel_points_to_world(self, points: np.ndarray) -> np.ndarray:
+        """Transform fitted pixel points to CAD world coordinates."""
+        corrected = self._correct_points(points)
+        if self._pixel_to_world_transform is None:
+            return affine_solver.apply_projective(self._affine, corrected)
+
+        return affine_solver.apply_projective(self._pixel_to_world_transform, corrected)
+
     # ── private measurement methods ──────────────────────────────
 
     def _measure_circle(self, feat: CADFeature) -> Optional[MeasuredFeature]:
@@ -285,13 +326,11 @@ class MeasurementPipeline:
         # Convert fitted center and radius to world coords
         # Apply residual distortion correction first
         pixel_center_fitted = np.array([[result.center[0], result.center[1]]])
-        corrected_center = self._correct_points(pixel_center_fitted)
-        world_center = affine_solver.apply(self._affine, corrected_center)[0]
+        world_center = self._pixel_points_to_world(pixel_center_fitted)[0]
 
         # Convert radius to world coords
         pixel_edge = np.array([[result.center[0] + result.radius, result.center[1]]])
-        corrected_edge = self._correct_points(pixel_edge)
-        world_edge = affine_solver.apply(self._affine, corrected_edge)[0]
+        world_edge = self._pixel_points_to_world(pixel_edge)[0]
         world_radius = float(np.linalg.norm(world_edge - world_center))
 
         fitted_geom = {
@@ -717,10 +756,13 @@ class MeasurementPipeline:
         if len(arc_world) < 4:
             return None
 
-        inv_affine = affine_solver.invert(self._affine)
-        arc_px = affine_solver.apply(inv_affine, arc_world)
+        world_to_pixel = affine_solver.invert(
+            self._pixel_to_world_transform
+            if self._pixel_to_world_transform is not None else self._affine
+        )
+        arc_px = affine_solver.apply_projective(world_to_pixel, arc_world)
         center_world = np.array([[geom["cx"], geom["cy"]]], dtype=np.float64)
-        pixel_center = affine_solver.apply(inv_affine, center_world)[0]
+        pixel_center = affine_solver.apply_projective(world_to_pixel, center_world)[0]
         pixel_radius = float(np.mean(np.linalg.norm(arc_px - pixel_center, axis=1)))
         if pixel_radius < 3.0:
             return None
@@ -803,11 +845,9 @@ class MeasurementPipeline:
             0.45 * residual_score + 0.35 * support_score + 0.20 * prior_score,
         )))
 
-        corrected_center = self._correct_points(center.reshape(1, 2))
-        world_center = affine_solver.apply(self._affine, corrected_center)[0]
+        world_center = self._pixel_points_to_world(center.reshape(1, 2))[0]
         pixel_edge = np.array([[center[0] + radius, center[1]]], dtype=np.float64)
-        corrected_edge = self._correct_points(pixel_edge)
-        world_edge = affine_solver.apply(self._affine, corrected_edge)[0]
+        world_edge = self._pixel_points_to_world(pixel_edge)[0]
         world_radius = float(np.linalg.norm(world_edge - world_center))
 
         fitted_geom = {
@@ -1495,8 +1535,7 @@ class MeasurementPipeline:
         # Convert fitted line endpoints to world coords
         # Apply residual distortion correction first
         pixel_pts = np.array([result.p1, result.p2])
-        corrected_pts = self._correct_points(pixel_pts)
-        world_pts = affine_solver.apply(self._affine, corrected_pts)
+        world_pts = self._pixel_points_to_world(pixel_pts)
 
         fitted_geom = {
             "x1": float(result.p1[0]),

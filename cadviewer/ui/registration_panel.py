@@ -62,6 +62,8 @@ class RegistrationPanel(QWidget):
         self._image_calibration_applied = False
         self._auto_source_image_path = ""
         self._last_auto_registration = {}
+        self._last_measurement_pixel_to_world = None
+        self._last_display_pixel_to_world = None
         self._loading_profile_combo = False
 
         # Pixel size from config
@@ -359,7 +361,9 @@ class RegistrationPanel(QWidget):
         self._btn_pick_auto_rois.clicked.connect(self._pick_auto_rois)
         self._btn_auto_register = QPushButton("Auto Register")
         self._btn_auto_register.clicked.connect(self._run_auto_correspondence)
-        for btn in [self._btn_pick_auto_rois, self._btn_auto_register]:
+        self._btn_window_register = QPushButton("Window Register")
+        self._btn_window_register.clicked.connect(self._run_window_line_registration)
+        for btn in [self._btn_pick_auto_rois, self._btn_auto_register, self._btn_window_register]:
             btn.setStyleSheet("""
                 QPushButton {
                     background: #264f78; color: white; border: none;
@@ -635,6 +639,44 @@ class RegistrationPanel(QWidget):
 
         self._auto_source_image_path = str(auto_data.get("source_image_path", ""))
 
+        last = auto_data.get("last_registration")
+        self._last_auto_registration = dict(last) if isinstance(last, dict) else {}
+        self._last_measurement_pixel_to_world = None
+        self._last_display_pixel_to_world = None
+        display_matrix = self._last_auto_registration.get("display_pixel_to_world")
+        if display_matrix is not None:
+            try:
+                arr = np.asarray(display_matrix, dtype=np.float64)
+                if self._display_transform_is_sane(arr):
+                    self._last_display_pixel_to_world = arr
+            except Exception:
+                self._last_display_pixel_to_world = None
+        matrix = self._last_auto_registration.get("measurement_pixel_to_world")
+        if matrix is not None:
+            try:
+                arr = np.asarray(matrix, dtype=np.float64)
+                image_size = None
+                metadata = (
+                    getattr(
+                        getattr(self._config, "lens_calibration", None),
+                        "coordinate_correction",
+                        {},
+                    )
+                    or {}
+                ).get("metadata", {})
+                if isinstance(metadata, dict):
+                    size = metadata.get("image_size")
+                    if isinstance(size, (list, tuple)) and len(size) == 2:
+                        image_size = (int(size[0]), int(size[1]))
+                from ..calibration.transform_safety import validate_pixel_to_world_transform
+                safety = validate_pixel_to_world_transform(
+                    arr, float(self._pixel_size_mm), image_size=image_size,
+                )
+                if arr.shape == (3, 3) and safety.safe:
+                    self._last_measurement_pixel_to_world = arr
+            except Exception:
+                self._last_measurement_pixel_to_world = None
+
     def _apply_production_profile(self, profile: dict) -> None:
         if self._config is None or not isinstance(profile, dict):
             return
@@ -646,7 +688,55 @@ class RegistrationPanel(QWidget):
         self._config.active_production_profile = str(profile.get("name", ""))
         self._config.save()
         if hasattr(self, "_canvas"):
+            self._apply_saved_display_transform_to_image()
             self._canvas.update()
+
+    def _apply_saved_display_transform_to_image(self) -> None:
+        if self._last_display_pixel_to_world is None or not hasattr(self, "_canvas"):
+            return
+        layer = self._canvas.get_image_layer()
+        if layer is None or not getattr(layer, "has_image", False):
+            return
+        image_path = self._last_auto_registration.get("image_path")
+        if image_path and getattr(layer, "path", "") != image_path:
+            return
+        layer.set_affine_transform(
+            np.asarray(self._last_display_pixel_to_world, dtype=np.float64),
+        )
+
+    def _display_transform_is_sane(self, transform, image_size=None) -> bool:
+        try:
+            arr = np.asarray(transform, dtype=np.float64)
+            if arr.shape != (3, 3) or not np.all(np.isfinite(arr)):
+                return False
+            if image_size is None and hasattr(self, "_canvas"):
+                layer = self._canvas.get_image_layer()
+                image = getattr(layer, "image", None)
+                if image is not None:
+                    image_size = (int(image.shape[1]), int(image.shape[0]))
+            if image_size is None:
+                metadata = (
+                    getattr(
+                        getattr(self._config, "lens_calibration", None),
+                        "coordinate_correction",
+                        {},
+                    )
+                    or {}
+                ).get("metadata", {})
+                if isinstance(metadata, dict):
+                    size = metadata.get("image_size")
+                    if isinstance(size, (list, tuple)) and len(size) == 2:
+                        image_size = (int(size[0]), int(size[1]))
+            from ..calibration.transform_safety import validate_pixel_to_world_transform
+            safety = validate_pixel_to_world_transform(
+                arr, float(self._pixel_size_mm), image_size=image_size,
+                max_scale_error=0.12,
+                max_anisotropy=1.08,
+                max_field_scale_change=1.08,
+            )
+            return bool(safety.safe)
+        except Exception:
+            return False
 
     def apply_active_production_profile(self) -> None:
         if self._config is None:
@@ -893,11 +983,15 @@ class RegistrationPanel(QWidget):
             self._reg_status.setText(tr("No frame to capture"))
             return False
 
+        if self._config is not None:
+            self._pixel_size_mm = float(self._config.pixel_size_mm)
+
         # Load into image layer, applying lens undistortion if available.
         from ..registration.auto_correspondence import undistort_if_calibrated
         frame, applied = undistort_if_calibrated(frame, self._config)
         self._image_calibration_applied = applied
         self._canvas.get_image_layer().load_from_array(frame)
+        self._canvas.get_image_layer().set_pixel_size_mm(self._pixel_size_mm)
         self._auto_source_image_path = self._canvas.get_image_layer().path
         self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
         # Keep pixel_size_mm from config (don't reset to default)
@@ -1023,6 +1117,8 @@ class RegistrationPanel(QWidget):
         return T_imgworld_to_cad @ T_pixel_to_imgworld
 
     def _load_image(self) -> None:
+        if self._config is not None:
+            self._pixel_size_mm = float(self._config.pixel_size_mm)
         camera = self._camera if (HAS_CAMERA and self._camera_open) else None
         dialog = ImageLoadDialog(
             self,
@@ -1037,9 +1133,12 @@ class RegistrationPanel(QWidget):
             if hasattr(self, '_canvas'):
                 if captured is not None:
                     self._canvas.get_image_layer().load_from_array(captured)
-                    self._image_calibration_applied = True
+                    self._image_calibration_applied = dialog.calibration_applied()
                     self._auto_source_image_path = self._canvas.get_image_layer().path
-                    self._image_path_label.setText("<camera capture undistorted>")
+                    self._image_path_label.setText(
+                        "<camera capture undistorted>"
+                        if self._image_calibration_applied else "<camera capture>"
+                    )
                 elif path:
                     self._canvas.get_image_layer().load_image(path)
                     self._image_calibration_applied = False
@@ -1047,6 +1146,7 @@ class RegistrationPanel(QWidget):
                     self._image_path_label.setText(path.split('/')[-1])
                 else:
                     return
+                pixel_size = float(pixel_size)
                 self._canvas.get_image_layer().set_pixel_size_mm(pixel_size)
                 self._pixel_size_mm = pixel_size
                 self._btn_run_coarse.setEnabled(True)
@@ -1056,7 +1156,7 @@ class RegistrationPanel(QWidget):
                 self._canvas.update()
                 bus.image_loaded.emit(path or "<camera_capture>")
             if self._config:
-                self._config.pixel_size_mm = pixel_size
+                self._config.pixel_size_mm = float(pixel_size)
 
     def _current_auto_rois(self) -> list[Optional[tuple[int, int, int, int]]]:
         rois: list[Optional[tuple[int, int, int, int]]] = [None, None]
@@ -1180,6 +1280,105 @@ class RegistrationPanel(QWidget):
             {"label": "P2", "pixel": [float(d2.center[0]), float(d2.center[1])]},
         ]
 
+    def _compute_calibrated_pixel_to_world(
+        self, cad_points: list[dict], img_points: list[dict],
+        enforce_measurement_safety: bool,
+    ):
+        """Build calibrated pixel -> CAD transform from lens coordinate model.
+
+        Display registration may use the projective transform to compensate
+        small camera tilt. Measurement only accepts it when local scale remains
+        close to the calibrated pixel size.
+        """
+        cfg = self._config
+        lc = getattr(cfg, "lens_calibration", None) if cfg is not None else None
+        if lc is None or not getattr(lc, "coordinate_correction", None):
+            return None
+        model_type = getattr(lc, "correction_model_type", "none")
+        if model_type not in {"homography", "affine"}:
+            return None
+        try:
+            from ..calibration.coordinate_correction import CoordinateTransformer
+            from ..registration import affine_solver
+            transformer = CoordinateTransformer()
+            if not transformer.load_model(lc.coordinate_correction, model_type):
+                return None
+            image_px = np.array([p["pixel"] for p in img_points], dtype=np.float64)
+            from ..calibration.residual_map import residual_map_from_config
+            residual_map = residual_map_from_config(cfg)
+            if residual_map is not None:
+                image_px = residual_map.correct(image_px)
+            image_metric = transformer.transform(image_px)
+            cad_metric = np.array([p["world"] for p in cad_points], dtype=np.float64)
+            plane_to_world = affine_solver.solve_similarity(image_metric, cad_metric)
+            if model_type == "homography":
+                model_matrix = np.asarray(lc.coordinate_correction.get("homography"), dtype=np.float64)
+            else:
+                affine = np.asarray(lc.coordinate_correction.get("affine"), dtype=np.float64)
+                model_matrix = np.vstack([affine, np.array([0.0, 0.0, 1.0])])
+            if model_matrix.shape != (3, 3):
+                return None
+            pixel_to_world = plane_to_world @ model_matrix
+            if not np.all(np.isfinite(pixel_to_world)):
+                return None
+            if not enforce_measurement_safety:
+                return pixel_to_world
+            metadata = (lc.coordinate_correction or {}).get("metadata", {})
+            image_size = None
+            if isinstance(metadata, dict):
+                size = metadata.get("image_size")
+                if isinstance(size, (list, tuple)) and len(size) == 2:
+                    image_size = (int(size[0]), int(size[1]))
+            from ..calibration.transform_safety import validate_pixel_to_world_transform
+            safety = validate_pixel_to_world_transform(
+                pixel_to_world, float(self._pixel_size_mm),
+                image_size=image_size,
+            )
+            if not safety.safe:
+                return None
+            return pixel_to_world
+        except Exception:
+            return None
+
+    def _compute_measurement_pixel_to_world(self, cad_points: list[dict], img_points: list[dict]):
+        """Build optional measurement-safe pixel -> CAD world transform."""
+        return self._compute_calibrated_pixel_to_world(
+            cad_points, img_points, enforce_measurement_safety=True,
+        )
+
+    def _compute_display_pixel_to_world(self, cad_points: list[dict], img_points: list[dict]):
+        """Build a sane calibrated pixel -> CAD world transform for visual overlay."""
+        transform = self._compute_calibrated_pixel_to_world(
+            cad_points, img_points, enforce_measurement_safety=False,
+        )
+        if transform is None or not self._display_transform_is_sane(transform):
+            return None
+        return transform
+
+    def measurement_pixel_to_world_transform(self, image_path: str = ""):
+        """Return latest projective pixel -> CAD world measurement transform."""
+        if self._last_measurement_pixel_to_world is None:
+            return None
+        if image_path and self._last_auto_registration.get("image_path") != image_path:
+            return None
+        transform = np.asarray(self._last_measurement_pixel_to_world, dtype=np.float64)
+        image_size = None
+        if hasattr(self, "_canvas"):
+            layer = self._canvas.get_image_layer()
+            image = getattr(layer, "image", None)
+            if image is not None:
+                image_size = (int(image.shape[1]), int(image.shape[0]))
+        try:
+            from ..calibration.transform_safety import validate_pixel_to_world_transform
+            safety = validate_pixel_to_world_transform(
+                transform, float(self._pixel_size_mm), image_size=image_size,
+            )
+            if not safety.safe:
+                return None
+        except Exception:
+            return None
+        return transform
+
     def _save_auto_correspondence_config(
         self,
         detections: Optional[list] = None,
@@ -1292,6 +1491,12 @@ class RegistrationPanel(QWidget):
             T = TeachICPStrategy._compute_transform_from_points(
                 cad_points, img_points, self._pixel_size_mm,
             )
+            measurement_pixel_to_world = self._compute_measurement_pixel_to_world(
+                cad_points, img_points,
+            )
+            display_pixel_to_world = self._compute_display_pixel_to_world(
+                cad_points, img_points,
+            )
             params = affine_solver.extract_params(T)
 
             group_id = "default"
@@ -1309,6 +1514,22 @@ class RegistrationPanel(QWidget):
                 "image_rois": [list(roi1), list(roi2)],
                 "detections": [d1.to_dict(), d2.to_dict()],
                 "calibration_applied": bool(self._image_calibration_applied),
+                "measurement_pixel_to_world": (
+                    measurement_pixel_to_world.tolist()
+                    if measurement_pixel_to_world is not None else None
+                ),
+                "display_pixel_to_world": (
+                    display_pixel_to_world.tolist()
+                    if display_pixel_to_world is not None else None
+                ),
+                "display_transform_model": (
+                    getattr(getattr(self._config, "lens_calibration", None), "correction_model_type", "none")
+                    if display_pixel_to_world is not None else "affine"
+                ),
+                "measurement_transform_model": (
+                    getattr(getattr(self._config, "lens_calibration", None), "correction_model_type", "none")
+                    if measurement_pixel_to_world is not None else "affine"
+                ),
                 "created": datetime.now().isoformat(),
                 "image_path": image_path,
                 "source_image_path": self._auto_source_image_path,
@@ -1316,6 +1537,8 @@ class RegistrationPanel(QWidget):
             info = {"image_path": image_path, "group_id": group_id}
             pose_path = TeachICPStrategy._pose_template_path(info)
             TeachICPStrategy._save_pose_template(pose_path, pose)
+            self._last_measurement_pixel_to_world = measurement_pixel_to_world
+            self._last_display_pixel_to_world = display_pixel_to_world
             self._last_auto_registration = {
                 "pose_template_path": pose_path,
                 "detections": [d1.to_dict(), d2.to_dict()],
@@ -1324,13 +1547,32 @@ class RegistrationPanel(QWidget):
                     "rotation_deg": float(params["rotation_deg"]),
                     "scale": float(params["scale_x"]),
                 },
+                "measurement_pixel_to_world": (
+                    measurement_pixel_to_world.tolist()
+                    if measurement_pixel_to_world is not None else None
+                ),
+                "display_pixel_to_world": (
+                    display_pixel_to_world.tolist()
+                    if display_pixel_to_world is not None else None
+                ),
+                "display_transform_model": (
+                    getattr(getattr(self._config, "lens_calibration", None), "correction_model_type", "none")
+                    if display_pixel_to_world is not None else "affine"
+                ),
+                "measurement_transform_model": (
+                    getattr(getattr(self._config, "lens_calibration", None), "correction_model_type", "none")
+                    if measurement_pixel_to_world is not None else "affine"
+                ),
                 "image_path": image_path,
                 "source_image_path": self._auto_source_image_path,
             }
             self._save_selected_production_profile(silent=True)
             profile_name = self._current_profile_name()
 
-            T_img = self._compute_image_affine(T)
+            T_img = (
+                display_pixel_to_world
+                if display_pixel_to_world is not None else self._compute_image_affine(T)
+            )
             self._canvas.get_image_layer().set_affine_transform(T_img)
             self._coarse_transform = T
             self._populate_auto_debug_data(T, image)
@@ -1344,12 +1586,107 @@ class RegistrationPanel(QWidget):
             )
             return True
         except Exception as e:
+            self._last_measurement_pixel_to_world = None
+            self._last_display_pixel_to_world = None
             self._reg_status.setText(f"Auto registration error: {e}")
+            bus.registration_failed.emit(str(e))
+            return False
+
+    def _run_window_line_registration(self) -> bool:
+        try:
+            from datetime import datetime
+            from ..registration.window_line_registration import register_window_lines
+            from ..registration import affine_solver
+
+            image = self._ensure_auto_detection_image()
+            result = register_window_lines(
+                self._repo,
+                image,
+                pixel_size_mm=self._pixel_size_mm,
+            )
+            transform = result.transform
+            affine = result.affine
+            params = affine_solver.extract_params(affine)
+            image_path = self._canvas.get_image_layer().path
+
+            self._last_measurement_pixel_to_world = transform
+            self._last_display_pixel_to_world = transform
+            self._last_auto_registration = {
+                "source": result.method,
+                "line_handles": dict(result.line_handles),
+                "side_positions": dict(result.side_positions),
+                "component_bbox": list(result.component_bbox),
+                "confidence": float(result.confidence),
+                "transform_model": result.transform_model,
+                "homography_safety": result.homography_safety,
+                "side_lines": {
+                    key: [float(v) for v in value]
+                    for key, value in result.side_lines.items()
+                },
+                "image_corners": (
+                    result.image_corners.tolist()
+                    if result.image_corners is not None else None
+                ),
+                "cad_corners": (
+                    result.cad_corners.tolist()
+                    if result.cad_corners is not None else None
+                ),
+                "homography": (
+                    result.homography.tolist()
+                    if result.homography is not None else None
+                ),
+                "transform": {
+                    "translation": [float(params["tx"]), float(params["ty"])],
+                    "rotation_deg": float(params["rotation_deg"]),
+                    "scale": float(params["scale_x"]),
+                    "scale_y": float(params["scale_y"]),
+                },
+                "measurement_pixel_to_world": transform.tolist(),
+                "display_pixel_to_world": transform.tolist(),
+                "display_transform_model": result.transform_model,
+                "measurement_transform_model": result.transform_model,
+                "calibration_applied": bool(self._image_calibration_applied),
+                "created": datetime.now().isoformat(),
+                "image_path": image_path,
+                "source_image_path": self._auto_source_image_path,
+            }
+            self._save_selected_production_profile(silent=True)
+            profile_name = self._current_profile_name()
+
+            self._canvas.get_image_layer().set_affine_transform(transform)
+            self._coarse_transform = transform
+            self._canvas.update()
+            self._btn_run_fine.setEnabled(True)
+            bus.registration_completed.emit({
+                "transform": transform,
+                "stage": result.method,
+                "error": 0.0,
+            })
+            sides = result.side_positions
+            self._reg_status.setText(
+                "Window registered: "
+                f"L={sides['left']:.1f}, R={sides['right']:.1f}, "
+                f"T={sides['top']:.1f}, B={sides['bottom']:.1f}; "
+                f"conf={result.confidence:.2f}, model={result.transform_model}, "
+                f"profile={profile_name}"
+            )
+            return True
+        except Exception as e:
+            self._last_measurement_pixel_to_world = None
+            self._last_display_pixel_to_world = None
+            self._reg_status.setText(f"Window registration error: {e}")
             bus.registration_failed.emit(str(e))
             return False
 
     def run_auto_registration_for_production(self) -> bool:
         return self._run_auto_correspondence()
+
+    def run_registration_for_production(self) -> bool:
+        """Run the production registration method for the current captured frame."""
+        # The current production workflow is window-registration based.  Keep the
+        # old auto-correspondence method available for explicit UI use, but route
+        # Run Production through the same fast window path as manual Evaluate.
+        return self._run_window_line_registration()
 
     def production_profile_snapshot(self) -> dict:
         return self._snapshot_production_profile(self._current_profile_name())

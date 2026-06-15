@@ -78,6 +78,49 @@ def _image_from_path(path: str) -> np.ndarray:
     return image
 
 
+def _measurement_pixel_to_world(cfg: AppConfig, cad_points: list[dict], image_points: list[dict]):
+    lc = cfg.lens_calibration
+    if not lc.coordinate_correction or lc.correction_model_type not in {"homography", "affine"}:
+        return None
+    try:
+        from cadviewer.calibration.coordinate_correction import CoordinateTransformer
+        from cadviewer.registration import affine_solver
+        transformer = CoordinateTransformer()
+        if not transformer.load_model(lc.coordinate_correction, lc.correction_model_type):
+            return None
+        image_px = np.array([p["pixel"] for p in image_points], dtype=np.float64)
+        from cadviewer.calibration.residual_map import residual_map_from_config
+        residual_map = residual_map_from_config(cfg)
+        if residual_map is not None:
+            image_px = residual_map.correct(image_px)
+        image_metric = transformer.transform(image_px)
+        cad_metric = np.array([p["world"] for p in cad_points], dtype=np.float64)
+        plane_to_world = affine_solver.solve_similarity(image_metric, cad_metric)
+        if lc.correction_model_type == "homography":
+            model_matrix = np.asarray(lc.coordinate_correction.get("homography"), dtype=np.float64)
+        else:
+            affine_model = np.asarray(lc.coordinate_correction.get("affine"), dtype=np.float64)
+            model_matrix = np.vstack([affine_model, np.array([0.0, 0.0, 1.0])])
+        if model_matrix.shape != (3, 3):
+            return None
+        measurement_transform = plane_to_world @ model_matrix
+        metadata = (lc.coordinate_correction or {}).get("metadata", {})
+        image_size = None
+        if isinstance(metadata, dict):
+            size = metadata.get("image_size")
+            if isinstance(size, (list, tuple)) and len(size) == 2:
+                image_size = (int(size[0]), int(size[1]))
+        from cadviewer.calibration.transform_safety import validate_pixel_to_world_transform
+        safety = validate_pixel_to_world_transform(
+            measurement_transform, float(cfg.pixel_size_mm), image_size=image_size,
+        )
+        if not safety.safe:
+            return None
+        return measurement_transform
+    except Exception:
+        return None
+
+
 def _auto_affine(image: np.ndarray, cfg: AppConfig, profile: dict, repo) -> tuple[np.ndarray, dict]:
     auto = profile.get("auto_correspondence") or {}
     cad_fids = auto.get("cad_fiducials") or []
@@ -110,20 +153,36 @@ def _auto_affine(image: np.ndarray, cfg: AppConfig, profile: dict, repo) -> tupl
         cad_points, image_points, pixel_size,
     )
     affine = TeachICPStrategy._compute_pixel_to_world_transform(registration, pixel_size)
+    measurement_pixel_to_world = _measurement_pixel_to_world(cfg, cad_points, image_points)
     return affine, {
         "detections": [d.to_dict() for d in detections],
         "pixel_size_mm": pixel_size,
+        "measurement_pixel_to_world": (
+            measurement_pixel_to_world.tolist()
+            if measurement_pixel_to_world is not None else None
+        ),
+        "measurement_transform_model": (
+            cfg.lens_calibration.correction_model_type
+            if measurement_pixel_to_world is not None else "affine"
+        ),
     }
 
 
-def _evaluate(repo, image: np.ndarray, affine: np.ndarray, pixel_size: float, query: str) -> list[dict]:
+def _evaluate(
+    repo, image: np.ndarray, affine: np.ndarray, pixel_size: float, query: str,
+    pixel_to_world_transform=None, residual_map=None,
+) -> list[dict]:
     if image.ndim == 2:
         gray = image
     elif image.ndim == 3 and image.shape[2] == 1:
         gray = image[:, :, 0]
     else:
         gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    pipeline = MeasurementPipeline(repo, gray, affine, pixel_size_mm=pixel_size)
+    pipeline = MeasurementPipeline(
+        repo, gray, affine, pixel_size_mm=pixel_size,
+        residual_map=residual_map,
+        pixel_to_world_transform=pixel_to_world_transform,
+    )
     results = QueryEvaluator(repo, pipeline).evaluate(query)
     rows = []
     for result in results:
@@ -183,7 +242,15 @@ def main(argv: list[str]) -> int:
             frame = _camera_frame(cfg, profile)
         image, undistorted = undistort_if_calibrated(frame, cfg)
         affine, reg = _auto_affine(image, cfg, profile, repo)
-        rows = _evaluate(repo, image, affine, reg["pixel_size_mm"], query)
+        measurement_transform = reg.get("measurement_pixel_to_world")
+        if measurement_transform is not None:
+            measurement_transform = np.array(measurement_transform, dtype=np.float64)
+        from cadviewer.calibration.residual_map import residual_map_from_config
+        rows = _evaluate(
+            repo, image, affine, reg["pixel_size_mm"], query,
+            pixel_to_world_transform=measurement_transform,
+            residual_map=residual_map_from_config(cfg),
+        )
         samples.append(rows)
         details.append({
             "frame": idx + 1,

@@ -421,6 +421,7 @@ class MainWindow(QMainWindow):
         """Evaluate measurement queries using current image and registration."""
         from ..measurement.evaluator import QueryEvaluator
         from ..measurement.measurement_pipeline import MeasurementPipeline
+        from ..calibration.residual_map import residual_map_from_config
         import numpy as np
         try:
             import cv2
@@ -442,6 +443,11 @@ class MainWindow(QMainWindow):
                     pipeline = MeasurementPipeline(
                         self._repo, image, affine,
                         pixel_size_mm=self._config.pixel_size_mm,
+                        residual_map=residual_map_from_config(self._config),
+                        pixel_to_world_transform=(
+                            self._reg_panel.measurement_pixel_to_world_transform(image_layer.path)
+                            if hasattr(self, "_reg_panel") else None
+                        ),
                     )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
@@ -452,7 +458,7 @@ class MainWindow(QMainWindow):
         # selected query row can temporarily narrow the overlay to its features.
         if pipeline is not None:
             self._last_measurement_debug = dict(pipeline.get_debug_data())
-            self._last_measurement_affine = image_layer.affine
+            self._last_measurement_affine = pipeline.measurement_transform
             self._viewer.set_measurement_debug(
                 self._last_measurement_debug, self._last_measurement_affine,
             )
@@ -475,10 +481,10 @@ class MainWindow(QMainWindow):
             self._status_label.setText(tr("Production cycle failed during camera capture"))
             return
 
-        self._status_label.setText(tr("Production cycle: applying auto registration..."))
+        self._status_label.setText(tr("Production cycle: applying window registration..."))
         QApplication.processEvents()
-        if not self._reg_panel.run_auto_registration_for_production():
-            self._status_label.setText(tr("Production cycle failed during auto registration"))
+        if not self._reg_panel.run_registration_for_production():
+            self._status_label.setText(tr("Production cycle failed during window registration"))
             return
 
         self._status_label.setText(tr("Production cycle: evaluating measurement queries..."))
@@ -570,6 +576,7 @@ class MainWindow(QMainWindow):
         try:
             from ..measurement.evaluator import QueryEvaluator
             from ..measurement.measurement_pipeline import MeasurementPipeline
+            from ..calibration.residual_map import residual_map_from_config
             import cv2
             import numpy as np
 
@@ -581,16 +588,22 @@ class MainWindow(QMainWindow):
                 return
             gray = cv2.cvtColor(image_layer.image, cv2.COLOR_BGR2GRAY)
             affine = np.array(record["affine"], dtype=float)
+            registration = record.get("registration") or {}
+            measurement_transform = registration.get("measurement_pixel_to_world")
+            if measurement_transform is not None:
+                measurement_transform = np.array(measurement_transform, dtype=float)
             pipeline = MeasurementPipeline(
                 self._repo, gray, affine,
                 pixel_size_mm=float(record.get("pixel_size_mm") or self._config.pixel_size_mm),
+                residual_map=residual_map_from_config(self._config),
+                pixel_to_world_transform=measurement_transform,
             )
             query_text = "\n".join(
                 r.instruction.raw_text for r in results if r.instruction is not None
             )
             QueryEvaluator(self._repo, pipeline).evaluate(query_text)
             self._last_measurement_debug = dict(pipeline.get_debug_data())
-            self._last_measurement_affine = affine
+            self._last_measurement_affine = pipeline.measurement_transform
             self._viewer.set_measurement_debug(
                 self._last_measurement_debug, self._last_measurement_affine,
             )
@@ -946,7 +959,12 @@ class MainWindow(QMainWindow):
         self._config.calibration.chessboard_cell_mm = params["cell_mm"]
         pixel_size = win.get_computed_pixel_size()
         if pixel_size is not None:
-            self._config.pixel_size_mm = pixel_size
+            self._config.pixel_size_mm = float(pixel_size)
+        if hasattr(self, "_reg_panel"):
+            self._reg_panel._pixel_size_mm = float(self._config.pixel_size_mm)
+            layer = self._viewer.get_image_layer()
+            if layer is not None:
+                layer.set_pixel_size_mm(float(self._config.pixel_size_mm))
         self._config.save()
 
     def _check_dwg_converter(self) -> None:
@@ -962,9 +980,9 @@ class MainWindow(QMainWindow):
         """Handle window close — save config, cleanup camera resources."""
         # Persist settings from registration panel
         if hasattr(self, '_reg_panel'):
-            self._config.pixel_size_mm = getattr(
+            self._config.pixel_size_mm = float(getattr(
                 self._reg_panel, '_pixel_size_mm', self._config.pixel_size_mm,
-            )
+            ))
             if hasattr(self, '_reg_panel') and hasattr(self._reg_panel, '_camera_settings_for_config'):
                 cam = self._reg_panel._camera_settings_for_config()
                 if cam is not None:
