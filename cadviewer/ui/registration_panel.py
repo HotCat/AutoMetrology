@@ -59,6 +59,7 @@ class RegistrationPanel(QWidget):
         self._repo = repo
         self._config = config
         self._auto_cad_ids = ["", ""]
+        self._window_edge_ids: list[str] = []
         self._image_calibration_applied = False
         self._auto_source_image_path = ""
         self._last_auto_registration = {}
@@ -377,6 +378,35 @@ class RegistrationPanel(QWidget):
 
         reg_layout.addWidget(auto_group)
 
+        window_group = QGroupBox("Window CAD Edges")
+        window_group.setStyleSheet(reg_group.styleSheet())
+        window_layout = QVBoxLayout(window_group)
+
+        self._window_edges_edit = QLineEdit()
+        self._window_edges_edit.setReadOnly(True)
+        self._window_edges_edit.setPlaceholderText("Select CAD edge, click Add; need 4")
+        self._window_edges_edit.setStyleSheet(self._anchor_edit.styleSheet())
+        window_layout.addWidget(self._window_edges_edit)
+
+        window_btn_row = QHBoxLayout()
+        self._btn_add_window_edge = QPushButton("Add")
+        self._btn_add_window_edge.clicked.connect(self._add_selected_window_edge)
+        self._btn_clear_window_edges = QPushButton("Clear")
+        self._btn_clear_window_edges.clicked.connect(self._clear_window_edges)
+        for btn in [self._btn_add_window_edge, self._btn_clear_window_edges]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 4px 6px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:disabled { background: #252525; color: #666; }
+            """)
+            window_btn_row.addWidget(btn)
+        window_layout.addLayout(window_btn_row)
+
+        reg_layout.addWidget(window_group)
+
         layout.addWidget(reg_group)
 
         self._hide_legacy_registration_controls()
@@ -402,6 +432,10 @@ class RegistrationPanel(QWidget):
                 "roi_texts": ["", ""],
                 "source_image_path": "",
                 "image_path": "",
+            },
+            "window_registration": {
+                "edge_ids": [],
+                "edge_labels": [],
             },
         }
 
@@ -513,12 +547,23 @@ class RegistrationPanel(QWidget):
             data["last_registration"] = dict(self._last_auto_registration)
         return data
 
+    def _window_registration_profile(self) -> dict:
+        labels = []
+        for feature_id in self._window_edge_ids:
+            feature = self._repo.get(feature_id)
+            labels.append(self._window_edge_label(feature_id, feature))
+        return {
+            "edge_ids": list(self._window_edge_ids),
+            "edge_labels": labels,
+        }
+
     def _snapshot_production_profile(self, name: str) -> dict:
         return {
             "version": 1,
             "name": name,
             "camera": self._camera_profile_dict(),
             "auto_correspondence": self._auto_correspondence_profile(),
+            "window_registration": self._window_registration_profile(),
         }
 
     def _upsert_production_profile(self, profile: dict, silent: bool = False) -> None:
@@ -677,6 +722,20 @@ class RegistrationPanel(QWidget):
             except Exception:
                 self._last_measurement_pixel_to_world = None
 
+    def _apply_window_registration_profile(self, window_data: dict) -> None:
+        if not isinstance(window_data, dict):
+            self._window_edge_ids = []
+            self._refresh_window_edges_edit()
+            return
+        edge_ids = window_data.get("edge_ids", [])
+        if not isinstance(edge_ids, list):
+            edge_ids = []
+        self._window_edge_ids = [
+            str(feature_id) for feature_id in edge_ids
+            if isinstance(feature_id, str) and self._repo.get(feature_id) is not None
+        ][:4]
+        self._refresh_window_edges_edit()
+
     def _apply_production_profile(self, profile: dict) -> None:
         if self._config is None or not isinstance(profile, dict):
             return
@@ -684,6 +743,9 @@ class RegistrationPanel(QWidget):
 
         self._apply_auto_correspondence_profile(
             profile.get("auto_correspondence", {})
+        )
+        self._apply_window_registration_profile(
+            profile.get("window_registration", {})
         )
         self._config.active_production_profile = str(profile.get("name", ""))
         self._config.save()
@@ -992,6 +1054,10 @@ class RegistrationPanel(QWidget):
         self._image_calibration_applied = applied
         self._canvas.get_image_layer().load_from_array(frame)
         self._canvas.get_image_layer().set_pixel_size_mm(self._pixel_size_mm)
+        self._coarse_transform = None
+        self._last_measurement_pixel_to_world = None
+        self._last_display_pixel_to_world = None
+        self._last_auto_registration = {}
         self._auto_source_image_path = self._canvas.get_image_layer().path
         self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
         # Keep pixel_size_mm from config (don't reset to default)
@@ -1085,6 +1151,54 @@ class RegistrationPanel(QWidget):
     def _on_feature_highlighted(self, feature_id: str) -> None:
         self._last_highlighted_id = feature_id
 
+    def _window_edge_label(self, feature_id: str, feature=None) -> str:
+        if feature is None:
+            feature = self._repo.get(feature_id)
+        if feature is None:
+            return feature_id[:8]
+        token = feature.dxf_handle or feature.feature_id[:8]
+        return f"{feature.feature_type.name}[{token}]"
+
+    def _refresh_window_edges_edit(self) -> None:
+        if not hasattr(self, "_window_edges_edit"):
+            return
+        labels = [
+            self._window_edge_label(feature_id)
+            for feature_id in self._window_edge_ids
+        ]
+        self._window_edges_edit.setText(", ".join(labels))
+
+    def _add_selected_window_edge(self) -> None:
+        feature_id = getattr(self, "_last_highlighted_id", "")
+        feature = self._repo.get(feature_id) if feature_id else None
+        if feature is None:
+            self._reg_status.setText("Select a CAD line edge first.")
+            return
+        if feature.feature_type != FeatureType.LINE:
+            self._reg_status.setText(
+                f"Window edge must be LINE; selected {feature.feature_type.name}."
+            )
+            return
+        if feature_id in self._window_edge_ids:
+            self._reg_status.setText("Window edge already added.")
+            return
+        if len(self._window_edge_ids) >= 4:
+            self._reg_status.setText("Window edge list already has 4 lines; clear it first.")
+            return
+        self._window_edge_ids.append(feature_id)
+        self._refresh_window_edges_edit()
+        self._save_selected_production_profile(silent=True)
+        self._reg_status.setText(
+            f"Window edge added ({len(self._window_edge_ids)}/4): "
+            f"{self._window_edge_label(feature_id, feature)}"
+        )
+
+    def _clear_window_edges(self) -> None:
+        self._window_edge_ids = []
+        self._refresh_window_edges_edit()
+        self._save_selected_production_profile(silent=True)
+        self._reg_status.setText("Window CAD edges cleared.")
+
     def _get_selected_group(self):
         return None
 
@@ -1092,6 +1206,11 @@ class RegistrationPanel(QWidget):
         self._repo = repo
         self._manager._repo = repo
         self._manager.clear()
+        self._window_edge_ids = [
+            feature_id for feature_id in self._window_edge_ids
+            if self._repo.get(feature_id) is not None
+        ]
+        self._refresh_window_edges_edit()
 
     # ── image registration ────────────────────────────────────────
 
@@ -1149,6 +1268,10 @@ class RegistrationPanel(QWidget):
                 pixel_size = float(pixel_size)
                 self._canvas.get_image_layer().set_pixel_size_mm(pixel_size)
                 self._pixel_size_mm = pixel_size
+                self._coarse_transform = None
+                self._last_measurement_pixel_to_world = None
+                self._last_display_pixel_to_world = None
+                self._last_auto_registration = {}
                 self._btn_run_coarse.setEnabled(True)
                 self._btn_run_fine.setEnabled(False)
                 self._btn_run_full.setEnabled(True)
@@ -1599,9 +1722,16 @@ class RegistrationPanel(QWidget):
             from ..registration import affine_solver
 
             image = self._ensure_auto_detection_image()
+            edge_tokens = list(self._window_edge_ids)
+            if edge_tokens and len(edge_tokens) != 4:
+                self._reg_status.setText(
+                    f"Window registration needs 4 CAD edges; currently {len(edge_tokens)}."
+                )
+                return False
             result = register_window_lines(
                 self._repo,
                 image,
+                edge_tokens=edge_tokens if len(edge_tokens) == 4 else None,
                 pixel_size_mm=self._pixel_size_mm,
             )
             transform = result.transform
@@ -1614,6 +1744,7 @@ class RegistrationPanel(QWidget):
             self._last_auto_registration = {
                 "source": result.method,
                 "line_handles": dict(result.line_handles),
+                "cad_edge_ids": edge_tokens,
                 "side_positions": dict(result.side_positions),
                 "component_bbox": list(result.component_bbox),
                 "confidence": float(result.confidence),

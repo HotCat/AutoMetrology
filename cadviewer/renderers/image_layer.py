@@ -50,6 +50,7 @@ class ImageLayerRenderer:
         self._image = img
         self._path = path
         self._qimage = self._numpy_to_qimage(img)
+        self._affine = np.eye(3, dtype=np.float64)
         self._cache_dirty = True
         return True
 
@@ -75,6 +76,7 @@ class ImageLayerRenderer:
             img = cv2.cvtColor(img, cv2.COLOR_GRAY2BGR)
 
         self._image = img
+        self._affine = np.eye(3, dtype=np.float64)
 
         # Save to temp file for pipeline compatibility
         temp_dir = tempfile.gettempdir()

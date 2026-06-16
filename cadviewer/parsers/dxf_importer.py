@@ -91,20 +91,48 @@ class DXFImporter:
 
     # ── individual entity parsers ──────────────────────────────────
 
-    def _parse_line(self, e) -> None:
-        s, end = e.dxf.start, e.dxf.end
-        geom = {"x1": s.x, "y1": s.y, "x2": end.x, "y2": end.y}
-        handle = e.dxf.handle
+    def _add_line_feature(
+        self,
+        geom: dict,
+        handle: str,
+        layer: str = "0",
+        color: int = 7,
+    ) -> None:
         feat = CADFeature(
             feature_id=_stable_id(FeatureType.LINE, geom, handle),
             feature_type=FeatureType.LINE,
             geometry=geom,
             dxf_handle=handle,
-            layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
-            color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+            layer=layer,
+            color=color,
         )
         self.repo.add(feat)
         self._entity_index += 1
+
+    def _add_rectangular_polyline_edges(
+        self,
+        points: list,
+        handle: str,
+        layer: str = "0",
+        color: int = 7,
+    ) -> None:
+        for idx in range(4):
+            p1 = points[idx]
+            p2 = points[(idx + 1) % 4]
+            geom = {"x1": p1[0], "y1": p1[1], "x2": p2[0], "y2": p2[1]}
+            edge_handle = f"{handle}:{idx + 1}" if handle else ""
+            self._add_line_feature(geom, edge_handle, layer=layer, color=color)
+
+    def _parse_line(self, e) -> None:
+        s, end = e.dxf.start, e.dxf.end
+        geom = {"x1": s.x, "y1": s.y, "x2": end.x, "y2": end.y}
+        handle = e.dxf.handle
+        self._add_line_feature(
+            geom,
+            handle,
+            layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
+            color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+        )
 
     def _parse_circle(self, e) -> None:
         c = e.dxf.center
@@ -177,31 +205,31 @@ class DXFImporter:
         points = [(v.dxf.location.x, v.dxf.location.y) for v in vertices]
         flags = e.dxf.flags if hasattr(e.dxf, "flags") else 0
         closed = bool(flags & 1)
+        layer = e.dxf.layer if hasattr(e.dxf, "layer") else "0"
+        color = e.dxf.color if hasattr(e.dxf, "color") else 7
+        handle = e.dxf.handle
 
         # Determine subtype: if only 2 vertices and not closed, treat as LINE
         if len(points) == 2 and not closed:
             geom = {"x1": points[0][0], "y1": points[0][1],
                       "x2": points[1][0], "y2": points[1][1]}
-            feat = CADFeature(
-                feature_id=_stable_id(FeatureType.LINE, geom, e.dxf.handle),
-                feature_type=FeatureType.LINE,
-                geometry=geom,
-                dxf_handle=e.dxf.handle,
-                layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
-                color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+            self._add_line_feature(geom, handle, layer=layer, color=color)
+        elif len(points) == 4 and closed:
+            self._add_rectangular_polyline_edges(
+                points, handle, layer=layer, color=color,
             )
         else:
             geom = {"points": points, "closed": closed}
             feat = CADFeature(
-                feature_id=_stable_id(FeatureType.POLYLINE, geom, e.dxf.handle),
+                feature_id=_stable_id(FeatureType.POLYLINE, geom, handle),
                 feature_type=FeatureType.POLYLINE,
                 geometry=geom,
-                dxf_handle=e.dxf.handle,
-                layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
-                color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+                dxf_handle=handle,
+                layer=layer,
+                color=color,
             )
-        self.repo.add(feat)
-        self._entity_index += 1
+            self.repo.add(feat)
+            self._entity_index += 1
 
     def _parse_lwpolyline(self, e) -> None:
         """Handle lightweight polyline (DXF R13+)."""
@@ -209,14 +237,22 @@ class DXFImporter:
         if len(points) < 2:
             return
         closed = e.closed
+        layer = e.dxf.layer if hasattr(e.dxf, "layer") else "0"
+        color = e.dxf.color if hasattr(e.dxf, "color") else 7
+        handle = e.dxf.handle
+        if len(points) == 4 and closed:
+            self._add_rectangular_polyline_edges(
+                points, handle, layer=layer, color=color,
+            )
+            return
         geom = {"points": points, "closed": closed}
         feat = CADFeature(
-            feature_id=_stable_id(FeatureType.POLYLINE, geom, e.dxf.handle),
+            feature_id=_stable_id(FeatureType.POLYLINE, geom, handle),
             feature_type=FeatureType.POLYLINE,
             geometry=geom,
-            dxf_handle=e.dxf.handle,
-            layer=e.dxf.layer if hasattr(e.dxf, "layer") else "0",
-            color=e.dxf.color if hasattr(e.dxf, "color") else 7,
+            dxf_handle=handle,
+            layer=layer,
+            color=color,
         )
         self.repo.add(feat)
         self._entity_index += 1

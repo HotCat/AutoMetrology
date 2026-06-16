@@ -58,6 +58,7 @@ def register_window_lines(
     repo: FeatureRepository,
     image: np.ndarray,
     line_handles: Optional[dict[str, str]] = None,
+    edge_tokens: Optional[list[str]] = None,
     pixel_size_mm: Optional[float] = None,
     prefer_homography: bool = True,
 ) -> WindowLineRegistrationResult:
@@ -67,13 +68,23 @@ def register_window_lines(
     if image is None:
         raise ValueError("image is required")
 
-    handles = dict(DEFAULT_WINDOW_LINE_HANDLES)
-    if line_handles:
-        handles.update({k: v for k, v in line_handles.items() if v})
-
+    if edge_tokens:
+        cad_corners, handles = _cad_window_from_edges(repo, edge_tokens)
+        target_aspect = _corner_aspect(cad_corners)
+    else:
+        handles = dict(DEFAULT_WINDOW_LINE_HANDLES)
+        if line_handles:
+            handles.update({k: v for k, v in line_handles.items() if v})
+        cad_corners = _cad_window_corners(repo, handles)
+        target_aspect = None
     gray = _to_gray(image)
-    side_positions, bbox, confidence, side_lines, image_corners = _detect_window_geometry(gray)
-    cad_corners = _cad_window_corners(repo, handles)
+    side_positions, bbox, confidence, side_lines, image_corners = (
+        _detect_registration_geometry(gray, target_aspect)
+    )
+    if edge_tokens:
+        cad_corners = _select_cad_corner_order(
+            repo, edge_tokens, image_corners, cad_corners, gray,
+        )
     affine = _build_affine_from_corners(image_corners, cad_corners)
     homography = _build_homography_from_corners(image_corners, cad_corners)
     transform_model = "edge_affine"
@@ -120,6 +131,7 @@ def _to_gray(image: np.ndarray) -> np.ndarray:
 
 def _detect_window_geometry(
     gray: np.ndarray,
+    target_aspect: Optional[float] = None,
 ) -> tuple[
     dict[str, float],
     tuple[int, int, int, int],
@@ -129,13 +141,15 @@ def _detect_window_geometry(
 ]:
     labels = None
     best = None
-    best_score = -1.0
+    best_score = float("-inf")
     for threshold in _window_threshold_candidates(gray):
         mask = (gray < threshold).astype(np.uint8)
         n, cur_labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
         if n <= 1:
             continue
-        candidate, score = _select_window_component(gray.shape, stats, centroids)
+        candidate, score = _select_window_component(
+            gray.shape, stats, centroids, target_aspect,
+        )
         if candidate is not None and score > best_score:
             best = (candidate, stats)
             labels = cur_labels
@@ -150,17 +164,22 @@ def _detect_window_geometry(
     comp = labels == best_idx
 
     scan = _scan_component_sides(comp, xmin, ymin, xmax, ymax)
-    side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
-    image_corners = _side_line_corners(side_lines)
+    if target_aspect is not None and np.isfinite(target_aspect) and target_aspect > 0:
+        side_positions = dict(scan)
+        side_lines = _axis_aligned_side_lines(side_positions)
+        image_corners = _side_line_corners(side_lines)
+    else:
+        side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
+        image_corners = _side_line_corners(side_lines)
 
-    cx = (xmin + xmax) / 2.0
-    cy = (ymin + ymax) / 2.0
-    side_positions = {
-        "left": _line_x_at_y(side_lines["left"], cy, scan["left"]),
-        "right": _line_x_at_y(side_lines["right"], cy, scan["right"]),
-        "top": _line_y_at_x(side_lines["top"], cx, scan["top"]),
-        "bottom": _line_y_at_x(side_lines["bottom"], cx, scan["bottom"]),
-    }
+        cx = (xmin + xmax) / 2.0
+        cy = (ymin + ymax) / 2.0
+        side_positions = {
+            "left": _line_x_at_y(side_lines["left"], cy, scan["left"]),
+            "right": _line_x_at_y(side_lines["right"], cy, scan["right"]),
+            "top": _line_y_at_x(side_lines["top"], cx, scan["top"]),
+            "bottom": _line_y_at_x(side_lines["bottom"], cx, scan["bottom"]),
+        }
 
     width = side_positions["right"] - side_positions["left"]
     height = side_positions["bottom"] - side_positions["top"]
@@ -178,6 +197,187 @@ def _detect_window_geometry(
     )
     confidence = float(0.75 + 0.25 * coverage)
     return side_positions, (xmin, ymin, xmax, ymax), confidence, side_lines, image_corners
+
+
+def _detect_registration_geometry(
+    gray: np.ndarray,
+    target_aspect: Optional[float],
+) -> tuple[
+    dict[str, float],
+    tuple[int, int, int, int],
+    float,
+    dict[str, tuple[float, float, float]],
+    np.ndarray,
+]:
+    dark = _detect_window_geometry(gray, target_aspect)
+    if target_aspect is None or not np.isfinite(target_aspect) or target_aspect <= 0:
+        return dark
+    candidates = [dark]
+    try:
+        candidates.append(_detect_grid_cell_geometry(gray))
+    except Exception:
+        pass
+
+    def score(candidate) -> float:
+        aspect = _corner_aspect(candidate[4])
+        if not np.isfinite(aspect) or aspect <= 0:
+            return float("inf")
+        bbox = candidate[1]
+        cx = (bbox[0] + bbox[2]) / 2.0
+        cy = (bbox[1] + bbox[3]) / 2.0
+        h, w = gray.shape[:2]
+        center_penalty = (
+            abs(cx - w / 2.0) / max(float(w), 1.0)
+            + abs(cy - h / 2.0) / max(float(h), 1.0)
+        )
+        return abs(float(np.log(aspect / target_aspect))) + center_penalty * 0.08
+
+    return min(candidates, key=score)
+
+
+def _detect_grid_cell_geometry(
+    gray: np.ndarray,
+) -> tuple[
+    dict[str, float],
+    tuple[int, int, int, int],
+    float,
+    dict[str, tuple[float, float, float]],
+    np.ndarray,
+]:
+    h, w = gray.shape[:2]
+    threshold = int(np.clip(np.percentile(gray, 55), 120, 225))
+    mask = (gray < threshold).astype(np.uint8) * 255
+    mask = cv2.morphologyEx(
+        mask,
+        cv2.MORPH_CLOSE,
+        cv2.getStructuringElement(cv2.MORPH_RECT, (5, 5)),
+    )
+    horiz_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (max(220, int(w * 0.14)), 1),
+    )
+    vert_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT, (1, max(180, int(h * 0.14))),
+    )
+    horiz = cv2.morphologyEx(mask, cv2.MORPH_OPEN, horiz_kernel)
+    vert = cv2.morphologyEx(mask, cv2.MORPH_OPEN, vert_kernel)
+    horizontal = _line_components(horiz, horizontal=True, image_shape=gray.shape)
+    vertical = _line_components(vert, horizontal=False, image_shape=gray.shape)
+    if len(horizontal) < 2 or len(vertical) < 2:
+        raise RuntimeError("Could not detect enough printed grid lines")
+
+    best = None
+    best_score = float("inf")
+    for top in horizontal:
+        for bottom in horizontal:
+            y_top = min(top["pos"], bottom["pos"])
+            y_bottom = max(top["pos"], bottom["pos"])
+            height = y_bottom - y_top
+            if height < h * 0.20 or height > h * 0.75:
+                continue
+            for left in vertical:
+                for right in vertical:
+                    x_left = min(left["pos"], right["pos"])
+                    x_right = max(left["pos"], right["pos"])
+                    width = x_right - x_left
+                    if width < w * 0.35 or width > w * 0.90:
+                        continue
+                    aspect = width / max(height, 1.0)
+                    if not 1.2 <= aspect <= 3.2:
+                        continue
+                    if not _line_span_covers(top, x_left, x_right, "x"):
+                        continue
+                    if not _line_span_covers(bottom, x_left, x_right, "x"):
+                        continue
+                    if not _line_span_covers(left, y_top, y_bottom, "y"):
+                        continue
+                    if not _line_span_covers(right, y_top, y_bottom, "y"):
+                        continue
+                    cx = (x_left + x_right) / 2.0
+                    cy = (y_top + y_bottom) / 2.0
+                    center_penalty = abs(cx - w / 2.0) / w + abs(cy - h / 2.0) / h
+                    score = center_penalty - min(width * height / float(w * h), 1.0) * 0.15
+                    if score < best_score:
+                        best_score = score
+                        best = (x_left, y_top, x_right, y_bottom)
+    if best is None:
+        raise RuntimeError("No suitable printed grid cell detected")
+
+    left, top, right, bottom = [float(v) for v in best]
+    side_positions = {
+        "left": left,
+        "right": right,
+        "top": top,
+        "bottom": bottom,
+    }
+    side_lines = {
+        "left": (1.0, 0.0, -left),
+        "right": (1.0, 0.0, -right),
+        "top": (0.0, 1.0, -top),
+        "bottom": (0.0, 1.0, -bottom),
+    }
+    corners = _side_line_corners(side_lines)
+    return (
+        side_positions,
+        (int(round(left)), int(round(top)), int(round(right)), int(round(bottom))),
+        0.86,
+        side_lines,
+        corners,
+    )
+
+
+def _line_components(
+    mask: np.ndarray,
+    horizontal: bool,
+    image_shape: tuple[int, int],
+) -> list[dict[str, float]]:
+    n, _labels, stats, _centroids = cv2.connectedComponentsWithStats(mask, 8)
+    h, w = image_shape[:2]
+    result = []
+    for idx in range(1, n):
+        x, y, bw, bh, area = [float(v) for v in stats[idx]]
+        if horizontal:
+            if bw < w * 0.30 or bh > h * 0.05:
+                continue
+            result.append({
+                "pos": y + bh / 2.0,
+                "x0": x,
+                "x1": x + bw,
+                "y0": y,
+                "y1": y + bh,
+                "area": area,
+            })
+        else:
+            if bh < h * 0.20 or bw > w * 0.05:
+                continue
+            result.append({
+                "pos": x + bw / 2.0,
+                "x0": x,
+                "x1": x + bw,
+                "y0": y,
+                "y1": y + bh,
+                "area": area,
+            })
+    return result
+
+
+def _line_span_covers(line: dict[str, float], start: float, end: float, axis: str) -> bool:
+    pad = 35.0
+    return line[f"{axis}0"] <= start + pad and line[f"{axis}1"] >= end - pad
+
+
+def _axis_aligned_side_lines(
+    side_positions: dict[str, float],
+) -> dict[str, tuple[float, float, float]]:
+    left = float(side_positions["left"])
+    right = float(side_positions["right"])
+    top = float(side_positions["top"])
+    bottom = float(side_positions["bottom"])
+    return {
+        "left": (1.0, 0.0, -left),
+        "right": (1.0, 0.0, -right),
+        "top": (0.0, 1.0, -top),
+        "bottom": (0.0, 1.0, -bottom),
+    }
 
 
 def _window_threshold_candidates(gray: np.ndarray) -> list[int]:
@@ -203,10 +403,11 @@ def _select_window_component(
     shape: tuple[int, int],
     stats: np.ndarray,
     centroids: np.ndarray,
+    target_aspect: Optional[float] = None,
 ) -> tuple[Optional[int], float]:
     h, w = shape[:2]
     best = None
-    best_score = -1.0
+    best_score = float("-inf")
     for idx in range(1, len(stats)):
         x, y, bw, bh, area = stats[idx]
         if area < 80000 or bw < w * 0.25 or bh < h * 0.20:
@@ -221,7 +422,17 @@ def _select_window_component(
         border_penalty = 0.0
         if x <= 2 or y <= 2 or x + bw >= w - 2 or y + bh >= h - 2:
             border_penalty = float(area) * 0.6
-        score = float(area) - center_penalty * 80.0 - border_penalty
+        if target_aspect is not None and np.isfinite(target_aspect) and target_aspect > 0:
+            normalized_aspect = max(aspect, 1.0 / max(aspect, 1e-12))
+            aspect_error = abs(float(np.log(normalized_aspect / target_aspect)))
+            score = (
+                -aspect_error * 1_000_000.0
+                + float(area) * 0.02
+                - center_penalty * 10.0
+                - border_penalty
+            )
+        else:
+            score = float(area) - center_penalty * 80.0 - border_penalty
         if score > best_score:
             best = idx
             best_score = score
@@ -458,6 +669,24 @@ def _polygon_area(points: np.ndarray) -> float:
     return float(0.5 * np.sum(x * np.roll(y, -1) - y * np.roll(x, -1)))
 
 
+def _corner_aspect(points: np.ndarray) -> float:
+    pts = np.asarray(points, dtype=np.float64)
+    if pts.shape[0] < 4:
+        return 0.0
+    lengths = [
+        float(np.linalg.norm(pts[(i + 1) % 4] - pts[i]))
+        for i in range(4)
+    ]
+    positives = [length for length in lengths if length > 1e-12]
+    if not positives:
+        return 0.0
+    long_side = max(lengths)
+    short_side = min(positives)
+    if short_side <= 1e-12:
+        return 0.0
+    return float(long_side / short_side)
+
+
 def _cad_window_corners(
     repo: FeatureRepository,
     handles: dict[str, str],
@@ -473,6 +702,236 @@ def _cad_window_corners(
         "bottom": _cad_line_equation(bottom.geometry),
     }
     return _side_line_corners(lines)
+
+
+def _cad_window_from_edges(
+    repo: FeatureRepository,
+    edge_tokens: list[str],
+) -> tuple[np.ndarray, dict[str, str]]:
+    tokens = [str(token).strip() for token in edge_tokens if str(token).strip()]
+    if len(tokens) != 4:
+        raise ValueError("Window registration requires exactly four CAD edge lines")
+    features = [_resolve_line(repo, token) for token in tokens]
+    corners = _cad_corners_from_line_features(features)
+    handles = {
+        "edge1": _line_token(features[0]),
+        "edge2": _line_token(features[1]),
+        "edge3": _line_token(features[2]),
+        "edge4": _line_token(features[3]),
+    }
+    return corners, handles
+
+
+def _select_cad_corner_order(
+    repo: FeatureRepository,
+    edge_tokens: list[str],
+    image_corners: np.ndarray,
+    cad_corners: np.ndarray,
+    gray: np.ndarray,
+) -> np.ndarray:
+    context_points = _sample_cad_context_points(repo, edge_tokens, cad_corners)
+    if len(context_points) < 20:
+        return cad_corners
+
+    edge_distance = _image_edge_distance(gray)
+    best = np.asarray(cad_corners, dtype=np.float64)
+    best_score = float("inf")
+    for candidate in _cad_corner_order_candidates(best):
+        try:
+            transform = _build_affine_from_corners(image_corners, candidate)
+            score = _score_cad_to_image_edges(transform, context_points, edge_distance)
+        except Exception:
+            continue
+        if score < best_score:
+            best = candidate
+            best_score = score
+    return best
+
+
+def _cad_corner_order_candidates(corners: np.ndarray) -> list[np.ndarray]:
+    pts = np.asarray(corners, dtype=np.float64)
+    candidates = []
+    for base in (pts, pts[::-1]):
+        for shift in range(4):
+            cur = np.roll(base, -shift, axis=0)
+            if not any(np.allclose(cur, prev, atol=1e-9) for prev in candidates):
+                candidates.append(cur.copy())
+    return candidates
+
+
+def _image_edge_distance(gray: np.ndarray) -> np.ndarray:
+    blur = cv2.GaussianBlur(gray, (5, 5), 0)
+    edges = cv2.Canny(blur, 40, 120, L2gradient=True)
+    return cv2.distanceTransform(255 - edges, cv2.DIST_L2, 3)
+
+
+def _score_cad_to_image_edges(
+    pixel_to_cad: np.ndarray,
+    cad_points: np.ndarray,
+    edge_distance: np.ndarray,
+) -> float:
+    cad_to_pixel = np.linalg.inv(pixel_to_cad)
+    px = affine_solver.apply_projective(cad_to_pixel, cad_points)
+    h, w = edge_distance.shape[:2]
+    valid = (
+        np.isfinite(px[:, 0]) & np.isfinite(px[:, 1])
+        & (px[:, 0] >= 0) & (px[:, 0] < w)
+        & (px[:, 1] >= 0) & (px[:, 1] < h)
+    )
+    if int(np.count_nonzero(valid)) < 20:
+        return float("inf")
+    coords = np.round(px[valid]).astype(np.int32)
+    dists = edge_distance[coords[:, 1], coords[:, 0]].astype(np.float64)
+    return float(np.percentile(np.clip(dists, 0.0, 80.0), 70))
+
+
+def _sample_cad_context_points(
+    repo: FeatureRepository,
+    edge_tokens: list[str],
+    cad_corners: np.ndarray,
+) -> np.ndarray:
+    excluded = {
+        _resolve_line(repo, token).feature_id
+        for token in edge_tokens
+        if str(token).strip()
+    }
+    pts = []
+    corner_arr = np.asarray(cad_corners, dtype=np.float64)
+    min_x, min_y = np.min(corner_arr, axis=0)
+    max_x, max_y = np.max(corner_arr, axis=0)
+    span = max(float(max_x - min_x), float(max_y - min_y), 1.0)
+    margin = span * 1.5
+    bbox = (min_x - margin, min_y - margin, max_x + margin, max_y + margin)
+    for feature in repo.all_features():
+        if feature.feature_id in excluded:
+            continue
+        sampled = _sample_feature_points(feature, density=0.45)
+        if sampled.size == 0:
+            continue
+        mask = (
+            (sampled[:, 0] >= bbox[0]) & (sampled[:, 0] <= bbox[2])
+            & (sampled[:, 1] >= bbox[1]) & (sampled[:, 1] <= bbox[3])
+        )
+        if np.any(mask):
+            pts.append(sampled[mask])
+    if not pts:
+        return np.empty((0, 2), dtype=np.float64)
+    return np.vstack(pts)
+
+
+def _sample_feature_points(feature, density: float) -> np.ndarray:
+    geom = feature.geometry
+    if feature.feature_type == FeatureType.LINE:
+        p1 = np.array([geom["x1"], geom["y1"]], dtype=np.float64)
+        p2 = np.array([geom["x2"], geom["y2"]], dtype=np.float64)
+        return _sample_segment(p1, p2, density)
+    if feature.feature_type == FeatureType.POLYLINE:
+        points = np.asarray(geom.get("points", []), dtype=np.float64)
+        if len(points) < 2:
+            return np.empty((0, 2), dtype=np.float64)
+        segs = []
+        for idx in range(len(points) - 1):
+            segs.append(_sample_segment(points[idx], points[idx + 1], density))
+        if geom.get("closed", False) and len(points) > 2:
+            segs.append(_sample_segment(points[-1], points[0], density))
+        return np.vstack(segs) if segs else np.empty((0, 2), dtype=np.float64)
+    if feature.feature_type in {FeatureType.CIRCLE, FeatureType.ARC}:
+        cx = float(geom["cx"])
+        cy = float(geom["cy"])
+        radius = float(geom["radius"])
+        if radius <= 1e-9:
+            return np.empty((0, 2), dtype=np.float64)
+        if feature.feature_type == FeatureType.CIRCLE:
+            a0, a1 = 0.0, 2.0 * np.pi
+            endpoint = False
+        else:
+            a0 = np.radians(float(geom.get("start_angle", 0.0)))
+            a1 = np.radians(float(geom.get("end_angle", 360.0)))
+            if a1 <= a0:
+                a1 += 2.0 * np.pi
+            endpoint = True
+        arc_len = radius * abs(a1 - a0)
+        count = max(8, int(round(arc_len * density)))
+        angles = np.linspace(a0, a1, count, endpoint=endpoint)
+        return np.column_stack([cx + radius * np.cos(angles), cy + radius * np.sin(angles)])
+    return np.empty((0, 2), dtype=np.float64)
+
+
+def _sample_segment(p1: np.ndarray, p2: np.ndarray, density: float) -> np.ndarray:
+    length = float(np.linalg.norm(p2 - p1))
+    count = max(2, int(round(length * density)))
+    t = np.linspace(0.0, 1.0, count)
+    return p1 + np.outer(t, p2 - p1)
+
+
+def _line_token(feature) -> str:
+    return str(feature.dxf_handle or feature.feature_id)
+
+
+def _cad_corners_from_line_features(features: list) -> np.ndarray:
+    endpoints = []
+    for feature in features:
+        geom = feature.geometry
+        endpoints.append((float(geom["x1"]), float(geom["y1"])))
+        endpoints.append((float(geom["x2"]), float(geom["y2"])))
+    pts = np.asarray(endpoints, dtype=np.float64)
+    min_x, min_y = np.min(pts, axis=0)
+    max_x, max_y = np.max(pts, axis=0)
+    if max_x - min_x <= 1e-9 or max_y - min_y <= 1e-9:
+        raise ValueError("Selected CAD window edges are degenerate")
+
+    horizontal = []
+    vertical = []
+    for feature in features:
+        geom = feature.geometry
+        dx = abs(float(geom["x2"]) - float(geom["x1"]))
+        dy = abs(float(geom["y2"]) - float(geom["y1"]))
+        if dy <= max(0.02, dx * 0.01):
+            horizontal.append(feature)
+        elif dx <= max(0.02, dy * 0.01):
+            vertical.append(feature)
+    if len(horizontal) == 2 and len(vertical) == 2:
+        return np.array([
+            [min_x, max_y],
+            [min_x, min_y],
+            [max_x, min_y],
+            [max_x, max_y],
+        ], dtype=np.float64)
+
+    lines = [_cad_line_equation(feature.geometry) for feature in features]
+    intersections = []
+    for i, line_a in enumerate(lines):
+        for line_b in lines[i + 1:]:
+            try:
+                pt = _intersect_lines(line_a, line_b)
+            except RuntimeError:
+                continue
+            if (
+                min_x - 1.0 <= pt[0] <= max_x + 1.0
+                and min_y - 1.0 <= pt[1] <= max_y + 1.0
+            ):
+                intersections.append(pt)
+    unique = []
+    for pt in intersections:
+        if not any(np.linalg.norm(pt - prev) < 1e-3 for prev in unique):
+            unique.append(pt)
+    if len(unique) != 4:
+        raise ValueError("Selected CAD edges do not form one four-sided window")
+    return _order_cad_corners(np.asarray(unique, dtype=np.float64))
+
+
+def _order_cad_corners(points: np.ndarray) -> np.ndarray:
+    center = np.mean(points, axis=0)
+    ordered = sorted(
+        points,
+        key=lambda pt: np.arctan2(float(pt[1] - center[1]), float(pt[0] - center[0])),
+    )
+    pts = np.asarray(ordered, dtype=np.float64)
+    start = int(np.argmin(pts[:, 0] - pts[:, 1]))
+    pts = np.roll(pts, -start, axis=0)
+    if _polygon_area(pts) < 0:
+        pts = np.asarray([pts[0], pts[3], pts[2], pts[1]], dtype=np.float64)
+    return pts
 
 
 def _cad_line_equation(geom: dict) -> tuple[float, float, float]:
@@ -553,8 +1012,13 @@ def _build_affine_from_sides(
 def _resolve_line(repo: FeatureRepository, token: str):
     feat = repo.get(token) or repo.get_by_handle(token)
     if feat is None:
+        needle = str(token).lower()
         for candidate in repo.all_features():
-            if candidate.feature_id.startswith(token):
+            handle = str(candidate.dxf_handle or "").lower()
+            if (
+                candidate.feature_id.lower().startswith(needle)
+                or handle.startswith(needle)
+            ):
                 feat = candidate
                 break
     if feat is None:
