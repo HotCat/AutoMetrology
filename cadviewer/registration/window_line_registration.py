@@ -81,10 +81,6 @@ def register_window_lines(
     side_positions, bbox, confidence, side_lines, image_corners = (
         _detect_registration_geometry(gray, target_aspect)
     )
-    if edge_tokens:
-        cad_corners = _select_cad_corner_order(
-            repo, edge_tokens, image_corners, cad_corners, gray,
-        )
     affine = _build_affine_from_corners(image_corners, cad_corners)
     homography = _build_homography_from_corners(image_corners, cad_corners)
     transform_model = "edge_affine"
