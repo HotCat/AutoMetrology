@@ -1,0 +1,3422 @@
+======================================================================
+COORDINATE TRANSFORMATION TRACE REPORT
+======================================================================
+Pixel Size: 0.116200 mm/px
+Affine: scale=0.116505 rot=0.2869deg tx=4172.64 ty=2656.58
+TPS Map: built=True samples=1760
+Image Size: 2592x1944 px
+
+----------------------------------------------------------------------
+Feature: ee575355-bde5-23c5-e2e9-92ea028ebca0_trace (LINE)
+CAD Feature ID: ee575355-bde5-23c5-e2e9-92ea028ebca0
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4166.802637290252, 'y1': 2392.997550618202, 'x2': 4166.802637290252, 'y2': 2692.997550618203}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(-61.45335597941448), 'y1_px': np.float64(2262.1667652564174), 'x2_px': np.float64(-48.55817174058029), 'y2_px': np.float64(-312.7881976963836)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -447, 'ymin': -699, 'xmax': 337, 'ymax': 2648}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 3.5428283211385714, 'y1': 36.382058060899, 'x2': 4.599463510373586, 'y2': 1913.0554154610531}
+  Residual: 2.9300 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(278.2693572716968), 'p1_dy': np.float64(222.59451760174454), 'p2_dx': np.float64(4.689478498469271), 'p2_dy': np.float64(5.781806973007406)}
+  Corrected Pixel: {'x1': np.float64(281.81218559283536), 'y1': np.float64(258.97657566264354), 'x2': np.float64(9.288942008842856), 'y2': np.float64(1918.8372224340605)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4205.625687884405, 'y1': 2626.577436838248, 'x2': 4174.8440825568405, 'y2': 2433.0380795782635}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 195.97191134228885, 'length_deviation_mm': -104.02808865771252, 'length_deviation_pct': -34.67602955257068}
+  Edge Points: 44
+  Confidence: 0.681
+
+----------------------------------------------------------------------
+Feature: 17828e11-e5c4-4ed5-c6bd-dc3da055dc22_trace (LINE)
+CAD Feature ID: 17828e11-e5c4-4ed5-c6bd-dc3da055dc22
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4166.802637290252, 'y1': 2692.99754957633, 'x2': 4656.802637290251, 'y2': 2692.997549576329}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(-48.55817178536381), 'y1_px': np.float64(-312.78818875379875), 'x2_px': np.float64(4157.2016010375155), 'y2_px': np.float64(-291.7260544970304)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -679, 'ymin': -943, 'xmax': 4788, 'ymax': 339}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 22.796620829809854, 'y1': 1.743541455836553, 'x2': 2589.0201230376465, 'y2': 1.5740183772348155}
+  Residual: 0.7031 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(268.16421303877144), 'p1_dy': np.float64(208.2102451459068), 'p2_dx': np.float64(50.48874526446525), 'p2_dy': np.float64(-56.85589191126019)}
+  Corrected Pixel: {'x1': np.float64(290.9608338685813), 'y1': np.float64(209.95378660174336), 'x2': np.float64(2639.5088683021118), 'y2': np.float64(-55.28187353402537)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4206.6629397142415, 'y1': 2632.294124113756, 'x2': 4480.12336007911, 'y2': 2664.5653761313347}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 275.35801279954205, 'length_deviation_mm': -214.64198720045704, 'length_deviation_pct': -43.804487183766824}
+  Edge Points: 37
+  Confidence: 0.610
+
+----------------------------------------------------------------------
+Feature: e8b15b31-043c-8ea5-7c3c-ef5a7857e469_trace (LINE)
+CAD Feature ID: e8b15b31-043c-8ea5-7c3c-ef5a7857e469
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4656.802637290251, 'y1': 2392.997549576329, 'x2': 4166.802637290252, 'y2': 2392.997549576329}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(4144.306416798689), 'y1_px': np.float64(2283.2289084557597), 'x2_px': np.float64(-61.453356024198), 'y2_px': np.float64(2262.1667741990022)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -692, 'ymin': 1631, 'xmax': 4775, 'ymax': 2914}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 9.675993510183844, 'y1': 1942.351419970972, 'x2': 2575.8957623916917, 'y2': 1941.78520575842}
+  Residual: 1.0906 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-3.6415543185137267), 'p1_dy': np.float64(10.080568704870416), 'p2_dx': np.float64(-177.56197714183827), 'p2_dy': np.float64(-107.0261518803386)}
+  Corrected Pixel: {'x1': np.float64(6.034439191670117), 'y1': np.float64(1952.4319886758426), 'x2': np.float64(2398.3337852498535), 'y2': np.float64(1834.7590538780814)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4174.484520697955, 'y1': 2429.122257113785, 'x2': 4453.128237050601, 'y2': 2444.227392177618}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 279.0528368752235, 'length_deviation_mm': -210.9471631247756, 'length_deviation_pct': -43.05044145403592}
+  Edge Points: 37
+  Confidence: 0.607
+
+----------------------------------------------------------------------
+Feature: 7939a968-6c47-9906-b602-ad30ac93d210_trace (CIRCLE)
+CAD Feature ID: 7939a968-6c47-9906-b602-ad30ac93d210
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4186.802637290252, 'cy': 2542.99754957633, 'radius': 1.5}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(116.65790029206983), 'cy_px': np.float64(975.5489716718548)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 88, 'ymin': 947, 'xmax': 144, 'ymax': 1003}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 115.8646595754227, 'cy': 975.711391883159, 'radius': 13.204032160288842}
+  Residual: 0.3253 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-9.949710635094213), 'center_dy': np.float64(16.0300657608562)}
+  Corrected Pixel: {'cx': np.float64(105.91494894032849), 'cy': np.float64(991.7414576440152), 'radius': 13.204032160288842}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4185.5604882026755, 'cy': 2541.104792769665, 'radius': 1.3927914345313266}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.3927914345313266, 'cx_mm': 4185.5604882026755, 'cy_mm': 2541.104792769665, 'radius_deviation_mm': -0.10720856546867341, 'radius_deviation_pct': -7.147237697911561}
+  Edge Points: 90
+  Confidence: 0.837
+
+----------------------------------------------------------------------
+Feature: 602e8d4e-3c67-f22e-0814-078895c7cc2a_trace (CIRCLE)
+CAD Feature ID: 602e8d4e-3c67-f22e-0814-078895c7cc2a
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4186.802637290252, 'cy': 2532.99754957633, 'radius': 1.5}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(116.22806081744056), 'cy_px': np.float64(1061.3808037702802)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 88, 'ymin': 1033, 'xmax': 144, 'ymax': 1089}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 115.54195269656672, 'cy': 1061.3932522557307, 'radius': 13.226244098585124}
+  Residual: 0.3388 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(30.645558458732133), 'center_dy': np.float64(-3.6892003006189387)}
+  Corrected Pixel: {'cx': np.float64(146.18751115529886), 'cy': np.float64(1057.7040519551117), 'radius': 13.226244098585124}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4190.290887024906, 'cy': 2533.4433854002828, 'radius': 1.777302274431027}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.777302274431027, 'cx_mm': 4190.290887024906, 'cy_mm': 2533.4433854002828, 'radius_deviation_mm': 0.27730227443102695, 'radius_deviation_pct': 18.486818295401797}
+  Edge Points: 90
+  Confidence: 0.831
+
+----------------------------------------------------------------------
+Feature: 23d434fc-ed77-c80c-d9d8-991748a65fef_trace (LINE)
+CAD Feature ID: 23d434fc-ed77-c80c-d9d8-991748a65fef
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4264.62763172774, 'y1': 2555.747568199115, 'x2': 4264.62763172774, 'y2': 2630.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(785.1921319846442), 'y1_px': np.float64(869.4584513757763), 'x2_px': np.float64(788.4030319876183), 'y2_px': np.float64(228.29483982307647)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 689, 'ymin': 132, 'xmax': 884, 'ymax': 965}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 785.7154697549726, 'y1': 869.4632266407714, 'x2': 789.1766713553554, 'y2': 228.29834987051055}
+  Residual: 1.6659 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-7.062789322403205), 'p1_dy': np.float64(5.31593952813671), 'p2_dx': np.float64(13.357396483180764), 'p2_dy': np.float64(42.36881612264642)}
+  Corrected Pixel: {'x1': np.float64(778.6526804325694), 'y1': np.float64(874.7791661689081), 'x2': np.float64(802.5340678385362), 'y2': np.float64(270.66716599315697)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4263.868863993957, 'y1': 2555.1238684021214, 'x2': 4266.298675356897, 'y2': 2625.519248331428}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 70.43730189786453, 'length_deviation_mm': -4.262677804008433, 'length_deviation_pct': -5.7063975398932465}
+  Edge Points: 60
+  Confidence: 0.838
+
+----------------------------------------------------------------------
+Feature: 2ca80a84-4ee7-dbe9-f72b-549859916cf8_trace (LINE)
+CAD Feature ID: 2ca80a84-4ee7-dbe9-f72b-549859916cf8
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4213.677642852764, 'y1': 2551.0475681991147, 'x2': 4259.92763172774, 'y2': 2551.0475681991147}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(347.67701837819914), 'y1_px': np.float64(907.6093808170117), 'x2_px': np.float64(744.6491463453058), 'y2_px': np.float64(909.5973879089652)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 288, 'ymin': 848, 'xmax': 804, 'ymax': 969}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 347.68678318942904, 'y1': 906.1341423536253, 'x2': 744.6546777799792, 'y2': 908.7616519176396}
+  Residual: 0.8181 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(15.519161497455798), 'p1_dy': np.float64(4.189360541762312), 'p2_dx': np.float64(1.1147947196466248), 'p2_dy': np.float64(-2.806099950074781)}
+  Corrected Pixel: {'x1': np.float64(363.20594468688483), 'y1': np.float64(910.3235028953876), 'x2': np.float64(745.7694724996259), 'y2': np.float64(905.9555519675648)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4215.488407957678, 'y1': 2550.740422448897, 'x2': 4260.056029367995, 'y2': 2551.4725101920385}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 44.573633805614186, 'length_deviation_mm': -1.6763550693620388, 'length_deviation_pct': -3.6245523731769773}
+  Edge Points: 60
+  Confidence: 0.871
+
+----------------------------------------------------------------------
+Feature: 794aad97-8db7-68de-f8eb-08a6643e73f5_trace (LINE)
+CAD Feature ID: 794aad97-8db7-68de-f8eb-08a6643e73f5
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.977642852764, 'y1': 2630.447547900988, 'x2': 4208.977642852764, 'y2': 2555.747568199115}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(310.7489818479953), 'y1_px': np.float64(225.90278362496974), 'x2_px': np.float64(307.5380818450212), 'y2_px': np.float64(867.0663951776696)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 211, 'ymin': 129, 'xmax': 406, 'ymax': 963}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 307.6022373917815, 'y1': 867.0667881918813, 'x2': 311.5299620266541, 'y2': 225.90594990728266}
+  Residual: 0.9447 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(27.597271417719867), 'p1_dy': np.float64(6.81001041139325), 'p2_dx': np.float64(40.85792300117737), 'p2_dy': np.float64(56.41527576674139)}
+  Corrected Pixel: {'x1': np.float64(335.19950880950137), 'y1': np.float64(873.8767986032746), 'x2': np.float64(352.3878850278315), 'y2': np.float64(282.32122567402405)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4212.204282400916, 'y1': 2554.9702680346336, 'x2': 4213.861657350643, 'y2': 2623.898869345226}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 68.9485240622205, 'length_deviation_mm': -5.7514556396524625, 'length_deviation_pct': -7.699407232246217}
+  Edge Points: 60
+  Confidence: 0.908
+
+----------------------------------------------------------------------
+Feature: de969199-5119-c389-62a4-bf9fa6e5004e_trace (LINE)
+CAD Feature ID: de969199-5119-c389-62a4-bf9fa6e5004e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4262.62763172774, 'y1': 2632.447547900988, 'x2': 4210.977642852764, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(771.3226334628562), 'y1_px': np.float64(211.04250550846336), 'x2_px': np.float64(328.0013161626048), 'y2_px': np.float64(208.82238510021125)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 261, 'ymin': 142, 'xmax': 837, 'ymax': 277}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 328.0002832717305, 'y1': 209.22996727358807, 'x2': 771.323076751208, 'y2': 211.18554149512286}
+  Residual: 0.8426 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(2.176332318230834), 'p1_dy': np.float64(15.86221147547542), 'p2_dx': np.float64(1.5636511587697441), 'p2_dy': np.float64(14.246477155026128)}
+  Corrected Pixel: {'x1': np.float64(330.17661558996133), 'y1': np.float64(225.0921787490635), 'x2': np.float64(772.8867279099777), 'y2': np.float64(225.432018650149)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4211.240566374244, 'y1': 2630.553321509621, 'x2': 4262.8182504053675, 'y2': 2630.772025050448}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 51.578147710568295, 'length_deviation_mm': -0.07184116440756583, 'length_deviation_pct': -0.13909231342036646}
+  Edge Points: 60
+  Confidence: 0.881
+
+----------------------------------------------------------------------
+Feature: e2351f15-20ec-ee33-d2c9-34e47fc0074c_trace (LINE)
+CAD Feature ID: e2351f15-20ec-ee33-d2c9-34e47fc0074c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.977642852764, 'y1': 2530.2475309535425, 'x2': 4208.977642852764, 'y2': 2455.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(306.44198958375637), 'y1_px': np.float64(1085.9378867142295), 'x2_px': np.float64(303.2310895807823), 'y2_px': np.float64(1727.101498266933)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 207, 'ymin': 989, 'xmax': 402, 'ymax': 1823}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 303.86897231391924, 'y1': 1727.103328849407, 'x2': 307.88615523616795, 'y2': 1085.941217702301}
+  Residual: 1.5361 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(25.44232370507666), 'p1_dy': np.float64(-1.530186694250915), 'p2_dx': np.float64(3.3698708242893645), 'p2_dy': np.float64(7.061265659864944)}
+  Corrected Pixel: {'x1': np.float64(329.3112960189959), 'y1': np.float64(1725.5731421551561), 'x2': np.float64(311.2560260604573), 'y2': np.float64(1093.002483362166)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4212.015198738582, 'y1': 2455.7408271277436, 'x2': 4209.54261900663, 'y2': 2529.4272861130794}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 73.72793153431357, 'length_deviation_mm': -0.972048167559393, 'length_deviation_pct': -1.3012696542071762}
+  Edge Points: 60
+  Confidence: 0.850
+
+----------------------------------------------------------------------
+Feature: 4f7c6925-6103-7c9e-02f2-a9b6300fdc95_trace (LINE)
+CAD Feature ID: 4f7c6925-6103-7c9e-02f2-a9b6300fdc95
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4259.92763172774, 'y1': 2534.947530953543, 'x2': 4213.677642852764, 'y2': 2534.947530953543}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(743.9571031901942), 'y1_px': np.float64(1047.7869572729978), 'x2_px': np.float64(346.98497522308753), 'y2_px': np.float64(1045.7989501810443)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 287, 'ymin': 986, 'xmax': 803, 'ymax': 1107}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 346.9789508570024, 'y1': 1047.0156333993577, 'x2': 743.950294063112, 'y2': 1049.081072581638}
+  Residual: 0.3056 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(27.21973883135388), 'p1_dy': np.float64(-2.617380230818526), 'p2_dx': np.float64(0.9529910866895079), 'p2_dy': np.float64(-1.1140522492780747)}
+  Corrected Pixel: {'x1': np.float64(374.1986896883563), 'y1': np.float64(1044.3982531685392), 'x2': np.float64(744.9032851498015), 'y2': np.float64(1047.9670203323599)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4216.847331405883, 'y1': 2535.126595375351, 'x2': 4260.037970739191, 'y2': 2534.927104935735}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 43.19110003757048, 'length_deviation_mm': -3.058888837405746, 'length_deviation_pct': -6.613815293393016}
+  Edge Points: 60
+  Confidence: 0.952
+
+----------------------------------------------------------------------
+Feature: f1d0887e-191e-5357-312d-828eaf125d96_trace (LINE)
+CAD Feature ID: f1d0887e-191e-5357-312d-828eaf125d96
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4264.62763172774, 'y1': 2455.5475512516696, 'x2': 4264.62763172774, 'y2': 2530.2475309535425}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(780.8851397204053), 'y1_px': np.float64(1729.4935544650398), 'x2_px': np.float64(784.0960397233794), 'y2_px': np.float64(1088.3299429123363)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 684, 'ymin': 992, 'xmax': 880, 'ymax': 1825}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 781.9496248243295, 'y1': 1729.498260075697, 'x2': 785.440263445046, 'y2': 1088.3369980762598}
+  Residual: 1.6208 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(5.836746131636801), 'p1_dy': np.float64(-6.72713535414448), 'p2_dx': np.float64(3.255186495174712), 'p2_dy': np.float64(-1.7839011305396753)}
+  Corrected Pixel: {'x1': np.float64(787.7863709559663), 'y1': np.float64(1722.7711247215525), 'x2': np.float64(788.6954499402207), 'y2': np.float64(1086.55309694572)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4265.427730409839, 'y1': 2456.3347674834577, 'x2': 4265.162444589963, 'y2': 2530.4572240581383}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 74.12293130490487, 'length_deviation_mm': -0.5770483969680953, 'length_deviation_pct': -0.7724880237867412}
+  Edge Points: 60
+  Confidence: 0.842
+
+----------------------------------------------------------------------
+Feature: 78987f23-e325-0c2c-3130-e242b5c91846_trace (LINE)
+CAD Feature ID: 78987f23-e325-0c2c-3130-e242b5c91846
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4210.977642852764, 'y1': 2453.5475512516696, 'x2': 4262.62763172774, 'y2': 2453.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(320.3114881055444), 'y1_px': np.float64(1744.3538325815462), 'x2_px': np.float64(763.6328054057958), 'y2_px': np.float64(1746.5739529897983)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 253, 'ymin': 1677, 'xmax': 830, 'ymax': 1813}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 320.31158415869356, 'y1': 1744.661399742846, 'x2': 763.6321310474916, 'y2': 1744.5162879445863}
+  Residual: 1.8098 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(19.62550569828045), 'p1_dy': np.float64(2.957515991723767), 'p2_dx': np.float64(17.012538409893295), 'p2_dy': np.float64(-2.4410709204737486)}
+  Corrected Pixel: {'x1': np.float64(339.937089856974), 'y1': np.float64(1747.6189157345698), 'x2': np.float64(780.6446694573849), 'y2': np.float64(1742.0752170241126)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4213.266008366107, 'y1': 2453.1786065265474, 'x2': 4264.606956673801, 'y2': 2454.08159731047}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 51.348888649017, 'length_deviation_mm': -0.3011002259588622, 'length_deviation_pct': -0.5829628089324597}
+  Edge Points: 60
+  Confidence: 0.745
+
+----------------------------------------------------------------------
+Feature: 4d3c5375-eeaf-ba4f-2e2f-ec25e0266c5b_trace (CIRCLE)
+CAD Feature ID: 4d3c5375-eeaf-ba4f-2e2f-ec25e0266c5b
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4218.502639795327, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(393.170026613996), 'cy_px': np.float64(93.27291593811242)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 369, 'ymin': 69, 'xmax': 416, 'ymax': 116}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 393.8225691890554, 'cy': 93.4098550457569, 'radius': 8.60224971700515}
+  Residual: 1.4317 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-112.92064786586029), 'center_dy': np.float64(-135.33857792339103)}
+  Corrected Pixel: {'cx': np.float64(280.9019213231951), 'cy': np.float64(-41.92872287763413), 'radius': 8.60224971700515}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4205.344077309666, 'cy': 2661.633567699009, 'radius': 1.0521066686064737}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.0521066686064737, 'cx_mm': 4205.344077309666, 'cy_mm': 2661.633567699009, 'radius_deviation_mm': 0.05210666860647373, 'radius_deviation_pct': 5.210666860647373}
+  Edge Points: 90
+  Confidence: 0.284
+
+----------------------------------------------------------------------
+Feature: 4614f873-faf1-b48a-5ef4-42f525191614_trace (CIRCLE)
+CAD Feature ID: 4614f873-faf1-b48a-5ef4-42f525191614
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4255.102634785177, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(707.3144890911935), 'cy_px': np.float64(94.84612819989707)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 683, 'ymin': 71, 'xmax': 730, 'ymax': 118}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 706.880352360315, 'cy': 95.11255834940357, 'radius': 8.564787934983201}
+  Residual: 1.1840 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(21.40275592796486), 'center_dy': np.float64(-16.955347568352565)}
+  Corrected Pixel: {'cx': np.float64(728.2831082882799), 'cy': np.float64(78.157210781051), 'radius': 8.564787934983201}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4257.535825135573, 'cy': 2647.904101202592, 'radius': 0.9431931311767735}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.9431931311767735, 'cx_mm': 4257.535825135573, 'cy_mm': 2647.904101202592, 'radius_deviation_mm': -0.0568068688232265, 'radius_deviation_pct': -5.68068688232265}
+  Edge Points: 90
+  Confidence: 0.408
+
+----------------------------------------------------------------------
+Feature: 2e9100da-22a8-aa69-5c0c-d9dd87c71f91_trace (CIRCLE)
+CAD Feature ID: 2e9100da-22a8-aa69-5c0c-d9dd87c71f91
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4218.502639795327, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(384.3196324771998), 'cy_px': np.float64(1860.5502098901052)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 360, 'ymin': 1836, 'xmax': 407, 'ymax': 1884}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 384.9475106041114, 'cy': 1860.3632898585392, 'radius': 8.54536673210737}
+  Residual: 1.5060 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-23.614035013931478), 'center_dy': np.float64(19.531081223776397)}
+  Corrected Pixel: {'cx': np.float64(361.33347559017994), 'cy': np.float64(1879.8943710823157), 'radius': 8.54536673210737}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4215.835947478056, 'cy': 2437.7804743896945, 'radius': 0.9139411594625882}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.9139411594625882, 'cx_mm': 4215.835947478056, 'cy_mm': 2437.7804743896945, 'radius_deviation_mm': -0.08605884053741175, 'radius_deviation_pct': -8.605884053741175}
+  Edge Points: 90
+  Confidence: 0.247
+
+----------------------------------------------------------------------
+Feature: 1d92bb3b-0183-6ebb-b414-40add2460758_trace (CIRCLE)
+CAD Feature ID: 1d92bb3b-0183-6ebb-b414-40add2460758
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4255.102634785177, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(698.4640949544046), 'cy_px': np.float64(1862.1234221518898)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 674, 'ymin': 1838, 'xmax': 722, 'ymax': 1885}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 698.2041671459938, 'cy': 1861.9608957969253, 'radius': 8.648686421594261}
+  Residual: 1.4892 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-31.63691149401041), 'center_dy': np.float64(18.4339765078763)}
+  Corrected Pixel: {'cx': np.float64(666.5672556519834), 'cy': np.float64(1880.3948723048015), 'radius': 8.648686421594261}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4251.397186722857, 'cy': 2437.9002506069546, 'radius': 1.0385665388542926}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.0385665388542926, 'cx_mm': 4251.397186722857, 'cy_mm': 2437.9002506069546, 'radius_deviation_mm': 0.03856653885429262, 'radius_deviation_pct': 3.856653885429262}
+  Edge Points: 90
+  Confidence: 0.255
+
+----------------------------------------------------------------------
+Feature: 18e964f3-be0b-a40f-d27b-e70c040622e7_trace (LINE)
+CAD Feature ID: 18e964f3-be0b-a40f-d27b-e70c040622e7
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.977642852764, 'y1': 2631.385047900988, 'x2': 4208.977642852764, 'y2': 2661.344238036237}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(310.78927929874044), 'y1_px': np.float64(217.85604936574236), 'x2_px': np.float64(312.0770435535378), 'y2_px': np.float64(-39.28916838361329)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 272, 'ymin': -77, 'xmax': 350, 'ymax': 256}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 311.1419537025203, 'y1': 217.8561231908476, 'x2': 312.73084629949483, 'y2': -0.08414459031132537}
+  Residual: 1.2423 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(36.05188788824216), 'p1_dy': np.float64(50.93566102470777), 'p2_dx': np.float64(-2.83529200583439), 'p2_dy': np.float64(-46.51246792546681)}
+  Corrected Pixel: {'x1': np.float64(347.1938415907625), 'y1': np.float64(268.79178421555537), 'x2': np.float64(309.89555429366044), 'y2': np.float64(-46.59661251577813)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4213.248637006933, 'y1': 2625.472072560641, 'x2': 4208.719227213787, 'y2': 2662.1943115147515}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 37.00051873794495, 'length_deviation_mm': 7.041328602695778, 'length_deviation_pct': 23.503067242165336}
+  Edge Points: 51
+  Confidence: 0.593
+
+----------------------------------------------------------------------
+Feature: 8e4c27ab-46a5-7a86-3ae5-e695d12ffe7e_trace (LINE)
+CAD Feature ID: 8e4c27ab-46a5-7a86-3ae5-e695d12ffe7e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4264.62763172774, 'y1': 2631.385047900988, 'x2': 4264.62763172774, 'y2': 2661.344238036237}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(788.4433294383634), 'y1_px': np.float64(220.2481055638491), 'x2_px': np.float64(789.7310936931608), 'y2_px': np.float64(-36.89711218550656)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 749, 'ymin': -75, 'xmax': 828, 'ymax': 258}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 788.9410730410146, 'y1': 220.2499385211763, 'x2': 789.2468676836831, 'y2': 2.3281469359239537}
+  Residual: 1.0961 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(13.576956467044283), 'p1_dy': np.float64(39.70583462924617), 'p2_dx': np.float64(24.53395800957901), 'p2_dy': np.float64(-49.17194673416702)}
+  Corrected Pixel: {'x1': np.float64(802.5180295080589), 'y1': np.float64(259.9557731504225), 'x2': np.float64(813.7808256932622), 'y2': np.float64(-46.84379979824307)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4266.290557337582, 'y1': 2626.767158767027, 'x2': 4267.423717661116, 'y2': 2662.5170982883697}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 35.767893816920335, 'length_deviation_mm': 5.808703681671162, 'length_deviation_pct': 19.388720641139088}
+  Edge Points: 51
+  Confidence: 0.624
+
+----------------------------------------------------------------------
+Feature: fb388d8d-1125-e021-6565-d15688ee9b1b_trace (LINE)
+CAD Feature ID: fb388d8d-1125-e021-6565-d15688ee9b1b
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4261.92763172774, 'y1': 2658.644238036237, 'x2': 4243.552637290252, 'y2': 2658.644238036237}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(766.4404423684391), 'y1_px': np.float64(-13.838574177076225), 'x2_px': np.float64(608.7244986316437), 'y2_px': np.float64(-14.628403972605156)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 585, 'ymin': -38, 'xmax': 790, 'ymax': 9}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 613.9955230118796, 'y1': 0.43998695578429997, 'x2': 766.365843831569, 'y2': 1.026239310262756}
+  Residual: 0.0948 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(11.843667241941375), 'p1_dy': np.float64(-47.08376126219957), 'p2_dx': np.float64(25.050124068463447), 'p2_dy': np.float64(-47.68976733886723)}
+  Corrected Pixel: {'x1': np.float64(625.839190253821), 'y1': np.float64(-46.643774306415274), 'x2': np.float64(791.4159679000325), 'y2': np.float64(-46.663528028604475)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4245.527887661218, 'y1': 2662.3841412408156, 'x2': 4264.8182281125455, 'y2': 2662.48304728557}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 19.290594006764017, 'length_deviation_mm': 0.9155995692763597, 'length_deviation_pct': 4.982856307201942}
+  Edge Points: 48
+  Confidence: 0.775
+
+----------------------------------------------------------------------
+Feature: 615ca8ba-9ed9-aef8-bf11-634fbb041951_trace (LINE)
+CAD Feature ID: 615ca8ba-9ed9-aef8-bf11-634fbb041951
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4210.040142852764, 'y1': 2632.447547900988, 'x2': 4187.467626219695, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(319.95458190338104), 'y1_px': np.float64(208.78208764946248), 'x2_px': np.float64(126.21053613453114), 'y2_px': np.float64(207.81183178040374)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 97, 'ymin': 178, 'xmax': 349, 'ymax': 237}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 126.21934187002861, 'y1': 206.88234797695776, 'x2': 319.954675869913, 'y2': 208.7438582212513}
+  Residual: 1.1249 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(82.92128510117641), 'p1_dy': np.float64(82.65957482461886), 'p2_dx': np.float64(15.621287537559056), 'p2_dy': np.float64(29.041754365066822)}
+  Corrected Pixel: {'x1': np.float64(209.14062697120502), 'y1': np.float64(289.5419228015766), 'x2': np.float64(335.57596340747205), 'y2': np.float64(237.7856125863181)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4197.176995927228, 'y1': 2622.9740528122984, 'x2': 4211.8770177303595, 'y2': 2629.0776362846946}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 15.91679528727609, 'length_deviation_mm': -6.655721345792427, 'length_deviation_pct': -29.485951672937787}
+  Edge Points: 60
+  Confidence: 0.637
+
+----------------------------------------------------------------------
+Feature: e25dc8b7-cfd7-93c3-ed5e-27e554edb707_trace (LINE)
+CAD Feature ID: e25dc8b7-cfd7-93c3-ed5e-27e554edb707
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4212.740142852764, 'y1': 2551.047568199115, 'x2': 4187.467626219695, 'y2': 2551.047568199115}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(339.6302841189754), 'y1_px': np.float64(907.5690833662593), 'x2_px': np.float64(122.71164368355676), 'y2_px': np.float64(906.4827708390512)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 90, 'ymin': 873, 'xmax': 372, 'ymax': 940}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 122.71469916912714, 'y1': 906.1054645026586, 'x2': 339.62954404899494, 'y2': 907.6134396446499}
+  Residual: 1.2460 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(29.42462425284043), 'p1_dy': np.float64(13.80765817469262), 'p2_dx': np.float64(7.908030591235956), 'p2_dy': np.float64(5.29678518240803)}
+  Corrected Pixel: {'x1': np.float64(152.13932342196756), 'y1': np.float64(919.9131226773512), 'x2': np.float64(347.5375746402309), 'y2': np.float64(912.910224827058)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4190.903903592864, 'y1': 2549.5000482700293, 'x2': 4213.6644898454615, 'y2': 2550.4299174687717}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 22.779572939120694, 'length_deviation_mm': -2.492943693947641, 'length_deviation_pct': -9.864247910656031}
+  Edge Points: 60
+  Confidence: 0.641
+
+----------------------------------------------------------------------
+Feature: 6ca81b6f-b647-efec-b242-01f0c4caed25_trace (LINE)
+CAD Feature ID: 6ca81b6f-b647-efec-b242-01f0c4caed25
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4190.167626219695, 'y1': 2629.747547900988, 'x2': 4190.167626219695, 'y2': 2594.447558050051}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(149.2690741429542), 'y1_px': np.float64(231.10248310512907), 'x2_px': np.float64(147.751741233762), 'y2_px': np.float64(534.0887633013081)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 102, 'ymin': 185, 'xmax': 194, 'ymax': 579}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 148.04145871259442, 'y1': 534.0903194330739, 'x2': 149.51932245867127, 'y2': 231.1039207214617}
+  Residual: 0.9803 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-23.611200096435596), 'p1_dy': np.float64(16.05015544094772), 'p2_dx': np.float64(-8.614360774265606), 'p2_dy': np.float64(7.88206789373919)}
+  Corrected Pixel: {'x1': np.float64(124.43025861615882), 'y1': np.float64(550.1404748740216), 'x2': np.float64(140.90496168440566), 'y2': np.float64(238.98598861520088)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4187.459946165891, 'y1': 2592.563863160333, 'x2': 4189.197773488967, 'y2': 2628.82420822442}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 36.30196507038572, 'length_deviation_mm': 1.0019752194487381, 'length_deviation_pct': 2.8384575284010807}
+  Edge Points: 60
+  Confidence: 0.798
+
+----------------------------------------------------------------------
+Feature: 8b9ecaa7-8643-eaf6-1052-eeebca716ca7_trace (LINE)
+CAD Feature ID: 8b9ecaa7-8643-eaf6-1052-eeebca716ca7
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4190.167626219695, 'y1': 2553.747568199115, 'x2': 4190.167626219695, 'y2': 2589.047558050052}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(146.00229500827845), 'y1_px': np.float64(883.4242328306282), 'x2_px': np.float64(147.51962791746337), 'y2_px': np.float64(580.4379526344528)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 100, 'ymin': 534, 'xmax': 192, 'ymax': 928}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 145.48837296553936, 'y1': 883.4219307028766, 'x2': 147.16124185741398, 'y2': 580.4364945454242}
+  Residual: 0.9265 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(35.651458401974196), 'p1_dy': np.float64(10.042343837654812), 'p2_dx': np.float64(-50.13152070898309), 'p2_dy': np.float64(-2.4896609904083107)}
+  Corrected Pixel: {'x1': np.float64(181.13983136751355), 'y1': np.float64(893.4642745405314), 'x2': np.float64(97.0297211484309), 'y2': np.float64(577.9468335550159)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4194.267146505081, 'y1': 2552.5983642378123, 'x2': 4184.283898197018, 'y2': 2589.308325316519}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 38.043218701637265, 'length_deviation_mm': 2.7432288507002838, 'length_deviation_pct': 7.771188780178839}
+  Edge Points: 60
+  Confidence: 0.809
+
+----------------------------------------------------------------------
+Feature: 26f66a57-5967-596a-b63a-278e974adfc8_trace (LINE)
+CAD Feature ID: 26f66a57-5967-596a-b63a-278e974adfc8
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.977642852764, 'y1': 2631.385047900988, 'x2': 4208.977642852764, 'y2': 2672.810230159025}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(310.78927929874044), 'y1_px': np.float64(217.85604936574236), 'x2_px': np.float64(312.569897156558), 'y2_px': np.float64(-137.70387945611583)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 257, 'ymin': -191, 'xmax': 365, 'ymax': 271}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 310.3076379911571, 'y1': 217.8522060681782, 'x2': 311.65352468459577, 'y2': 0.9007639508275247}
+  Residual: 0.9922 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(36.20699213399439), 'p1_dy': np.float64(50.97615836179102), 'p2_dx': np.float64(-2.5362847637890127), 'p2_dy': np.float64(-45.91945336643141)}
+  Corrected Pixel: {'x1': np.float64(346.5146301251515), 'y1': np.float64(268.8283644299692), 'x2': np.float64(309.11723992080675), 'y2': np.float64(-45.01868941560389)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4213.169527517031, 'y1': 2625.4674145390663, 'x2': 4208.629471127873, 'y2': 2662.0100231065485}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 36.823557038028724, 'length_deviation_mm': -4.601625220008515, 'length_deviation_pct': -11.108279962041001}
+  Edge Points: 37
+  Confidence: 0.509
+
+----------------------------------------------------------------------
+Feature: 6ba6b9fd-892b-7355-94bc-46ba8f75aa7d_trace (LINE)
+CAD Feature ID: 6ba6b9fd-892b-7355-94bc-46ba8f75aa7d
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4278.977642852764, 'y1': 2631.385047900988, 'x2': 4278.977642852764, 'y2': 2672.810230159025}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(911.6121039877253), 'y1_px': np.float64(220.86492568813628), 'x2_px': np.float64(913.3927218455428), 'y2_px': np.float64(-134.6950031337219)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 858, 'ymin': -188, 'xmax': 966, 'ymax': 274}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 911.5453980265952, 'y1': 220.86770945754608, 'x2': 912.4383559541295, 'y2': 3.911986794288282}
+  Residual: 1.0553 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-14.174245842191567), 'p1_dy': np.float64(11.14170754957695), 'p2_dx': np.float64(21.218164804981143), 'p2_dy': np.float64(-65.66205720899143)}
+  Corrected Pixel: {'x1': np.float64(897.3711521844036), 'y1': np.float64(232.00941700712303), 'x2': np.float64(933.6565207591107), 'y2': np.float64(-61.750070414703146)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4277.325017606111, 'y1': 2630.0783616283584, 'x2': 4281.381015109046, 'y2': 2664.3236786650887}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 34.48467565006203, 'length_deviation_mm': -6.940506607975209, 'length_deviation_pct': -16.754317614688645}
+  Edge Points: 37
+  Confidence: 0.502
+
+----------------------------------------------------------------------
+Feature: 2f746eeb-55fe-bcdf-5b4e-9e0c5fc0705c_trace (LINE)
+CAD Feature ID: 2f746eeb-55fe-bcdf-5b4e-9e0c5fc0705c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4210.040142852764, 'y1': 2632.447547900988, 'x2': 4176.585521657792, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(319.95458190338104), 'y1_px': np.float64(208.78208764946248), 'x2_px': np.float64(32.80743897105276), 'y2_px': np.float64(207.34407596963138)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -10, 'ymin': 164, 'xmax': 363, 'ymax': 251}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 32.81017931682706, 'y1': 206.90856783873437, 'x2': 319.9560376344365, 'y2': 208.5075997191086}
+  Residual: 1.3140 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(196.5773111346724), 'p1_dy': np.float64(174.26690449973648), 'p2_dx': np.float64(15.150285460337045), 'p2_dy': np.float64(28.481214254007796)}
+  Corrected Pixel: {'x1': np.float64(229.38749045149947), 'y1': np.float64(381.17547233847085), 'x2': np.float64(335.10632309477353), 'y2': np.float64(236.9888139731164)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4199.589298886129, 'y1': 2612.310193379788, 'x2': 4211.821837882548, 'y2': 2629.1701924781373}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 20.83013633885414, 'length_deviation_mm': -12.62448485611774, 'length_deviation_pct': -37.73614647298759}
+  Edge Points: 60
+  Confidence: 0.714
+
+----------------------------------------------------------------------
+Feature: 5f55d901-df49-7546-9c20-b8701ee8bb1c_trace (LINE)
+CAD Feature ID: 5f55d901-df49-7546-9c20-b8701ee8bb1c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4212.740142852764, 'y1': 2534.947530953543, 'x2': 4176.585521657792, 'y2': 2534.947530953543}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(338.9382409638638), 'y1_px': np.float64(1045.7586527302956), 'x2_px': np.float64(28.6165033649595), 'y2_px': np.float64(1044.2045843923152)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -17, 'ymin': 997, 'xmax': 385, 'ymax': 1092}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 28.616268945316364, 'y1': 1044.1212152745306, 'x2': 338.9385790803934, 'y2': 1045.5522224826984}
+  Residual: 1.0425 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(19.65093441728459), 'p1_dy': np.float64(21.805774803554414), 'p2_dx': np.float64(30.307990281490675), 'p2_dy': np.float64(-3.3454291154538396)}
+  Corrected Pixel: {'x1': np.float64(48.26720336260095), 'y1': np.float64(1065.926990078085), 'x2': np.float64(369.2465693618841), 'y2': np.float64(1042.2067933672447)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4178.887580017202, 'y1': 2532.428249516628, 'x2': 4216.26911113422, 'y2': 2535.379019861529}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 37.497812126588855, 'length_deviation_mm': 1.3431909316171584, 'length_deviation_pct': 3.7151293174217144}
+  Edge Points: 60
+  Confidence: 0.790
+
+----------------------------------------------------------------------
+Feature: ab100e95-b13f-63fd-8b76-f6b949727b0a_trace (LINE)
+CAD Feature ID: ab100e95-b13f-63fd-8b76-f6b949727b0a
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4179.285521657792, 'y1': 2629.747547900988, 'x2': 4179.285521657792, 'y2': 2586.397539427265}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(55.86597697947582), 'y1_px': np.float64(230.63472729435307), 'x2_px': np.float64(54.002622492727824), 'y2_px': np.float64(602.7157921725484)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -1, 'ymin': 174, 'xmax': 111, 'ymax': 658}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 53.74928560128464, 'y1': 602.7145463390575, 'x2': 55.65026841307242, 'y2': 230.63347429644742}
+  Residual: 1.3656 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(50.03594924571826), 'p1_dy': np.float64(58.731244867805685), 'p2_dx': np.float64(155.96156994946682), 'p2_dy': np.float64(142.2058964338986)}
+  Corrected Pixel: {'x1': np.float64(103.7852348470029), 'y1': np.float64(661.4457912068632), 'x2': np.float64(211.61183836253923), 'y2': np.float64(372.839370730346)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4185.119659269412, 'y1': 2579.584306697633, 'x2': 4197.513501201597, 'y2': 2613.2710112288178}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 35.89430846264238, 'length_deviation_mm': -7.455700011080559, 'length_deviation_pct': -17.198843261126257}
+  Edge Points: 60
+  Confidence: 0.771
+
+----------------------------------------------------------------------
+Feature: a364e329-590f-478b-6bc2-dc8f3dea57f8_trace (LINE)
+CAD Feature ID: a364e329-590f-478b-6bc2-dc8f3dea57f8
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4179.285521657792, 'y1': 2537.647530953543, 'x2': 4179.285521657792, 'y2': 2580.997539427265}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(51.90715468968119), 'y1_px': np.float64(1021.1460463838885), 'x2_px': np.float64(53.77050917642919), 'y2_px': np.float64(649.0649815057004)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': -3, 'ymin': 593, 'xmax': 109, 'ymax': 1076}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 51.748677066202724, 'y1': 1021.1451231375834, 'x2': 54.3449463652268, 'y2': 649.0691956307319}
+  Residual: 1.0045 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(10.163771843342829), 'p1_dy': np.float64(19.53887916921269), 'p2_dx': np.float64(55.15550537195895), 'p2_dy': np.float64(54.120707788610616)}
+  Corrected Pixel: {'x1': np.float64(61.91244890954555), 'y1': np.float64(1040.6840023067962), 'x2': np.float64(109.50045173718576), 'y2': np.float64(703.1899034193425)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4180.462577446919, 'y1': 2535.377119039655, 'x2': 4185.809860049553, 'y2': 2574.724286395309}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 39.70885304496038, 'length_deviation_mm': -3.6411554287616497, 'length_deviation_pct': -8.399434179969886}
+  Edge Points: 60
+  Confidence: 0.831
+
+----------------------------------------------------------------------
+Feature: ba208673-72d3-a114-573c-2c071d5e9626_trace (LINE)
+CAD Feature ID: ba208673-72d3-a114-573c-2c071d5e9626
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4271.802623948636, 'y1': 2644.622558452217, 'x2': 4271.802623948637, 'y2': 2550.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(850.5966026575843), 'y1_px': np.float64(106.93653674909365), 'x2_px': np.float64(846.566856819918), 'y2_px': np.float64(911.6101150385948)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 725, 'ymin': -13, 'xmax': 971, 'ymax': 1032}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 846.6363100336723, 'y1': 911.6110328454464, 'x2': 851.7562776280445, 'y2': 106.9414790386628}
+  Residual: 1.1918 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(13.591835985132775), 'p1_dy': np.float64(7.682969678972654), 'p2_dx': np.float64(8.47184052829789), 'p2_dy': np.float64(-19.701432484365682)}
+  Corrected Pixel: {'x1': np.float64(860.2281460188051), 'y1': np.float64(919.294002524419), 'x2': np.float64(860.2281181563424), 'y2': np.float64(87.24004655429712)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4273.398701491493, 'y1': 2549.985307888743, 'x2': 4272.913241958959, 'y2': 2646.9228972028054}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.9388048873078, 'length_deviation_mm': 3.1887871355305464, 'length_deviation_pct': 3.40137230050828}
+  Edge Points: 60
+  Confidence: 0.907
+
+----------------------------------------------------------------------
+Feature: 7e579f3c-b2c6-54c8-f30f-b6fdbe435fc6_trace (LINE)
+CAD Feature ID: 7e579f3c-b2c6-54c8-f30f-b6fdbe435fc6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4264.802623948637, 'y1': 2543.87254070044, 'x2': 4208.802650631866, 'y2': 2543.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(786.1836867187812), 'y1_px': np.float64(971.391509875255), 'x2_px': np.float64(305.5256559946283), 'y2_px': np.float64(968.9844099642905)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 233, 'ymin': 896, 'xmax': 858, 'ymax': 1043}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 305.5235198929556, 'y1': 969.4145383290654, 'x2': 786.1821859106961, 'y2': 971.679557052679}
+  Residual: 0.2219 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-20.670197906063322), 'p1_dy': np.float64(14.636812779359161), 'p2_dx': np.float64(0.20827500738187155), 'p2_dy': np.float64(1.964995851167373)}
+  Corrected Pixel: {'x1': np.float64(284.8533219868923), 'y1': np.float64(984.0513511084246), 'x2': np.float64(786.390460918078), 'y2': np.float64(973.6445529038464)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4206.403032351201, 'y1': 2542.1051211033787, 'x2': 4264.828028486607, 'y2': 2543.6101728834874}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 58.444378294948436, 'length_deviation_mm': 2.4444049781769337, 'length_deviation_pct': 4.3650109694692585}
+  Edge Points: 60
+  Confidence: 0.971
+
+----------------------------------------------------------------------
+Feature: 618375cb-7e3b-e700-e753-d9d89c6cad11_trace (LINE)
+CAD Feature ID: 618375cb-7e3b-e700-e753-d9d89c6cad11
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4201.802650631866, 'y1': 2550.87254070044, 'x2': 4201.802650631866, 'y2': 2644.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(245.74426115796814), 'y1_px': np.float64(908.6012398631501), 'x2_px': np.float64(249.77400699564896), 'y2_px': np.float64(103.92766157364895)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 125, 'ymin': -16, 'xmax': 370, 'ymax': 1029}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 246.44123608874602, 'y1': 908.604675875046, 'x2': 250.00701354364665, 'y2': 103.92928535888075}
+  Residual: 1.2556 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-2.225113117527826), 'p1_dy': np.float64(-2.8054830510499187), 'p2_dx': np.float64(24.109062610557658), 'p2_dy': np.float64(11.27835098027765)}
+  Corrected Pixel: {'x1': np.float64(244.2161229712182), 'y1': np.float64(905.7991928239961), 'x2': np.float64(274.1160761542043), 'y2': np.float64(115.2076363391584)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4201.622981630516, 'y1': 2551.1980987233696, 'x2': 4204.645179558304, 'y2': 2643.322598824339}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 92.17405925296019, 'length_deviation_mm': -1.5759584988170587, 'length_deviation_pct': -1.6810220804328142}
+  Edge Points: 60
+  Confidence: 0.902
+
+----------------------------------------------------------------------
+Feature: b5d6ddc6-841b-bf88-8fb1-034512e85c36_trace (LINE)
+CAD Feature ID: b5d6ddc6-841b-bf88-8fb1-034512e85c36
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.802650631866, 'y1': 2651.622558452217, 'x2': 4264.802623948636, 'y2': 2651.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(310.15717709678574), 'y1_px': np.float64(44.1462667369924), 'x2_px': np.float64(790.8152078209241), 'y2_px': np.float64(46.553366647956864)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 238, 'ymin': -27, 'xmax': 862, 'ymax': 118}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 310.156429017812, 'y1': 44.152060834544045, 'x2': 790.816702410563, 'y2': 46.248939039899135}
+  Residual: 1.0396 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-23.843778545572604), 'p1_dy': np.float64(-55.84524763302852), 'p2_dx': np.float64(20.270308927701763), 'p2_dy': np.float64(-37.391834325326954)}
+  Corrected Pixel: {'x1': np.float64(286.3126504722394), 'y1': np.float64(-11.693186798484476), 'x2': np.float64(811.0870113382648), 'y2': np.float64(8.85710471457218)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4205.992089457704, 'y1': 2658.1141645567827, 'x2': 4267.142375911893, 'y2': 2656.0261500783986}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 61.185924344503526, 'length_deviation_mm': 5.1859510277329335, 'length_deviation_pct': 9.26063124780074}
+  Edge Points: 60
+  Confidence: 0.865
+
+----------------------------------------------------------------------
+Feature: 4c8a057c-16fa-02ef-3711-355e39abcbda_trace (LINE)
+CAD Feature ID: 4c8a057c-16fa-02ef-3711-355e39abcbda
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4271.802623948636, 'y1': 2535.122558452218, 'x2': 4271.802623948637, 'y2': 2441.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(845.8898604104106), 'y1_px': np.float64(1046.7950982268521), 'x2_px': np.float64(841.8601145727444), 'y2_px': np.float64(1851.468676516357)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 721, 'ymin': 926, 'xmax': 966, 'ymax': 1972}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 839.6546805955185, 'y1': 1851.4517375093135, 'x2': 846.3976561605729, 'y2': 1046.8014044060876}
+  Residual: 1.6578 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-24.43687987203498), 'p1_dy': np.float64(15.099973657299529), 'p2_dx': np.float64(7.574721181681753), 'p2_dy': np.float64(9.425342533410458)}
+  Corrected Pixel: {'x1': np.float64(815.2178007234835), 'y1': np.float64(1866.5517111666131), 'x2': np.float64(853.9723773422546), 'y2': np.float64(1056.226746939498)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4268.707488703787, 'y1': 2439.599763001421, 'x2': 4272.749772092814, 'y2': 2534.0284496213812}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 94.51516762810031, 'length_deviation_mm': 0.7651498763230649, 'length_deviation_pct': 0.8161597135362245}
+  Edge Points: 60
+  Confidence: 0.871
+
+----------------------------------------------------------------------
+Feature: a2bbb421-cd6b-45f8-fb60-ed7187ee9cd0_trace (LINE)
+CAD Feature ID: a2bbb421-cd6b-45f8-fb60-ed7187ee9cd0
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4264.802623948637, 'y1': 2434.372540700441, 'x2': 4208.802650631866, 'y2': 2434.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(781.4769444716076), 'y1_px': np.float64(1911.2500713530171), 'x2_px': np.float64(300.81891374745464), 'y2_px': np.float64(1908.8429714420527)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 228, 'ymin': 1836, 'xmax': 853, 'ymax': 1983}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 300.8233069546751, 'y1': 1910.2027258713315, 'x2': 781.468634180477, 'y2': 1908.668213570288}
+  Residual: 1.6363 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-42.945908545299744), 'p1_dy': np.float64(17.882247779615568), 'p2_dx': np.float64(-51.263898713074695), 'p2_dy': np.float64(30.105133772695353)}
+  Corrected Pixel: {'x1': np.float64(257.87739840937536), 'y1': np.float64(1928.0849736509472), 'x2': np.float64(730.2047354674023), 'y2': np.float64(1938.7733473429832)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4203.811020223371, 'y1': 2432.105717109186, 'x2': 4258.845266306636, 'y2': 2431.136055347779}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 55.04278777355794, 'length_deviation_mm': -0.9571855432135621, 'length_deviation_pct': -1.709260713034828}
+  Edge Points: 60
+  Confidence: 0.787
+
+----------------------------------------------------------------------
+Feature: 97491b65-1353-2976-5c25-d592385191e4_trace (LINE)
+CAD Feature ID: 97491b65-1353-2976-5c25-d592385191e4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4201.802650631866, 'y1': 2441.372540700441, 'x2': 4201.802650631866, 'y2': 2535.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(241.03751891079446), 'y1_px': np.float64(1848.4598013409122), 'x2_px': np.float64(245.06726474847528), 'y2_px': np.float64(1043.7862230514074)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 120, 'ymin': 923, 'xmax': 365, 'ymax': 1969}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 238.92707772256182, 'y1': 1848.4403984638127, 'x2': 246.3219859504993, 'y2': 1043.7977593073426}
+  Residual: 1.5247 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-22.997719370537425), 'p1_dy': np.float64(6.494899280377695), 'p2_dx': np.float64(-3.8641214708886764), 'p2_dy': np.float64(8.134116590760414)}
+  Corrected Pixel: {'x1': np.float64(215.9293583520244), 'y1': np.float64(1854.9352977441904), 'x2': np.float64(242.45786447961063), 'y2': np.float64(1051.931875898103)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4198.881228326006, 'y1': 2440.60347047267, 'x2': 4201.5033976669665, 'y2': 2534.1720351182803}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 93.60529932590596, 'length_deviation_mm': -0.14471842587128947, 'length_deviation_pct': -0.1543662916997645}
+  Edge Points: 60
+  Confidence: 0.882
+
+----------------------------------------------------------------------
+Feature: b50c2c40-1fa1-1246-b922-d28165a0bad6_trace (LINE)
+CAD Feature ID: b50c2c40-1fa1-1246-b922-d28165a0bad6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4208.802650631866, 'y1': 2542.122558452218, 'x2': 4264.802623948636, 'y2': 2542.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(305.45043484961207), 'y1_px': np.float64(984.0048282147509), 'x2_px': np.float64(786.1084655737504), 'y2_px': np.float64(986.4119281257153)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 233, 'ymin': 911, 'xmax': 858, 'ymax': 1058}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 305.45128553426605, 'y1': 983.8262430328308, 'x2': 786.1083267120971, 'y2': 986.5241034772467}
+  Residual: 0.2238 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-14.240204601858068), 'p1_dy': np.float64(15.384041053856436), 'p2_dx': np.float64(0.4761949118865232), 'p2_dy': np.float64(3.472568060980734)}
+  Corrected Pixel: {'x1': np.float64(291.211080932408), 'y1': np.float64(999.2102840866872), 'x2': np.float64(786.5845216239836), 'y2': np.float64(989.9966715382275)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4207.152580887755, 'y1': 2540.342754618413, 'x2': 4264.86017786299, 'y2': 2541.705199364045}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 57.723678021597436, 'length_deviation_mm': 1.7237047048268437, 'length_deviation_pct': 3.0780455824085853}
+  Edge Points: 60
+  Confidence: 0.971
+
+----------------------------------------------------------------------
+Feature: c482f922-c2b3-f468-1f73-766713e4ced8_trace (LINE)
+CAD Feature ID: c482f922-c2b3-f468-1f73-766713e4ced8
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4334.62763172774, 'y1': 2555.747568199115, 'x2': 4334.62763172774, 'y2': 2630.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1386.014956673629), 'y1_px': np.float64(872.4673276981703), 'x2_px': np.float64(1389.2258566766031), 'y2_px': np.float64(231.3037161454704)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1289, 'ymin': 135, 'xmax': 1485, 'ymax': 968}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1386.4452128121054, 'y1': 872.4697080496271, 'x2': 1390.423055695218, 'y2': 231.3092398273709}
+  Residual: 0.2595 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-22.25109909557932), 'p1_dy': np.float64(-0.9600442132884837), 'p2_dx': np.float64(6.60964435149117), 'p2_dy': np.float64(-6.2440471829768285)}
+  Corrected Pixel: {'x1': np.float64(1364.194113716526), 'y1': np.float64(871.5096638363386), 'x2': np.float64(1397.0327000467091), 'y2': np.float64(225.06519264439407)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4332.084858146557, 'y1': 2555.8464086170657, 'x2': 4335.533520150861, 'y2': 2631.178915507619}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 75.41140407150093, 'length_deviation_mm': 0.711424369627963, 'length_deviation_pct': 0.9523755862682319}
+  Edge Points: 60
+  Confidence: 0.975
+
+----------------------------------------------------------------------
+Feature: 86fa455a-3a3a-f059-5c57-75410f52e2e4_trace (LINE)
+CAD Feature ID: 86fa455a-3a3a-f059-5c57-75410f52e2e4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4283.677642852764, 'y1': 2551.0475681991147, 'x2': 4329.92763172774, 'y2': 2551.0475681991147}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(948.499843067184), 'y1_px': np.float64(910.6182571394056), 'x2_px': np.float64(1345.4719710342906), 'y2_px': np.float64(912.6062642313591)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 888, 'ymin': 851, 'xmax': 1405, 'ymax': 972}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 948.5014090093571, 'y1': 910.1081707381335, 'x2': 1345.475898472334, 'y2': 911.327117764267}
+  Residual: 0.8328 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.8997694870124633), 'p1_dy': np.float64(-2.8224692691775317), 'p2_dx': np.float64(1.9847906809993674), 'p2_dy': np.float64(-2.184245729066106)}
+  Corrected Pixel: {'x1': np.float64(952.4011784963695), 'y1': np.float64(907.285701468956), 'x2': np.float64(1347.4606891533333), 'y2': np.float64(909.1428720352009)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4284.130219562328, 'y1': 2551.438100373717, 'x2': 4330.157304591418, 'y2': 2551.4522274447054}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 46.02708719709739, 'length_deviation_mm': -0.22290167787883775, 'length_deviation_pct': -0.48194968972076824}
+  Edge Points: 60
+  Confidence: 0.869
+
+----------------------------------------------------------------------
+Feature: 69a4489d-ff70-7538-45be-b304f4f6de75_trace (LINE)
+CAD Feature ID: 69a4489d-ff70-7538-45be-b304f4f6de75
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4278.977642852764, 'y1': 2630.447547900988, 'x2': 4278.977642852764, 'y2': 2555.747568199115}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(911.5718065369801), 'y1_px': np.float64(228.91165994736366), 'x2_px': np.float64(908.3609065340061), 'y2_px': np.float64(870.0752715000635)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 812, 'ymin': 132, 'xmax': 1007, 'ymax': 966}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 909.1986256584125, 'y1': 870.075563438759, 'x2': 913.1155481901455, 'y2': 228.91858487712597}
+  Residual: 1.2480 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.3139217126840776), 'p1_dy': np.float64(8.224216728312172), 'p2_dx': np.float64(-12.69523900815443), 'p2_dy': np.float64(11.836158585160547)}
+  Corrected Pixel: {'x1': np.float64(912.5125473710966), 'y1': np.float64(878.2997801670712), 'x2': np.float64(900.4203091819911), 'y2': np.float64(240.7547434622865)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4279.46612402761, 'y1': 2554.7918025330105, 'x2': 4277.685358904159, 'y2': 2629.0612753853748}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 74.29081855917981, 'length_deviation_mm': -0.40916114269315074, 'length_deviation_pct': -0.5477392956813505}
+  Edge Points: 60
+  Confidence: 0.878
+
+----------------------------------------------------------------------
+Feature: 54c98938-44a5-540d-63eb-d74d2fb0f8c4_trace (LINE)
+CAD Feature ID: 54c98938-44a5-540d-63eb-d74d2fb0f8c4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4332.62763172774, 'y1': 2632.447547900988, 'x2': 4280.977642852764, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1372.145458151841), 'y1_px': np.float64(214.05138183085728), 'x2_px': np.float64(928.8241408515896), 'y2_px': np.float64(211.83126142260517)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 862, 'ymin': 145, 'xmax': 1438, 'ymax': 280}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 928.8227459878731, 'y1': 212.11951781733094, 'x2': 1372.144260208429, 'y2': 214.29013575377908}
+  Residual: 1.0240 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-5.302829485063057), 'p1_dy': np.float64(-5.1329574945681316), 'p2_dx': np.float64(16.003217678851115), 'p2_dy': np.float64(-10.403593780299389)}
+  Corrected Pixel: {'x1': np.float64(923.51991650281), 'y1': np.float64(206.9865603227628), 'x2': np.float64(1388.14747788728), 'y2': np.float64(203.8865419734797)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4280.356853048765, 'y1': 2633.0088800997455, 'x2': 4334.4859999514165, 'y2': 2633.6411283721263}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 54.132839222479326, 'length_deviation_mm': 2.482850347503465, 'length_deviation_pct': 4.807068503951591}
+  Edge Points: 60
+  Confidence: 0.856
+
+----------------------------------------------------------------------
+Feature: 9c0bd3a0-4c48-b46f-d36e-69e28b5d3d5e_trace (LINE)
+CAD Feature ID: 9c0bd3a0-4c48-b46f-d36e-69e28b5d3d5e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4278.977642852764, 'y1': 2530.2475309535425, 'x2': 4278.977642852764, 'y2': 2455.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(907.2648142727412), 'y1_px': np.float64(1088.9467630366235), 'x2_px': np.float64(904.0539142697671), 'y2_px': np.float64(1730.110374589327)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 807, 'ymin': 992, 'xmax': 1003, 'ymax': 1826}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 905.2302805379746, 'y1': 1730.1161494230053, 'x2': 908.5405922973554, 'y2': 1088.953152669225}
+  Residual: 1.2398 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(29.7750825818016), 'p1_dy': np.float64(-9.232452647697869), 'p2_dx': np.float64(15.837554627577902), 'p2_dy': np.float64(12.618922555675908)}
+  Corrected Pixel: {'x1': np.float64(935.0053631197762), 'y1': np.float64(1720.8836967753073), 'x2': np.float64(924.3781469249333), 'y2': np.float64(1101.5720752249008)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4282.578226285553, 'y1': 2456.6405542639286, 'x2': 4280.978780204415, 'y2': 2528.7866166168765}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 72.1637896787711, 'length_deviation_mm': -2.5361900231018666, 'length_deviation_pct': -3.3951682895012576}
+  Edge Points: 60
+  Confidence: 0.879
+
+----------------------------------------------------------------------
+Feature: 9e40c968-6a44-0dca-8217-76ec222b665a_trace (LINE)
+CAD Feature ID: 9e40c968-6a44-0dca-8217-76ec222b665a
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4329.92763172774, 'y1': 2534.947530953543, 'x2': 4283.677642852764, 'y2': 2534.947530953543}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1344.779927879179), 'y1_px': np.float64(1050.7958335953917), 'x2_px': np.float64(947.8077999120724), 'y2_px': np.float64(1048.8078265034383)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 888, 'ymin': 989, 'xmax': 1404, 'ymax': 1110}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 947.7995499406724, 'y1': 1049.9986998941758, 'x2': 1344.7707066695161, 'y2': 1052.1612891937039}
+  Residual: 0.4072 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-7.62832446198513), 'p1_dy': np.float64(-0.0759614025761266), 'p2_dx': np.float64(-19.781498373248496), 'p2_dy': np.float64(0.7215840891599328)}
+  Corrected Pixel: {'x1': np.float64(940.1712254786872), 'y1': np.float64(1049.9227384915998), 'x2': np.float64(1324.9892082962676), 'y2': np.float64(1052.8828732828638)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4282.7886021000895, 'y1': 2534.8131837724354, 'x2': 4327.623151991557, 'y2': 2534.6928357816078}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 44.83471141436519, 'length_deviation_mm': -1.415277460611037, 'length_deviation_pct': -3.06006011036422}
+  Edge Points: 60
+  Confidence: 0.936
+
+----------------------------------------------------------------------
+Feature: 71490463-4227-2891-2990-e103dd49aa60_trace (LINE)
+CAD Feature ID: 71490463-4227-2891-2990-e103dd49aa60
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4334.62763172774, 'y1': 2455.5475512516696, 'x2': 4334.62763172774, 'y2': 2530.2475309535425}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1381.7079644093901), 'y1_px': np.float64(1732.5024307874337), 'x2_px': np.float64(1384.9188644123642), 'y2_px': np.float64(1091.3388192347302)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1285, 'ymin': 995, 'xmax': 1481, 'ymax': 1828}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1382.0263777331854, 'y1': 1732.5040777851264, 'x2': 1385.315415815045, 'y2': 1091.3408257682606}
+  Residual: 0.2609 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(9.46729376922417), 'p1_dy': np.float64(-19.28743194415324), 'p2_dx': np.float64(-5.055589941111293), 'p2_dy': np.float64(0.9221876068938855)}
+  Corrected Pixel: {'x1': np.float64(1391.4936715024096), 'y1': np.float64(1713.2166458409731), 'x2': np.float64(1380.2598258739338), 'y2': np.float64(1092.2630133751545)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4335.756453294189, 'y1': 2457.8001311722746, 'x2': 4334.085374455335, 'y2': 2530.1371403821927}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 72.35630868087063, 'length_deviation_mm': -2.3436710210023364, 'length_deviation_pct': -3.1374453250936734}
+  Edge Points: 60
+  Confidence: 0.975
+
+----------------------------------------------------------------------
+Feature: 7e6e8eb2-e2c7-d24c-8b5d-c69a3d146e9b_trace (LINE)
+CAD Feature ID: 7e6e8eb2-e2c7-d24c-8b5d-c69a3d146e9b
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4280.977642852764, 'y1': 2453.5475512516696, 'x2': 4332.62763172774, 'y2': 2453.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(921.134312794522), 'y1_px': np.float64(1747.36270890394), 'x2_px': np.float64(1364.4556300947806), 'y2_px': np.float64(1749.5828293121922)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 854, 'ymin': 1680, 'xmax': 1430, 'ymax': 1816}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 921.1364221020826, 'y1': 1746.879004939856, 'x2': 1364.455782826947, 'y2': 1749.357289624501}
+  Residual: 0.9591 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(24.692292240959205), 'p1_dy': np.float64(-5.97318423819263), 'p2_dx': np.float64(10.114125134577534), 'p2_dy': np.float64(-17.302062187549154)}
+  Corrected Pixel: {'x1': np.float64(945.8287143430418), 'y1': np.float64(1740.9058207016633), 'x2': np.float64(1374.5699079615245), 'y2': np.float64(1732.0552274369518)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4283.850871448031, 'y1': 2454.314212145231, 'x2': 4333.795758893927, 'y2': 2455.595487566465}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 49.96131952509119, 'length_deviation_mm': -1.6886693498846697, 'length_deviation_pct': -3.2694476546205427}
+  Edge Points: 60
+  Confidence: 0.865
+
+----------------------------------------------------------------------
+Feature: dd117a08-b20a-8643-d255-c913e7d90499_trace (CIRCLE)
+CAD Feature ID: dd117a08-b20a-8643-d255-c913e7d90499
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4288.502639795327, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(993.9928513029809), 'cy_px': np.float64(96.28179226050997)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 970, 'ymin': 72, 'xmax': 1017, 'ymax': 119}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 993.7366503148221, 'cy': 96.77513866258687, 'radius': 8.36347531981007}
+  Residual: 1.3846 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(6.137541076701802), 'center_dy': np.float64(-67.24894365934057)}
+  Corrected Pixel: {'cx': np.float64(999.8741913915239), 'cy': np.float64(29.5261950032463), 'radius': 8.36347531981007}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4289.148891161615, 'cy': 2653.728265609298, 'radius': 1.025718115243717}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.025718115243717, 'cx_mm': 4289.148891161615, 'cy_mm': 2653.728265609298, 'radius_deviation_mm': 0.02571811524371692, 'radius_deviation_pct': 2.571811524371692}
+  Edge Points: 90
+  Confidence: 0.308
+
+----------------------------------------------------------------------
+Feature: 31993823-496e-f195-c0bf-ebac6af49458_trace (CIRCLE)
+CAD Feature ID: 31993823-496e-f195-c0bf-ebac6af49458
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4325.102634785177, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1308.1373137801784), 'cy_px': np.float64(97.85500452229098)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1284, 'ymin': 74, 'xmax': 1331, 'ymax': 121}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1307.9030279222302, 'cy': 98.07607953527258, 'radius': 8.653074769134971}
+  Residual: 1.2362 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(53.20968623774843), 'center_dy': np.float64(-55.084416892007226)}
+  Corrected Pixel: {'cx': np.float64(1361.1127141599786), 'cy': np.float64(42.99166264326536), 'radius': 8.653074769134971}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4331.2424696068965, 'cy': 2652.3702473553894, 'radius': 1.3569203537742798}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.3569203537742798, 'cx_mm': 4331.2424696068965, 'cy_mm': 2652.3702473553894, 'radius_deviation_mm': 0.3569203537742798, 'radius_deviation_pct': 35.69203537742798}
+  Edge Points: 90
+  Confidence: 0.382
+
+----------------------------------------------------------------------
+Feature: 0f66c36e-17ab-2856-4bb6-771ba3689f53_trace (CIRCLE)
+CAD Feature ID: 0f66c36e-17ab-2856-4bb6-771ba3689f53
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4288.502639795327, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(985.1424571661846), 'cy_px': np.float64(1863.5590862125027)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 961, 'ymin': 1839, 'xmax': 1008, 'ymax': 1887}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 985.6269502178237, 'cy': 1862.8232974548268, 'radius': 8.518722783785872}
+  Residual: 1.6709 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-22.798630713915678), 'center_dy': np.float64(19.55020256969842)}
+  Corrected Pixel: {'cx': np.float64(962.828319503908), 'cy': np.float64(1882.3735000245254), 'radius': 8.518722783785872}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4285.913931308274, 'cy': 2437.8425841478124, 'radius': 1.092395248622937}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.092395248622937, 'cx_mm': 4285.913931308274, 'cy_mm': 2437.8425841478124, 'radius_deviation_mm': 0.09239524862293691, 'radius_deviation_pct': 9.239524862293692}
+  Edge Points: 90
+  Confidence: 0.165
+
+----------------------------------------------------------------------
+Feature: 736a514b-6636-3e9b-7ff7-2634584bcb6e_trace (CIRCLE)
+CAD Feature ID: 736a514b-6636-3e9b-7ff7-2634584bcb6e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4325.102634785177, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1299.2869196433894), 'cy_px': np.float64(1865.1322984742837)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1275, 'ymin': 1841, 'xmax': 1322, 'ymax': 1888}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1299.5829567287465, 'cy': 1864.260643077796, 'radius': 8.079208258389217}
+  Residual: 1.3037 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-7.408185780979653), 'center_dy': np.float64(23.29131308064648)}
+  Corrected Pixel: {'cx': np.float64(1292.1747709477668), 'cy': np.float64(1887.5519561584424), 'radius': 8.079208258389217}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4324.28712182369, 'cy': 2437.4314284212546, 'radius': 1.003516960202138}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.003516960202138, 'cx_mm': 4324.28712182369, 'cy_mm': 2437.4314284212546, 'radius_deviation_mm': 0.0035169602021380975, 'radius_deviation_pct': 0.35169602021380975}
+  Edge Points: 90
+  Confidence: 0.348
+
+----------------------------------------------------------------------
+Feature: 4e4d3d53-5b40-0d95-1cae-3baae88c09e3_trace (LINE)
+CAD Feature ID: 4e4d3d53-5b40-0d95-1cae-3baae88c09e3
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4341.802623948636, 'y1': 2644.622558452217, 'x2': 4341.802623948637, 'y2': 2550.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1451.4194273465691), 'y1_px': np.float64(109.94541307148756), 'x2_px': np.float64(1447.3896815089029), 'y2_px': np.float64(914.6189913609887)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1326, 'ymin': -10, 'xmax': 1572, 'ymax': 1035}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1446.8514614181938, 'y1': 914.6161095284567, 'x2': 1451.5062397962997, 'y2': 109.94545327051594}
+  Residual: 0.3816 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.2253790389233927), 'p1_dy': np.float64(5.072955946619231), 'p2_dx': np.float64(103.7422157129422), 'p2_dy': np.float64(-81.41022295735456)}
+  Corrected Pixel: {'x1': np.float64(1450.0768404571172), 'y1': np.float64(919.689065475076), 'x2': np.float64(1555.248455509242), 'y2': np.float64(28.535230313161378)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4342.118646735443, 'y1': 2550.283424741523, 'x2': 4353.851619732701, 'y2': 2654.167746310509}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 104.54479864250939, 'length_deviation_mm': 10.794780890732142, 'length_deviation_pct': 11.514430769830444}
+  Edge Points: 60
+  Confidence: 0.970
+
+----------------------------------------------------------------------
+Feature: 712e4790-d9d2-1ec2-8618-81fa2240c3a1_trace (LINE)
+CAD Feature ID: 712e4790-d9d2-1ec2-8618-81fa2240c3a1
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4334.802623948637, 'y1': 2543.87254070044, 'x2': 4278.802650631866, 'y2': 2543.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1387.006511407766), 'y1_px': np.float64(974.4003861976489), 'x2_px': np.float64(906.3484806836132), 'y2_px': np.float64(971.9932862866845)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 834, 'ymin': 899, 'xmax': 1459, 'ymax': 1046}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 906.347333319615, 'y1': 972.2193000560367, 'x2': 1387.0038525716043, 'y2': 974.9949730208057}
+  Residual: 0.2719 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(8.873250871879463), 'p1_dy': np.float64(10.971719902908262), 'p2_dx': np.float64(11.462422024113948), 'p2_dy': np.float64(11.45180086940536)}
+  Corrected Pixel: {'x1': np.float64(915.2205841914945), 'y1': np.float64(983.1910199589449), 'x2': np.float64(1398.4662745957182), 'y2': np.float64(986.446773890211)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4279.842819157401, 'y1': 2542.573136638993, 'x2': 4336.144760242032, 'y2': 2542.475774828905}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 56.302025267474306, 'length_deviation_mm': 0.3020519507028041, 'length_deviation_pct': 0.5393787404044034}
+  Edge Points: 60
+  Confidence: 0.965
+
+----------------------------------------------------------------------
+Feature: 23cf194b-e437-f085-008b-ebdfe17533f4_trace (LINE)
+CAD Feature ID: 23cf194b-e437-f085-008b-ebdfe17533f4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4271.802650631866, 'y1': 2550.87254070044, 'x2': 4271.802650631866, 'y2': 2644.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(846.567085846953), 'y1_px': np.float64(911.610116185544), 'x2_px': np.float64(850.5968316846338), 'y2_px': np.float64(106.93653789604286)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 725, 'ymin': -13, 'xmax': 971, 'ymax': 1032}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 846.6698245862174, 'y1': 911.6110936870309, 'x2': 851.5202118098098, 'y2': 106.94026980991936}
+  Residual: 1.2333 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(13.595061159966235), 'p1_dy': np.float64(7.686307210424275), 'p2_dx': np.float64(8.502484394470684), 'p2_dy': np.float64(-19.67363013740021)}
+  Corrected Pixel: {'x1': np.float64(860.2648857461836), 'y1': np.float64(919.2974008974552), 'x2': np.float64(860.0226962042805), 'y2': np.float64(87.26663967251915)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4273.402983798356, 'y1': 2549.984933400339, 'x2': 4272.8893250015435, 'y2': 2646.9196791468944}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.93610668016802, 'length_deviation_mm': 3.186088928390774, 'length_deviation_pct': 3.3984942134374947}
+  Edge Points: 60
+  Confidence: 0.904
+
+----------------------------------------------------------------------
+Feature: 72d70775-4008-2f99-25d3-614a3ccc5f5e_trace (LINE)
+CAD Feature ID: 72d70775-4008-2f99-25d3-614a3ccc5f5e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4278.802650631866, 'y1': 2651.622558452217, 'x2': 4334.802623948636, 'y2': 2651.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(910.9800017857706), 'y1_px': np.float64(47.15514305938632), 'x2_px': np.float64(1391.638032509909), 'y2_px': np.float64(49.56224297035078)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 838, 'ymin': -24, 'xmax': 1463, 'ymax': 121}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 910.9795104485645, 'y1': 47.29652286364839, 'x2': 1391.640101172215, 'y2': 48.966958004677515}
+  Residual: 1.0369 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(13.508909592351074), 'p1_dy': np.float64(-54.351777672316985), 'p2_dx': np.float64(92.94141219486119), 'p2_dy': np.float64(-84.65663389047745)}
+  Corrected Pixel: {'x1': np.float64(924.4884200409156), 'y1': np.float64(-7.055254808668593), 'x2': np.float64(1484.5815133670762), 'y2': np.float64(-35.689675885799936)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4280.344806298185, 'y1': 2657.946166428329, 'x2': 4345.581168818199, 'y2': 2661.6089727191584}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 65.33910884582714, 'length_deviation_mm': 9.339135529056549, 'length_deviation_pct': 16.677035676836134}
+  Edge Points: 60
+  Confidence: 0.865
+
+----------------------------------------------------------------------
+Feature: 2397bc7d-c64c-e0d3-f9fa-4dbdc97ed0a4_trace (LINE)
+CAD Feature ID: 2397bc7d-c64c-e0d3-f9fa-4dbdc97ed0a4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4341.802623948636, 'y1': 2535.122558452218, 'x2': 4341.802623948637, 'y2': 2441.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1446.7126850993955), 'y1_px': np.float64(1049.803974549246), 'x2_px': np.float64(1442.6829392617292), 'y2_px': np.float64(1854.4775528387509)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1321, 'ymin': 929, 'xmax': 1567, 'ymax': 1975}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1442.367468513031, 'y1': 1854.4752736093324, 'x2': 1446.7296281728252, 'y2': 1049.8035136245892}
+  Residual: 0.9971 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.250464536708705), 'p1_dy': np.float64(24.297005374086893), 'p2_dx': np.float64(-15.941811365318244), 'p2_dy': np.float64(0.8525936509674921)}
+  Corrected Pixel: {'x1': np.float64(1445.6179330497398), 'y1': np.float64(1878.7722789834193), 'x2': np.float64(1430.787816807507), 'y2': np.float64(1050.6561072755567)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4342.158736972218, 'y1': 2438.5438210509137, 'x2': 4339.947810738078, 'y2': 2535.013990349088}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.49550123830247, 'length_deviation_mm': 2.7454834865252167, 'length_deviation_pct': 2.9285151644391765}
+  Edge Points: 60
+  Confidence: 0.923
+
+----------------------------------------------------------------------
+Feature: 4595cf5f-4a16-918a-c5ee-ad9963579ac4_trace (LINE)
+CAD Feature ID: 4595cf5f-4a16-918a-c5ee-ad9963579ac4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4334.802623948637, 'y1': 2434.372540700441, 'x2': 4278.802650631866, 'y2': 2434.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1382.2997691605924), 'y1_px': np.float64(1914.258947675411), 'x2_px': np.float64(901.6417384364395), 'y2_px': np.float64(1911.8518477644466)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 829, 'ymin': 1839, 'xmax': 1454, 'ymax': 1986}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 901.6450028780332, 'y1': 1911.1784484783102, 'x2': 1382.3035134170307, 'y2': 1913.5187429093626}
+  Residual: 1.0380 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-45.46339732931233), 'p1_dy': np.float64(31.542296346941498), 'p2_dx': np.float64(-6.412501717396026), 'p2_dy': np.float64(45.697970877260786)}
+  Corrected Pixel: {'x1': np.float64(856.1816055487209), 'y1': np.float64(1942.7207448252516), 'x2': np.float64(1375.8910116996346), 'y2': np.float64(1959.2167137866234)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4273.524374912934, 'y1': 2430.7496682268174, 'x2': 4334.082208566457, 'y2': 2429.1310433085914}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 60.579461564408376, 'length_deviation_mm': 4.579488247636874, 'length_deviation_pct': 8.177661481608881}
+  Edge Points: 60
+  Confidence: 0.865
+
+----------------------------------------------------------------------
+Feature: 7bedd422-0d08-c852-f700-e846a0a1334c_trace (LINE)
+CAD Feature ID: 7bedd422-0d08-c852-f700-e846a0a1334c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4271.802650631866, 'y1': 2441.372540700441, 'x2': 4271.802650631866, 'y2': 2535.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(841.8603435997793), 'y1_px': np.float64(1851.4686776633062), 'x2_px': np.float64(845.8900894374601), 'y2_px': np.float64(1046.7950993738013)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 721, 'ymin': 926, 'xmax': 966, 'ymax': 1972}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 839.6549381581116, 'y1': 1851.450190286419, 'x2': 846.3978866166054, 'y2': 1046.7993465221282}
+  Residual: 1.6578 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-24.436137265017805), 'p1_dy': np.float64(15.099530424638829), 'p2_dx': np.float64(7.574543875712152), 'p2_dy': np.float64(9.425350902243053)}
+  Corrected Pixel: {'x1': np.float64(815.2188008930938), 'y1': np.float64(1866.549720711058), 'x2': np.float64(853.9724304923176), 'y2': np.float64(1056.2246974243712)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4268.7076040662, 'y1': 2439.5999954809377, 'x2': 4272.749777089231, 'y2': 2534.028688429041}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 94.51516923031602, 'length_deviation_mm': 0.765151478538769, 'length_deviation_pct': 0.8161614225659853}
+  Edge Points: 60
+  Confidence: 0.871
+
+----------------------------------------------------------------------
+Feature: 756f8ada-cee4-e6f8-e6fe-1ec509a71ff1_trace (LINE)
+CAD Feature ID: 756f8ada-cee4-e6f8-e6fe-1ec509a71ff1
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4278.802650631866, 'y1': 2542.122558452218, 'x2': 4334.802623948636, 'y2': 2542.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(906.2732595385969), 'y1_px': np.float64(987.0137045371448), 'x2_px': np.float64(1386.9312902627353), 'y2_px': np.float64(989.4208044481093)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 834, 'ymin': 914, 'xmax': 1459, 'ymax': 1061}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 906.2731023778549, 'y1': 987.0482891214502, 'x2': 1386.9296172273675, 'y2': 989.8129879834722}
+  Residual: 0.3044 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(7.760754851012052), 'p1_dy': np.float64(11.399082590423973), 'p2_dx': np.float64(11.888319722246479), 'p2_dy': np.float64(12.70707386115032)}
+  Corrected Pixel: {'x1': np.float64(914.033857228867), 'y1': np.float64(998.4473717118742), 'x2': np.float64(1398.817936949614), 'y2': np.float64(1002.5200618446225)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4279.713461970513, 'y1': 2540.7950187004235, 'x2': 4336.195108154238, 'y2': 2540.603378142327}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 56.48197129816777, 'length_deviation_mm': 0.4819979813971784, 'length_deviation_pct': 0.8607110911833811}
+  Edge Points: 60
+  Confidence: 0.960
+
+----------------------------------------------------------------------
+Feature: 13eb68c4-9748-7a66-54e4-1d0d5d522a5a_trace (LINE)
+CAD Feature ID: 13eb68c4-9748-7a66-54e4-1d0d5d522a5a
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4404.62763172774, 'y1': 2555.747568199115, 'x2': 4404.62763172774, 'y2': 2630.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1986.837781362614), 'y1_px': np.float64(875.4762040205642), 'x2_px': np.float64(1990.048681365588), 'y2_px': np.float64(234.3125924678643)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1890, 'ymin': 138, 'xmax': 2086, 'ymax': 971}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1984.935782627381, 'y1': 875.4601702080249, 'x2': 1990.2544284024268, 'y2': 234.31445337632607}
+  Residual: 1.1410 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(2.1262071302408003), 'p1_dy': np.float64(0.9146863722669423), 'p2_dx': np.float64(22.52515577720669), 'p2_dy': np.float64(25.936779890262414)}
+  Corrected Pixel: {'x1': np.float64(1987.0619897576219), 'y1': np.float64(876.3748565802919), 'x2': np.float64(2012.7795841796335), 'y2': np.float64(260.2512332665885)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4404.654277208715, 'y1': 2555.6430024209144, 'x2': 4407.291005878456, 'y2': 2627.4388554575426}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 71.84425412887899, 'length_deviation_mm': -2.8557255729939754, 'length_deviation_pct': -3.8229268393259996}
+  Edge Points: 60
+  Confidence: 0.889
+
+----------------------------------------------------------------------
+Feature: f6c179bc-1857-6575-c065-0976f47991b6_trace (LINE)
+CAD Feature ID: f6c179bc-1857-6575-c065-0976f47991b6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4353.677642852764, 'y1': 2551.0475681991147, 'x2': 4399.92763172774, 'y2': 2551.0475681991147}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1549.3226677561688), 'y1_px': np.float64(913.6271334617995), 'x2_px': np.float64(1946.2947957232755), 'y2_px': np.float64(915.615140553753)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1489, 'ymin': 854, 'xmax': 2005, 'ymax': 975}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1549.3270902829697, 'y1': 912.7177402599807, 'x2': 1946.298636340975, 'y2': 914.8601634093319}
+  Residual: 0.2469 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(4.780746364277775), 'p1_dy': np.float64(1.4382716016984887), 'p2_dx': np.float64(-6.6329861445838105), 'p2_dy': np.float64(3.9459158264025973)}
+  Corrected Pixel: {'x1': np.float64(1554.1078366472475), 'y1': np.float64(914.1560118616792), 'x2': np.float64(1939.6656501963912), 'y2': np.float64(918.8060792357345)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4354.235442597423, 'y1': 2550.9887436403674, 'x2': 4399.157171686232, 'y2': 2550.671943443461}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 44.922846155304086, 'length_deviation_mm': -1.327142719672139, 'length_deviation_pct': -2.8694984624962707}
+  Edge Points: 60
+  Confidence: 0.961
+
+----------------------------------------------------------------------
+Feature: 7580d529-f39b-bd1c-151f-5bfd6b1ee1be_trace (LINE)
+CAD Feature ID: 7580d529-f39b-bd1c-151f-5bfd6b1ee1be
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4348.977642852764, 'y1': 2630.447547900988, 'x2': 4348.977642852764, 'y2': 2555.747568199115}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1512.394631225965), 'y1_px': np.float64(231.92053626975758), 'x2_px': np.float64(1509.183731222991), 'y2_px': np.float64(873.0841478224575)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1413, 'ymin': 135, 'xmax': 1608, 'ymax': 969}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1510.7964945732713, 'y1': 873.0917586505873, 'x2': 1513.8205434803592, 'y2': 231.92725405937688}
+  Residual: 0.8046 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-11.640885763772985), 'p1_dy': np.float64(-1.4466858961850448), 'p2_dx': np.float64(44.17663856047898), 'p2_dy': np.float64(-17.712817075448584)}
+  Corrected Pixel: {'x1': np.float64(1499.1556088094983), 'y1': np.float64(871.6450727544022), 'x2': np.float64(1557.9971820408382), 'y2': np.float64(214.2144369839283)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4347.808487158794, 'y1': 2555.909375317427, 'x2': 4354.280190571506, 'y2': 2632.5369852670483}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 76.90041320859986, 'length_deviation_mm': 2.2004335067268954, 'length_deviation_pct': 2.9456949192072184}
+  Edge Points: 60
+  Confidence: 0.922
+
+----------------------------------------------------------------------
+Feature: afd2763e-ddec-f96f-f9a1-21c9f578a8ad_trace (LINE)
+CAD Feature ID: afd2763e-ddec-f96f-f9a1-21c9f578a8ad
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4402.62763172774, 'y1': 2632.447547900988, 'x2': 4350.977642852764, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1972.9682828408259), 'y1_px': np.float64(217.0602581532512), 'x2_px': np.float64(1529.6469655405745), 'y2_px': np.float64(214.84013774499908)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1463, 'ymin': 148, 'xmax': 2039, 'ymax': 283}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1529.644664228205, 'y1': 215.3081389409181, 'x2': 1972.9665425031199, 'y2': 217.4581008297991}
+  Residual: 1.0609 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(43.29918947850774), 'p1_dy': np.float64(-12.809570870940206), 'p2_dx': np.float64(39.305911664752784), 'p2_dy': np.float64(41.85688054216189)}
+  Corrected Pixel: {'x1': np.float64(1572.9438537067128), 'y1': np.float64(202.4985680699779), 'x2': np.float64(2012.2724541678726), 'y2': np.float64(259.314981371961)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4356.014701617612, 'y1': 2633.9106510455103, 'x2': 4407.231376968782, 'y2': 2627.5476366388225}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 51.6104232337498, 'length_deviation_mm': -0.0395656412260621, 'length_deviation_pct': -0.076603387702241}
+  Edge Points: 60
+  Confidence: 0.850
+
+----------------------------------------------------------------------
+Feature: 9d10f3a4-60a1-26c5-21f5-3b0aacc64cce_trace (LINE)
+CAD Feature ID: 9d10f3a4-60a1-26c5-21f5-3b0aacc64cce
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4348.977642852764, 'y1': 2530.2475309535425, 'x2': 4348.977642852764, 'y2': 2455.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1508.087638961726), 'y1_px': np.float64(1091.9556393590174), 'x2_px': np.float64(1504.876738958752), 'y2_px': np.float64(1733.1192509117209)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1408, 'ymin': 995, 'xmax': 1604, 'ymax': 1829}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1506.2080691506012, 'y1': 1733.1258594737867, 'x2': 1509.2230273648624, 'y2': 1091.961521414395}
+  Residual: 0.2585 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-1.482579885574978), 'p1_dy': np.float64(-32.74064479168101), 'p2_dx': np.float64(-2.9441470804679284), 'p2_dy': np.float64(-2.655800606291905)}
+  Corrected Pixel: {'x1': np.float64(1504.7254892650262), 'y1': np.float64(1700.3852146821057), 'x2': np.float64(1506.2788802843945), 'y2': np.float64(1089.3057208081032)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4348.940923209589, 'y1': 2459.361108189015, 'x2': 4348.765369208473, 'y2': 2530.555201677466}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 71.19430993309516, 'length_deviation_mm': -3.505669768777807, 'length_deviation_pct': -4.692999626999776}
+  Edge Points: 60
+  Confidence: 0.975
+
+----------------------------------------------------------------------
+Feature: 8a79445d-df93-14f2-a28d-11660e2fe4b6_trace (LINE)
+CAD Feature ID: 8a79445d-df93-14f2-a28d-11660e2fe4b6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4399.92763172774, 'y1': 2534.947530953543, 'x2': 4353.677642852764, 'y2': 2534.947530953543}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1945.6027525681639), 'y1_px': np.float64(1053.8047099177857), 'x2_px': np.float64(1548.6306246010572), 'y2_px': np.float64(1051.8167028258322)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1489, 'ymin': 992, 'xmax': 2005, 'ymax': 1113}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1548.6246142393825, 'y1': 1053.1997582325337, 'x2': 1945.5946344337433, 'y2': 1055.5256804138194}
+  Residual: 0.5137 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-15.473527575322123), 'p1_dy': np.float64(2.5907192734675846), 'p2_dx': np.float64(-12.276553108649296), 'p2_dy': np.float64(1.5687507186742096)}
+  Corrected Pixel: {'x1': np.float64(1533.1510866640604), 'y1': np.float64(1055.7904775060013), 'x2': np.float64(1933.318081325094), 'y2': np.float64(1057.0944311324936)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4351.876533697632, 'y1': 2534.4755389940997, 'x2': 4398.4983381204665, 'y2': 2534.5570979621803}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 46.62187576134511, 'length_deviation_mm': 0.371886886368884, 'length_deviation_pct': 0.8040799477253391}
+  Edge Points: 60
+  Confidence: 0.919
+
+----------------------------------------------------------------------
+Feature: 8c9663e2-2f29-1f41-58d3-47c8f270d74e_trace (LINE)
+CAD Feature ID: 8c9663e2-2f29-1f41-58d3-47c8f270d74e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4404.62763172774, 'y1': 2455.5475512516696, 'x2': 4404.62763172774, 'y2': 2530.2475309535425}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1982.530789098375), 'y1_px': np.float64(1735.5113071098276), 'x2_px': np.float64(1985.741689101349), 'y2_px': np.float64(1094.347695557124)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1886, 'ymin': 998, 'xmax': 2081, 'ymax': 1831}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1981.2608650293278, 'y1': 1735.5060718208301, 'x2': 1985.4352081154402, 'y2': 1094.3482265521714}
+  Residual: 2.3811 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-16.32408403476643), 'p1_dy': np.float64(-23.865747413397912), 'p2_dx': np.float64(-8.241618980204294), 'p2_dy': np.float64(3.0633465212767987)}
+  Corrected Pixel: {'x1': np.float64(1964.9367809945613), 'y1': np.float64(1711.6403244074322), 'x2': np.float64(1977.193589135236), 'y2': np.float64(1097.4115730734482)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4402.56393256672, 'y1': 2458.31835040446, 'x2': 4403.633531742355, 'y2': 2529.885589727086}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 71.5752316563386, 'length_deviation_mm': -3.1247480455343606, 'length_deviation_pct': -4.183064115954523}
+  Edge Points: 60
+  Confidence: 0.768
+
+----------------------------------------------------------------------
+Feature: 2cfd363c-b03f-bc37-e6aa-b0b8ccb43e68_trace (LINE)
+CAD Feature ID: 2cfd363c-b03f-bc37-e6aa-b0b8ccb43e68
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4350.977642852764, 'y1': 2453.5475512516696, 'x2': 4402.62763172774, 'y2': 2453.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1521.9571374835068), 'y1_px': np.float64(1750.371585226334), 'x2_px': np.float64(1965.2784547837655), 'y2_px': np.float64(1752.591705634586)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1455, 'ymin': 1683, 'xmax': 2031, 'ymax': 1819}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1521.9585148502592, 'y1': 1750.041071191356, 'x2': 1965.277773407487, 'y2': 1752.603388367061}
+  Residual: 0.9839 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(2.829675175602233), 'p1_dy': np.float64(-27.953237926409884), 'p2_dx': np.float64(-8.634058826624596), 'p2_dy': np.float64(-17.39020299497929)}
+  Corrected Pixel: {'x1': np.float64(1524.7881900258615), 'y1': np.float64(1722.087833264946), 'x2': np.float64(1956.6437145808625), 'y2': np.float64(1735.2131853720816)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4351.290969749004, 'y1': 2456.8443724072263, 'x2': 4401.611510831243, 'y2': 2455.5671799781535}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 50.336746769236214, 'length_deviation_mm': -1.313242105739647, 'length_deviation_pct': -2.542579648794282}
+  Edge Points: 60
+  Confidence: 0.861
+
+----------------------------------------------------------------------
+Feature: 876263b6-6646-9526-d84f-be874c5bcb7a_trace (CIRCLE)
+CAD Feature ID: 876263b6-6646-9526-d84f-be874c5bcb7a
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4358.502639795327, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1594.8156759919584), 'cy_px': np.float64(99.29066858290389)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1571, 'ymin': 75, 'xmax': 1618, 'ymax': 122}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1594.9690175481242, 'cy': 99.21889137754988, 'radius': 8.742318151257138}
+  Residual: 1.3051 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(35.87639397430996), 'center_dy': np.float64(-28.35977629885917)}
+  Corrected Pixel: {'cx': np.float64(1630.845411522434), 'cy': np.float64(70.8591150786907), 'radius': 8.742318151257138}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4362.6836588328415, 'cy': 2649.280952234768, 'radius': 0.8191220977564148}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.8191220977564148, 'cx_mm': 4362.6836588328415, 'cy_mm': 2649.280952234768, 'radius_deviation_mm': -0.18087790224358524, 'radius_deviation_pct': -18.087790224358525}
+  Edge Points: 90
+  Confidence: 0.347
+
+----------------------------------------------------------------------
+Feature: 7dcabf65-43d9-8180-cabb-4cbc9e0afa7b_trace (CIRCLE)
+CAD Feature ID: 7dcabf65-43d9-8180-cabb-4cbc9e0afa7b
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4395.102634785177, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1908.9601384691632), 'cy_px': np.float64(100.8638808446849)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1885, 'ymin': 77, 'xmax': 1932, 'ymax': 124}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1909.2806890008658, 'cy': 100.79080927363611, 'radius': 8.678404036127075}
+  Residual: 1.3427 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(19.10833569879684), 'center_dy': np.float64(-20.577386871418042)}
+  Corrected Pixel: {'cx': np.float64(1928.3890246996625), 'cy': np.float64(80.21342240221807), 'radius': 8.678404036127075}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4397.354128797369, 'cy': 2648.3647381132932, 'radius': 0.9962685571547246}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.9962685571547246, 'cx_mm': 4397.354128797369, 'cy_mm': 2648.3647381132932, 'radius_deviation_mm': -0.003731442845275379, 'radius_deviation_pct': -0.3731442845275379}
+  Edge Points: 90
+  Confidence: 0.329
+
+----------------------------------------------------------------------
+Feature: 23f13102-4a4f-448f-6303-d6385d78a4cd_trace (CIRCLE)
+CAD Feature ID: 23f13102-4a4f-448f-6303-d6385d78a4cd
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4358.502639795327, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1585.9652818551695), 'cy_px': np.float64(1866.5679625348967)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1562, 'ymin': 1842, 'xmax': 1609, 'ymax': 1890}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1585.5986042091952, 'cy': 1866.1801136529184, 'radius': 8.104377942079262}
+  Residual: 1.3551 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(8.400268825728533), 'center_dy': np.float64(35.755060525989784)}
+  Corrected Pixel: {'cx': np.float64(1593.9988730349237), 'cy': np.float64(1901.9351741789083), 'radius': 8.104377942079262}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4359.459219824958, 'cy': 2435.931823660044, 'radius': 0.9861540587722879}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.9861540587722879, 'cx_mm': 4359.459219824958, 'cy_mm': 2435.931823660044, 'radius_deviation_mm': -0.0138459412277121, 'radius_deviation_pct': -1.38459412277121}
+  Edge Points: 90
+  Confidence: 0.322
+
+----------------------------------------------------------------------
+Feature: 2ee201ee-6ff5-8fbb-a7d2-76d00f6d48d4_trace (CIRCLE)
+CAD Feature ID: 2ee201ee-6ff5-8fbb-a7d2-76d00f6d48d4
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4395.102634785177, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(1900.1097443323742), 'cy_px': np.float64(1868.1411747966777)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1876, 'ymin': 1844, 'xmax': 1923, 'ymax': 1891}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 1900.066060888189, 'cy': 1867.750285550378, 'radius': 8.461036785978324}
+  Residual: 1.5117 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(33.01838450655925), 'center_dy': np.float64(33.41716276771621)}
+  Corrected Pixel: {'cx': np.float64(1933.0844453947482), 'cy': np.float64(1901.1674483180943), 'radius': 8.461036785978324}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4398.963587333894, 'cy': 2436.219103968303, 'radius': 1.0894121063653537}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.0894121063653537, 'cx_mm': 4398.963587333894, 'cy_mm': 2436.219103968303, 'radius_deviation_mm': 0.08941210636535368, 'radius_deviation_pct': 8.941210636535368}
+  Edge Points: 90
+  Confidence: 0.244
+
+----------------------------------------------------------------------
+Feature: c8a4228a-5bd2-0003-0f75-aedcbf96b30c_trace (LINE)
+CAD Feature ID: c8a4228a-5bd2-0003-0f75-aedcbf96b30c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4411.802623948636, 'y1': 2644.622558452217, 'x2': 4411.802623948637, 'y2': 2550.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2052.242252035554), 'y1_px': np.float64(112.95428939388148), 'x2_px': np.float64(2048.2125061978877), 'y2_px': np.float64(917.6278676833826)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1927, 'ymin': -7, 'xmax': 2172, 'ymax': 1038}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2047.8724376847872, 'y1': 917.6270602463744, 'x2': 2052.298849324823, 'y2': 112.95390534432937}
+  Residual: 1.5073 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-10.615293184246639), 'p1_dy': np.float64(10.921029224320364), 'p2_dx': np.float64(8.644241407576828), 'p2_dy': np.float64(-9.404466516522461)}
+  Corrected Pixel: {'x1': np.float64(2037.2571445005406), 'y1': np.float64(928.5480894706948), 'x2': np.float64(2060.9430907324), 'y2': np.float64(103.54943882780691)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4410.532652145384, 'y1': 2549.593899674113, 'x2': 4412.810819004467, 'y2': 2645.723337328584}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.15642894784862, 'length_deviation_mm': 2.4064111960713745, 'length_deviation_pct': 2.566838123106121}
+  Edge Points: 60
+  Confidence: 0.883
+
+----------------------------------------------------------------------
+Feature: 9574592d-53aa-0ff3-a5d4-f5b814c4d645_trace (LINE)
+CAD Feature ID: 9574592d-53aa-0ff3-a5d4-f5b814c4d645
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4404.802623948637, 'y1': 2543.87254070044, 'x2': 4348.802650631866, 'y2': 2543.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1987.829336096751), 'y1_px': np.float64(977.4092625200428), 'x2_px': np.float64(1507.171305372598), 'y2_px': np.float64(975.0021626090784)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1435, 'ymin': 902, 'xmax': 2059, 'ymax': 1049}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1507.1678908925708, 'y1': 975.6420007785279, 'x2': 1987.8242662977812, 'y2': 978.4787292072875}
+  Residual: 0.2862 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(10.527709140149454), 'p1_dy': np.float64(6.567757763538566), 'p2_dx': np.float64(-6.744845580389438), 'p2_dy': np.float64(8.550383898881591)}
+  Corrected Pixel: {'x1': np.float64(1517.6956000327202), 'y1': np.float64(982.2097585420664), 'x2': np.float64(1981.0794207173917), 'y2': np.float64(987.0291131061691)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4350.032977967207, 'y1': 2543.038967487271, 'x2': 4404.021844645256, 'y2': 2542.7478517212257}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 53.98965154147024, 'length_deviation_mm': -2.0103217753012643, 'length_deviation_pct': -3.5898620235577696}
+  Edge Points: 60
+  Confidence: 0.963
+
+----------------------------------------------------------------------
+Feature: d2872fad-e7d9-880b-aa74-a06d7fa9d2fc_trace (LINE)
+CAD Feature ID: d2872fad-e7d9-880b-aa74-a06d7fa9d2fc
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4341.802650631866, 'y1': 2550.87254070044, 'x2': 4341.802650631866, 'y2': 2644.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1447.3899105359378), 'y1_px': np.float64(914.618992507938), 'x2_px': np.float64(1451.4196563736186), 'y2_px': np.float64(109.94541421843678)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1326, 'ymin': -10, 'xmax': 1572, 'ymax': 1035}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1446.3841986934872, 'y1': 914.6123280902217, 'x2': 1451.714921107391, 'y2': 109.94737388130142}
+  Residual: 0.2774 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.3156054437042712), 'p1_dy': np.float64(5.156209571177669), 'p2_dx': np.float64(103.71916677577406), 'p2_dy': np.float64(-81.38245190893667)}
+  Corrected Pixel: {'x1': np.float64(1449.6998041371914), 'y1': np.float64(919.7685376613994), 'x2': np.float64(1555.4340878831651), 'y2': np.float64(28.564921972364743)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4342.074766874757, 'y1': 2550.2739459369864, 'x2': 4353.873263964668, 'y2': 2654.164395420289}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 104.5582614020686, 'length_deviation_mm': 10.808243650291345, 'length_deviation_pct': 11.528791043974442}
+  Edge Points: 60
+  Confidence: 0.978
+
+----------------------------------------------------------------------
+Feature: 2c2d6b93-5c3d-e1a0-a19b-0c7e5f9aa6f5_trace (LINE)
+CAD Feature ID: 2c2d6b93-5c3d-e1a0-a19b-0c7e5f9aa6f5
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4348.802650631866, 'y1': 2651.622558452217, 'x2': 4404.802623948636, 'y2': 2651.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1511.8028264747554), 'y1_px': np.float64(50.164019381780236), 'x2_px': np.float64(1992.4608571988938), 'y2_px': np.float64(52.5711192927447)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1439, 'ymin': -21, 'xmax': 2064, 'ymax': 124}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1511.8066762768947, 'y1': 49.68870915579582, 'x2': 1992.4600966059527, 'y2': 52.49026236988621}
+  Residual: 0.9554 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(80.45762079499582), 'p1_dy': np.float64(-69.6124460852518), 'p2_dx': np.float64(5.897430944060716), 'p2_dy': np.float64(-24.142430221077348)}
+  Corrected Pixel: {'x1': np.float64(1592.2642970718905), 'y1': np.float64(-19.923736929455984), 'x2': np.float64(1998.3575275500134), 'y2': np.float64(28.347832148808862)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4358.135839178153, 'y1': 2659.835005032238, 'x2': 4405.475476541756, 'y2': 2654.4481079495918}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 47.645145879684314, 'length_deviation_mm': -8.354827437086279, 'length_deviation_pct': -14.919341817943717}
+  Edge Points: 60
+  Confidence: 0.876
+
+----------------------------------------------------------------------
+Feature: a0839a1f-d8d3-b1b3-d509-7e927b9ac1c9_trace (LINE)
+CAD Feature ID: a0839a1f-d8d3-b1b3-d509-7e927b9ac1c9
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4411.802623948636, 'y1': 2535.122558452218, 'x2': 4411.802623948637, 'y2': 2441.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2047.5355097883803), 'y1_px': np.float64(1052.81285087164), 'x2_px': np.float64(2043.505763950714), 'y2_px': np.float64(1857.4864291611448)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1922, 'ymin': 932, 'xmax': 2168, 'ymax': 1978}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2045.3672831174795, 'y1': 1857.4958063206614, 'x2': 2049.2108784399493, 'y2': 1052.8211645495303}
+  Residual: 0.5352 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(37.883091406766425), 'p1_dy': np.float64(28.468447607047437), 'p2_dx': np.float64(3.879060051419856), 'p2_dy': np.float64(3.9115235631961696)}
+  Corrected Pixel: {'x1': np.float64(2083.2503745242457), 'y1': np.float64(1885.9642539277088), 'x2': np.float64(2053.089938491369), 'y2': np.float64(1056.7326881127265)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4416.449644071772, 'y1': 2438.077949776958, 'x2': 4412.452023947672, 'y2': 2534.6691225449913}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.67386215187972, 'length_deviation_mm': 2.9238444001024675, 'length_deviation_pct': 3.118766769563667}
+  Edge Points: 60
+  Confidence: 0.958
+
+----------------------------------------------------------------------
+Feature: 0bb3ac24-305e-1718-f41a-daf168b37029_trace (LINE)
+CAD Feature ID: 0bb3ac24-305e-1718-f41a-daf168b37029
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4404.802623948637, 'y1': 2434.372540700441, 'x2': 4348.802650631866, 'y2': 2434.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1983.1225938495772), 'y1_px': np.float64(1917.267823997805), 'x2_px': np.float64(1502.4645631254243), 'y2_px': np.float64(1914.8607240868405)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1430, 'ymin': 1842, 'xmax': 2055, 'ymax': 1989}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1502.4629170203127, 'y1': 1914.8723840726168, 'x2': 1983.124735287582, 'y2': 1916.7016733564599}
+  Residual: 1.2416 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(4.660903715379391), 'p1_dy': np.float64(52.63747224006829), 'p2_dx': np.float64(49.727678922198265), 'p2_dy': np.float64(49.83525864053877)}
+  Corrected Pixel: {'x1': np.float64(1507.123820735692), 'y1': np.float64(1967.509856312685), 'x2': np.float64(2032.8524142097804), 'y2': np.float64(1966.5369319969986)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4349.3761904240855, 'y1': 2428.2414261785925, 'x2': 4410.625091190085, 'y2': 2428.6615085373414}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 61.25034133971343, 'length_deviation_mm': 5.250368022941927, 'length_deviation_pct': 9.375661651198481}
+  Edge Points: 60
+  Confidence: 0.839
+
+----------------------------------------------------------------------
+Feature: a8b8900b-8164-f183-c25e-28fc91bb2f8c_trace (LINE)
+CAD Feature ID: a8b8900b-8164-f183-c25e-28fc91bb2f8c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4341.802650631866, 'y1': 2441.372540700441, 'x2': 4341.802650631866, 'y2': 2535.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1442.6831682887641), 'y1_px': np.float64(1854.4775539857), 'x2_px': np.float64(1446.712914126445), 'y2_px': np.float64(1049.8039756961953)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1321, 'ymin': 929, 'xmax': 1567, 'ymax': 1975}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1441.5620469284186, 'y1': 1854.4720319046983, 'x2': 1445.8753699662273, 'y2': 1049.7999148316126}
+  Residual: 0.2872 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(3.2137163711452104), 'p1_dy': np.float64(24.26099323334188), 'p2_dx': np.float64(-15.676162337804726), 'p2_dy': np.float64(0.8859413129041513)}
+  Corrected Pixel: {'x1': np.float64(1444.7757632995638), 'y1': np.float64(1878.7330251380401), 'x2': np.float64(1430.1992076284225), 'y2': np.float64(1050.6858561445167)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4342.060597950309, 'y1': 2438.547902921469, 'x2': 4339.879252788569, 'y2': 2535.010181067676}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.48693886672372, 'length_deviation_mm': 2.736921114946469, 'length_deviation_pct': 2.9193819698179033}
+  Edge Points: 60
+  Confidence: 0.978
+
+----------------------------------------------------------------------
+Feature: af9b8234-f311-f692-f643-42f203393134_trace (LINE)
+CAD Feature ID: af9b8234-f311-f692-f643-42f203393134
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4348.802650631866, 'y1': 2542.122558452218, 'x2': 4404.802623948636, 'y2': 2542.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(1507.0960842275817), 'y1_px': np.float64(990.0225808595387), 'x2_px': np.float64(1987.75411495172), 'y2_px': np.float64(992.4296807705032)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1434, 'ymin': 917, 'xmax': 2059, 'ymax': 1064}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 1507.0940376733965, 'y1': 990.4331968450315, 'x2': 1987.751483391045, 'y2': 992.9718990150877}
+  Residual: 0.3074 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(14.103575315023363), 'p1_dy': np.float64(9.492670594787796), 'p2_dx': np.float64(-2.390062858716192), 'p2_dy': np.float64(7.3200807994999195)}
+  Corrected Pixel: {'x1': np.float64(1521.19761298842), 'y1': np.float64(999.9258674398193), 'x2': np.float64(1985.3614205323288), 'y2': np.float64(1000.2919798145876)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4350.451312725028, 'y1': 2540.9770136892666, 'x2': 4404.528452754705, 'y2': 2541.2051733968397}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 54.077621347849345, 'length_deviation_mm': -1.922351968921248, 'length_deviation_pct': -3.4327730087427586}
+  Edge Points: 60
+  Confidence: 0.960
+
+----------------------------------------------------------------------
+Feature: 89090d5c-d3d4-8c02-5195-7632d0c60581_trace (LINE)
+CAD Feature ID: 89090d5c-d3d4-8c02-5195-7632d0c60581
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4474.62763172774, 'y1': 2555.747568199115, 'x2': 4474.62763172774, 'y2': 2630.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2587.6606060515987), 'y1_px': np.float64(878.4850803429581), 'x2_px': np.float64(2590.871506054573), 'y2_px': np.float64(237.32146879025822)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2491, 'ymin': 141, 'xmax': 2687, 'ymax': 974}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2588.115717069451, 'y1': 878.4853608867389, 'x2': 2588.5256354562334, 'y2': 237.3199803145659}
+  Residual: 1.1973 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(52.34017752113209), 'p1_dy': np.float64(-28.368589784651704), 'p2_dx': np.float64(58.538754475629275), 'p2_dy': np.float64(-76.05508805859631)}
+  Corrected Pixel: {'x1': np.float64(2640.455894590583), 'y1': np.float64(850.1167711020872), 'x2': np.float64(2647.064389931863), 'y2': np.float64(161.26489225596958)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4480.761941153574, 'y1': 2559.083391911012, 'x2': 4481.129951100851, 'y2': 2639.3412263909295}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 80.25867820196859, 'length_deviation_mm': 5.55869850009563, 'length_deviation_pct': 7.441365475975164}
+  Edge Points: 60
+  Confidence: 0.883
+
+----------------------------------------------------------------------
+Feature: 84411093-855e-e9f0-0227-e2c880407f30_trace (LINE)
+CAD Feature ID: 84411093-855e-e9f0-0227-e2c880407f30
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4423.677642852764, 'y1': 2551.0475681991147, 'x2': 4469.92763172774, 'y2': 2551.0475681991147}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2150.1454924451536), 'y1_px': np.float64(916.6360097841934), 'x2_px': np.float64(2547.1176204122603), 'y2_px': np.float64(918.6240168761469)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2090, 'ymin': 857, 'xmax': 2606, 'ymax': 978}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2150.1485522593525, 'y1': 915.9949102447872, 'x2': 2547.1199740811508, 'y2': 918.1586093687466}
+  Residual: 0.2102 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-6.296525849207001), 'p1_dy': np.float64(4.273594455115244), 'p2_dx': np.float64(41.7487257902967), 'p2_dy': np.float64(-16.286072922722497)}
+  Corrected Pixel: {'x1': np.float64(2143.8520264101453), 'y1': np.float64(920.2685046999025), 'x2': np.float64(2588.8686998714475), 'y2': np.float64(901.8725364460241)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4422.946548427805, 'y1': 2550.6206962390866, 'x2': 4474.7820247082045, 'y2': 2553.0235415633447}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 51.89113861603097, 'length_deviation_mm': 5.641149741054747, 'length_deviation_pct': 12.19708345509877}
+  Edge Points: 60
+  Confidence: 0.967
+
+----------------------------------------------------------------------
+Feature: 60a859a1-93c8-6735-ec5e-806c5c2a9ac2_trace (LINE)
+CAD Feature ID: 60a859a1-93c8-6735-ec5e-806c5c2a9ac2
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4418.977642852764, 'y1': 2630.447547900988, 'x2': 4418.977642852764, 'y2': 2555.747568199115}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2113.21745591495), 'y1_px': np.float64(234.9294125921515), 'x2_px': np.float64(2110.0065559119757), 'y2_px': np.float64(876.0930241448514)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2013, 'ymin': 138, 'xmax': 2209, 'ymax': 972}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2107.8850634647224, 'y1': 876.0765969527281, 'x2': 2112.7169366053004, 'y2': 234.9255539939934}
+  Residual: 1.1744 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-17.8018974175352), 'p1_dy': np.float64(1.1911829149062214), 'p2_dx': np.float64(22.14177707387148), 'p2_dy': np.float64(-21.781958239792402)}
+  Corrected Pixel: {'x1': np.float64(2090.083166047187), 'y1': np.float64(877.2677798676343), 'x2': np.float64(2134.858713679172), 'y2': np.float64(213.143595754201)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4416.657174236063, 'y1': 2555.599080325475, 'x2': 4421.486224515075, 'y2': 2632.998308504026}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 77.54972758967423, 'length_deviation_mm': 2.8497478878012714, 'length_deviation_pct': 3.8149245812041626}
+  Edge Points: 60
+  Confidence: 0.886
+
+----------------------------------------------------------------------
+Feature: ffed5aa2-17fc-5b39-302a-195f0ff04b44_trace (LINE)
+CAD Feature ID: ffed5aa2-17fc-5b39-302a-195f0ff04b44
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4472.62763172774, 'y1': 2632.447547900988, 'x2': 4420.977642852764, 'y2': 2632.447547900988}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2573.7911075298107), 'y1_px': np.float64(220.06913447564511), 'x2_px': np.float64(2130.4697902295593), 'y2_px': np.float64(217.849014067393)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2063, 'ymin': 151, 'xmax': 2640, 'ymax': 286}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2130.464294176989, 'y1': 218.80140305062938, 'x2': 2573.787426909505, 'y2': 220.6782816334355}
+  Residual: 1.1268 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(28.328988131866936), 'p1_dy': np.float64(-3.7565542280005957), 'p2_dx': np.float64(56.217909635836804), 'p2_dy': np.float64(-71.53690584615288)}
+  Corrected Pixel: {'x1': np.float64(2158.793282308856), 'y1': np.float64(215.04484882262878), 'x2': np.float64(2630.005336545342), 'y2': np.float64(149.1413757872826)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4424.275806059904, 'y1': 2632.7907694362575, 'x2': 4479.135430268491, 'y2': 2640.743711202883}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 55.433091660583976, 'length_deviation_mm': 3.783102785608115, 'length_deviation_pct': 7.3244987424208485}
+  Edge Points: 60
+  Confidence: 0.841
+
+----------------------------------------------------------------------
+Feature: f3a36d72-c134-8f78-4da8-02e4ff37af10_trace (LINE)
+CAD Feature ID: f3a36d72-c134-8f78-4da8-02e4ff37af10
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4418.977642852764, 'y1': 2530.2475309535425, 'x2': 4418.977642852764, 'y2': 2455.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2108.910463650711), 'y1_px': np.float64(1094.9645156814113), 'x2_px': np.float64(2105.699563647737), 'y2_px': np.float64(1736.1281272341148)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2009, 'ymin': 998, 'xmax': 2205, 'ymax': 1832}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2104.3018282573, 'y1': 1736.12026308779, 'x2': 2107.9351375606157, 'y2': 1094.9590664120174}
+  Residual: 2.2165 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-35.94099437066711), 'p1_dy': np.float64(-29.236883251074687), 'p2_dx': np.float64(-9.957414931970561), 'p2_dy': np.float64(-3.4337914955251563)}
+  Corrected Pixel: {'x1': np.float64(2068.3608338866325), 'y1': np.float64(1706.8833798367152), 'x2': np.float64(2097.977722628645), 'y2': np.float64(1091.5252749164922)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4414.610469940364, 'y1': 2458.932895401501, 'x2': 4417.701928516109, 'y2': 2530.641837523046}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 71.77554943235647, 'length_deviation_mm': -2.924430269516492, 'length_deviation_pct': -3.9149010229826975}
+  Edge Points: 60
+  Confidence: 0.784
+
+----------------------------------------------------------------------
+Feature: c141df6b-b7bd-e876-cc94-328226ddf917_trace (LINE)
+CAD Feature ID: c141df6b-b7bd-e876-cc94-328226ddf917
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4469.92763172774, 'y1': 2534.947530953543, 'x2': 4423.677642852764, 'y2': 2534.947530953543}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2546.4255772571487), 'y1_px': np.float64(1056.8135862401796), 'x2_px': np.float64(2149.453449290042), 'y2_px': np.float64(1054.825579148226)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2089, 'ymin': 995, 'xmax': 2605, 'ymax': 1116}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2149.447584844989, 'y1': 1056.2946765555873, 'x2': 2546.4213192645548, 'y2': 1057.88040939847}
+  Residual: 1.0794 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-22.964397500451923), 'p1_dy': np.float64(4.060849073668578), 'p2_dx': np.float64(21.839792547112893), 'p2_dy': np.float64(-8.341358786600495)}
+  Corrected Pixel: {'x1': np.float64(2126.483187344537), 'y1': np.float64(1060.355525629256), 'x2': np.float64(2568.2611118116674), 'y2': np.float64(1049.5390506118695)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4421.004742548591, 'y1': 2534.2898683883527, 'x2': 4472.467313916905, 'y2': 2535.8077830317734}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 51.48495233273087, 'length_deviation_mm': 5.234963457754645, 'length_deviation_pct': 11.318842631305035}
+  Edge Points: 60
+  Confidence: 0.830
+
+----------------------------------------------------------------------
+Feature: b7f22a07-cb67-d41f-0348-b11f5575455f_trace (LINE)
+CAD Feature ID: b7f22a07-cb67-d41f-0348-b11f5575455f
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4474.62763172774, 'y1': 2455.5475512516696, 'x2': 4474.62763172774, 'y2': 2530.2475309535425}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2583.35361378736), 'y1_px': np.float64(1738.5201834322215), 'x2_px': np.float64(2586.564513790334), 'y2_px': np.float64(1097.356571879518)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2487, 'ymin': 1001, 'xmax': 2682, 'ymax': 1834}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2583.6521997749596, 'y1': 1738.5223040925844, 'x2': 2586.201037582925, 'y2': 1097.3561654915409}
+  Residual: 1.2258 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-167.82660600917256), 'p1_dy': np.float64(-110.65480441020577), 'p2_dx': np.float64(11.777824106338358), 'p2_dy': np.float64(-15.398930587562063)}
+  Corrected Pixel: {'x1': np.float64(2415.825593765787), 'y1': np.float64(1627.8674996823786), 'x2': np.float64(2597.9788616892633), 'y2': np.float64(1081.9572349039788)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4455.045392703211, 'y1': 2468.3412851300845, 'x2': 4475.948463936123, 'y2': 2532.0482744749047}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 67.0486306970485, 'length_deviation_mm': -7.651349004824468, 'length_deviation_pct': -10.242772535362047}
+  Edge Points: 60
+  Confidence: 0.881
+
+----------------------------------------------------------------------
+Feature: b0419051-c859-8193-ac0a-624875c9d785_trace (LINE)
+CAD Feature ID: b0419051-c859-8193-ac0a-624875c9d785
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4420.977642852764, 'y1': 2453.5475512516696, 'x2': 4472.62763172774, 'y2': 2453.5475512516696}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2122.7799621724917), 'y1_px': np.float64(1753.380461548728), 'x2_px': np.float64(2566.101279472743), 'y2_px': np.float64(1755.60058195698)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2056, 'ymin': 1686, 'xmax': 2632, 'ymax': 1822}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2122.800951486361, 'y1': 1751.27222080707, 'x2': 2566.1004371071986, 'y2': 1755.6868819269698}
+  Residual: 1.5277 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-29.43274815792938), 'p1_dy': np.float64(-24.64425143449853), 'p2_dx': np.float64(-176.5493653606486), 'p2_dy': np.float64(-116.78444718551805)}
+  Corrected Pixel: {'x1': np.float64(2093.3682033284317), 'y1': np.float64(1726.6279693725714), 'x2': np.float64(2389.55107174655), 'y2': np.float64(1638.9024347414518)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4417.535447613785, 'y1': 2456.6471627112423, 'x2': 4451.990744830295, 'y2': 2467.0403416910635}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 35.9886881614847, 'length_deviation_mm': -15.661300713491158, 'length_deviation_pct': -30.32198274311531}
+  Edge Points: 60
+  Confidence: 0.785
+
+----------------------------------------------------------------------
+Feature: 7206714c-4445-0b8e-a29c-0b3c0b7b0fa7_trace (CIRCLE)
+CAD Feature ID: 7206714c-4445-0b8e-a29c-0b3c0b7b0fa7
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4428.502639795327, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(2195.6385006809433), 'cy_px': np.float64(102.29954490529781)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2172, 'ymin': 78, 'xmax': 2219, 'ymax': 125}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 2195.711530227794, 'cy': 102.23776808684124, 'radius': 8.631326193687793}
+  Residual: 1.0106 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(31.141686401419356), 'center_dy': np.float64(-4.484379579643072)}
+  Corrected Pixel: {'cx': np.float64(2226.8532166292134), 'cy': np.float64(97.75338850719817), 'radius': 8.631326193687793}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4432.136625709049, 'cy': 2646.495399350175, 'radius': 1.0236426789789124}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.0236426789789124, 'cx_mm': 4432.136625709049, 'cy_mm': 2646.495399350175, 'radius_deviation_mm': 0.023642678978912368, 'radius_deviation_pct': 2.364267897891237}
+  Edge Points: 90
+  Confidence: 0.495
+
+----------------------------------------------------------------------
+Feature: c2bf468a-601c-e4d9-a64f-76d0d694a8df_trace (CIRCLE)
+CAD Feature ID: c2bf468a-601c-e4d9-a64f-76d0d694a8df
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4465.102634785177, 'cy': 2645.947542064279, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(2509.782963158148), 'cy_px': np.float64(103.87275716707882)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2486, 'ymin': 80, 'xmax': 2533, 'ymax': 127}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 2510.0116676185994, 'cy': 103.84838495392614, 'radius': 8.069979678984557}
+  Residual: 1.0909 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(44.50919732901465), 'center_dy': np.float64(-42.818483912134205)}
+  Corrected Pixel: {'cx': np.float64(2554.520864947614), 'cy': np.float64(61.02990104179194), 'radius': 8.069979678984557}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4470.289781587813, 'cy': 2650.9650069276113, 'radius': 1.0748667564896404}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 1.0748667564896404, 'cx_mm': 4470.289781587813, 'cy_mm': 2650.9650069276113, 'radius_deviation_mm': 0.07486675648964036, 'radius_deviation_pct': 7.486675648964036}
+  Edge Points: 90
+  Confidence: 0.455
+
+----------------------------------------------------------------------
+Feature: dc0c227c-66d4-495c-5754-c41e42fbb5b1_trace (CIRCLE)
+CAD Feature ID: dc0c227c-66d4-495c-5754-c41e42fbb5b1
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4428.502639795327, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(2186.7881065441543), 'cy_px': np.float64(1869.5768388572906)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2163, 'ymin': 1845, 'xmax': 2210, 'ymax': 1893}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 2186.524292855837, 'cy': 1869.9204729885812, 'radius': 8.715361747699585}
+  Residual: 1.4358 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(8.987624666852586), 'center_dy': np.float64(11.611557846070054)}
+  Corrected Pixel: {'cx': np.float64(2195.5119175226896), 'cy': np.float64(1881.5320308346513), 'radius': 8.715361747699585}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4429.525973586391, 'cy': 2438.6598196068126, 'radius': 0.6995737258779506}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.6995737258779506, 'cx_mm': 4429.525973586391, 'cy_mm': 2438.6598196068126, 'radius_deviation_mm': -0.30042627412204936, 'radius_deviation_pct': -30.042627412204936}
+  Edge Points: 90
+  Confidence: 0.282
+
+----------------------------------------------------------------------
+Feature: 50839c91-ce5c-dfc4-d7df-f284478c429c_trace (CIRCLE)
+CAD Feature ID: 50839c91-ce5c-dfc4-d7df-f284478c429c
+
+STAGE 1: CAD NOMINAL (mm)
+  {'cx': 4465.102634785177, 'cy': 2440.047557088379, 'radius': 1.0}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'cx_px': np.float64(2500.932569021359), 'cy_px': np.float64(1871.1500511190716)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2477, 'ymin': 1847, 'xmax': 2524, 'ymax': 1894}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'cx': 2501.1733703844225, 'cy': 1871.3954492357861, 'radius': 8.054173341815332}
+  Residual: 0.9161 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'center_dx': np.float64(-166.24533447679158), 'center_dy': np.float64(-104.70343900019917)}
+  Corrected Pixel: {'cx': np.float64(2334.928035907631), 'cy': np.float64(1766.692010235587), 'radius': 8.054173341815332}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'cx': 4445.701502256763, 'cy': 2452.120479346794, 'radius': 0.6554385207459055}
+
+STAGE 7: FINAL MEASUREMENT
+  {'radius_mm': 0.6554385207459055, 'cx_mm': 4445.701502256763, 'cy_mm': 2452.120479346794, 'radius_deviation_mm': -0.3445614792540945, 'radius_deviation_pct': -34.456147925409454}
+  Edge Points: 90
+  Confidence: 0.542
+
+----------------------------------------------------------------------
+Feature: 4ef60322-d686-72f6-b385-c01f91777878_trace (LINE)
+CAD Feature ID: 4ef60322-d686-72f6-b385-c01f91777878
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4481.802623948636, 'y1': 2644.622558452217, 'x2': 4481.802623948637, 'y2': 2550.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2653.065076724539), 'y1_px': np.float64(115.9631657162754), 'x2_px': np.float64(2649.0353308868725), 'y2_px': np.float64(920.6367440057766)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2528, 'ymin': -4, 'xmax': 2773, 'ymax': 1041}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2589.4527790586144, 'y1': 116.0023969233905, 'x2': 2589.724226437378, 'y2': 920.673368330743}
+  Residual: 1.3517 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(53.46562963112865), 'p1_dy': np.float64(-63.61340235967077), 'p2_dx': np.float64(45.6254648978902), 'p2_dy': np.float64(-24.44296893485466)}
+  Corrected Pixel: {'x1': np.float64(2642.918408689743), 'y1': np.float64(52.388994563719734), 'x2': np.float64(2635.3496913352683), 'y2': np.float64(896.2303993958883)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4480.5834049150735, 'y1': 2652.023281791412, 'x2': 4480.193952887833, 'y2': 2553.707991952327}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 98.31606119563983, 'length_deviation_mm': 4.566043443862583, 'length_deviation_pct': 4.8704454178900916}
+  Edge Points: 55
+  Confidence: 0.820
+
+----------------------------------------------------------------------
+Feature: 8ab5b98c-2073-c571-4aa8-20335fe87cd3_trace (LINE)
+CAD Feature ID: 8ab5b98c-2073-c571-4aa8-20335fe87cd3
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4474.802623948637, 'y1': 2543.87254070044, 'x2': 4418.802650631866, 'y2': 2543.87254070044}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2588.6521607857358), 'y1_px': np.float64(980.4181388424367), 'x2_px': np.float64(2107.994130061583), 'y2_px': np.float64(978.0110389314723)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2035, 'ymin': 905, 'xmax': 2660, 'ymax': 1052}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2107.9923438758237, 'y1': 978.4611845269126, 'x2': 2588.652358293975, 'y2': 980.368323611797}
+  Residual: 1.1071 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-16.264950299687143), 'p1_dy': np.float64(10.484836694668275), 'p2_dx': np.float64(35.603766768366086), 'p2_dy': np.float64(-19.405899001272473)}
+  Corrected Pixel: {'x1': np.float64(2091.727393576137), 'y1': np.float64(988.9460212215808), 'x2': np.float64(2624.256125062341), 'y2': np.float64(960.9624246105245)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4416.913891190245, 'y1': 2542.589081131024, 'x2': 4478.939275837735, 'y2': 2546.1599815460304}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 62.12809083211123, 'length_deviation_mm': 6.128117515339731, 'length_deviation_pct': 10.943072205901236}
+  Edge Points: 60
+  Confidence: 0.856
+
+----------------------------------------------------------------------
+Feature: 93df7e94-8f38-4009-a2dd-b6363b33f5d6_trace (LINE)
+CAD Feature ID: 93df7e94-8f38-4009-a2dd-b6363b33f5d6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4411.802650631866, 'y1': 2550.87254070044, 'x2': 4411.802650631866, 'y2': 2644.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2048.2127352249227), 'y1_px': np.float64(917.6278688303319), 'x2_px': np.float64(2052.2424810626035), 'y2_px': np.float64(112.9542905408307)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1927, 'ymin': -7, 'xmax': 2172, 'ymax': 1038}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2047.1200218280865, 'y1': 917.6237717691604, 'x2': 2052.1895852876146, 'y2': 112.95522073867511}
+  Residual: 1.3327 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-10.641474949714848), 'p1_dy': np.float64(11.199105309602146), 'p2_dx': np.float64(8.610841186319476), 'p2_dy': np.float64(-9.414941771947952)}
+  Corrected Pixel: {'x1': np.float64(2036.4785468783716), 'y1': np.float64(928.8228770787625), 'x2': np.float64(2060.800426473934), 'y2': np.float64(103.54027896672716)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4410.442102754159, 'y1': 2549.5614315592507, 'x2': 4412.794192707684, 'y2': 2645.7243212522644}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.19165078768637, 'length_deviation_mm': 2.4416330359091205, 'length_deviation_pct': 2.6044080784857595}
+  Edge Points: 60
+  Confidence: 0.896
+
+----------------------------------------------------------------------
+Feature: 3cb8ac01-2679-10dd-5c2e-f54e51e23ef1_trace (LINE)
+CAD Feature ID: 3cb8ac01-2679-10dd-5c2e-f54e51e23ef1
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4418.802650631866, 'y1': 2651.622558452217, 'x2': 4474.802623948636, 'y2': 2651.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2112.6256511637403), 'y1_px': np.float64(53.17289570417415), 'x2_px': np.float64(2593.2836818878786), 'y2_px': np.float64(55.579995615138614)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2040, 'ymin': -18, 'xmax': 2665, 'ymax': 127}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2112.6298329355595, 'y1': 52.627402537272, 'x2': 2585.131488746646, 'y2': 56.249588861798784}
+  Residual: 1.0834 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(18.73639696220812), 'p1_dy': np.float64(-12.861017555465878), 'p2_dx': np.float64(51.1358496240141), 'p2_dy': np.float64(-58.05011614857972)}
+  Corrected Pixel: {'x1': np.float64(2131.366229897768), 'y1': np.float64(39.76638498180612), 'x2': np.float64(2636.26733837066), 'y2': np.float64(-1.8005272867809339)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4420.978180520563, 'y1': 2653.195404243196, 'x2': 4479.776912304317, 'y2': 2658.3326957105264}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 59.02272971490025, 'length_deviation_mm': 3.0227563981296584, 'length_deviation_pct': 5.397781854343167}
+  Edge Points: 59
+  Confidence: 0.845
+
+----------------------------------------------------------------------
+Feature: e6c7ae47-78a1-7efc-6a49-761963a6835e_trace (LINE)
+CAD Feature ID: e6c7ae47-78a1-7efc-6a49-761963a6835e
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4481.802623948636, 'y1': 2535.122558452218, 'x2': 4481.802623948637, 'y2': 2441.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2648.358334477365), 'y1_px': np.float64(1055.8217271940339), 'x2_px': np.float64(2644.328588639699), 'y2_px': np.float64(1860.4953054835387)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2523, 'ymin': 935, 'xmax': 2769, 'ymax': 1981}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2589.3787489354654, 'y1': 1860.4329575552526, 'x2': 2589.7726141934586, 'y2': 1055.7546371776984}
+  Residual: 1.3852 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-186.52654257330346), 'p1_dy': np.float64(-119.43730172114783), 'p2_dx': np.float64(21.515419673235556), 'p2_dy': np.float64(-16.494306061643783)}
+  Corrected Pixel: {'x1': np.float64(2402.852206362162), 'y1': np.float64(1740.9956558341048), 'x2': np.float64(2611.288033866694), 'y2': np.float64(1039.2603311160547)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4453.599945425245, 'y1': 2455.153836556019, 'x2': 4477.4741241140455, 'y2': 2537.030398430481}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 85.28626965958448, 'length_deviation_mm': -8.463748092192773, 'length_deviation_pct': -9.027996255533854}
+  Edge Points: 60
+  Confidence: 0.892
+
+----------------------------------------------------------------------
+Feature: 3ffa66c5-476c-3db3-8f79-b5f63d8507f1_trace (LINE)
+CAD Feature ID: 3ffa66c5-476c-3db3-8f79-b5f63d8507f1
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4474.802623948637, 'y1': 2434.372540700441, 'x2': 4418.802650631866, 'y2': 2434.372540700441}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2583.945418538562), 'y1_px': np.float64(1920.2767003201989), 'x2_px': np.float64(2103.287387814409), 'y2_px': np.float64(1917.8696004092344)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2031, 'ymin': 1845, 'xmax': 2656, 'ymax': 1992}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2103.294680696178, 'y1': 1916.779500291103, 'x2': 2583.948371669545, 'y2': 1919.9511402689443}
+  Residual: 1.0853 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(40.58883967022393), 'p1_dy': np.float64(39.090818047413904), 'p2_dx': np.float64(-181.69698935873726), 'p2_dy': np.float64(-111.80827723926768)}
+  Corrected Pixel: {'x1': np.float64(2143.883520366402), 'y1': np.float64(1955.8703183385169), 'x2': np.float64(2402.2513823108075), 'y2': np.float64(1808.1428630296766)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4423.554432514235, 'y1': 2429.9689917300357, 'x2': 4453.569123624429, 'y2': 2447.3305697799774}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 34.67428549840095, 'length_deviation_mm': -21.325687818370554, 'length_deviation_pct': -38.081603535306854}
+  Edge Points: 60
+  Confidence: 0.859
+
+----------------------------------------------------------------------
+Feature: 8c734c14-b71c-bb4a-35c0-5ec083968914_trace (LINE)
+CAD Feature ID: 8c734c14-b71c-bb4a-35c0-5ec083968914
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4411.802650631866, 'y1': 2441.372540700441, 'x2': 4411.802650631866, 'y2': 2535.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2043.505992977749), 'y1_px': np.float64(1857.486430308094), 'x2_px': np.float64(2047.5357388154298), 'y2_px': np.float64(1052.8128520185892)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 1922, 'ymin': 932, 'xmax': 2168, 'ymax': 1978}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2044.6336695978775, 'y1': 1857.4931210317438, 'x2': 2048.9798835376782, 'y2': 1052.8201232087886}
+  Residual: 1.0869 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(37.89825216490317), 'p1_dy': np.float64(28.49239887631029), 'p2_dx': np.float64(3.8569347500467757), 'p2_dy': np.float64(3.9265923936704894)}
+  Corrected Pixel: {'x1': np.float64(2082.5319217627807), 'y1': np.float64(1885.9855199080541), 'x2': np.float64(2052.836818287725), 'y2': np.float64(1056.746715602459)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4416.36595388012, 'y1': 2438.0750530293835, 'x2': 4412.422542623242, 'y2': 2534.667340605464}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 96.67274958084651, 'length_deviation_mm': 2.9227318290692637, 'length_deviation_pct': 3.1175800273529615}
+  Edge Points: 60
+  Confidence: 0.916
+
+----------------------------------------------------------------------
+Feature: 308efc2b-99f5-f635-447d-9567f69cd95d_trace (LINE)
+CAD Feature ID: 308efc2b-99f5-f635-447d-9567f69cd95d
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4418.802650631866, 'y1': 2542.122558452218, 'x2': 4474.802623948636, 'y2': 2542.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2107.9189089165666), 'y1_px': np.float64(993.0314571819326), 'x2_px': np.float64(2588.576939640705), 'y2_px': np.float64(995.4385570928971)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2035, 'ymin': 920, 'xmax': 2660, 'ymax': 1067}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2107.9164604233424, 'y1': 993.8586848143633, 'x2': 2588.577402950625, 'y2': 995.2816334664185}
+  Residual: 0.5441 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-15.270375276785217), 'p1_dy': np.float64(9.366559848219822), 'p2_dx': np.float64(33.09317694924607), 'p2_dy': np.float64(-18.493615263763104)}
+  Corrected Pixel: {'x1': np.float64(2092.646085146557), 'y1': np.float64(1003.2252446625831), 'x2': np.float64(2621.670579899871), 'y2': np.float64(976.7880182026554)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4417.029253522544, 'y1': 2540.9260309125225, 'x2': 4478.6472828972355, 'y2': 2544.3147285420887}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 61.711140125952326, 'length_deviation_mm': 5.711166809181734, 'length_deviation_pct': 10.198517018706116}
+  Edge Points: 60
+  Confidence: 0.929
+
+----------------------------------------------------------------------
+Feature: 575a0b8e-66cf-4ae0-dbc8-2697f26c01e6_trace (LINE)
+CAD Feature ID: 575a0b8e-66cf-4ae0-dbc8-2697f26c01e6
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4481.802650631866, 'y1': 2550.87254070044, 'x2': 4481.802650631866, 'y2': 2644.622558452217}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2649.0355599139075), 'y1_px': np.float64(920.6367451527258), 'x2_px': np.float64(2653.0653057515883), 'y2_px': np.float64(115.96316686322461)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2528, 'ymin': -4, 'xmax': 2773, 'ymax': 1041}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2589.4530080856657, 'y1': 116.00239807034274, 'x2': 2589.724455464422, 'y2': 920.6733694776916}
+  Residual: 1.3517 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(53.465652681057236), 'p1_dy': np.float64(-63.613454674910145), 'p2_dx': np.float64(45.62548061644952), 'p2_dy': np.float64(-24.443015641668353)}
+  Corrected Pixel: {'x1': np.float64(2642.918660766723), 'y1': np.float64(52.38894339543259), 'x2': np.float64(2635.349936080872), 'y2': np.float64(896.2303538360233)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4480.583434253188, 'y1': 2652.023287899793, 'x2': 4480.193981375086, 'y2': 2553.707997403027}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 98.31606185668622, 'length_deviation_mm': 4.566044104908968, 'length_deviation_pct': 4.870446123006103}
+  Edge Points: 55
+  Confidence: 0.820
+
+----------------------------------------------------------------------
+Feature: a99beb29-f3af-72a6-a6d4-82ca5e024454_trace (LINE)
+CAD Feature ID: a99beb29-f3af-72a6-a6d4-82ca5e024454
+
+STAGE 1: CAD NOMINAL (mm)
+  {'x1': 4481.802650631866, 'y1': 2441.372540700441, 'x2': 4481.802650631866, 'y2': 2535.122558452218}
+
+STAGE 2: REGISTERED POSITION (pixels, via inv-affine)
+  {'x1_px': np.float64(2644.328817666734), 'y1_px': np.float64(1860.495306630488), 'x2_px': np.float64(2648.3585635044146), 'y2_px': np.float64(1055.821728340983)}
+
+STAGE 3: ROI BBOX (pixels)
+  {'xmin': 2523, 'ymin': 935, 'xmax': 2769, 'ymax': 1981}
+
+STAGE 4: FITTED PIXEL (before TPS)
+  {'x1': 2589.37897796251, 'y1': 1860.4329587022012, 'x2': 2589.7728432205104, 'y2': 1055.7546383246472}
+  Residual: 1.3852 px
+
+STAGE 5: TPS CORRECTION
+  Applied: True
+  Correction Vector: {'p1_dx': np.float64(-186.52656680475752), 'p1_dy': np.float64(-119.4373184840781), 'p2_dx': np.float64(21.51541479838852), 'p2_dy': np.float64(-16.494351414316043)}
+  Corrected Pixel: {'x1': np.float64(2402.8524111577526), 'y1': np.float64(1740.995640218123), 'x2': np.float64(2611.288258018899), 'y2': np.float64(1039.2602869103312)}
+
+STAGE 6: WORLD COORDINATES (mm, via affine)
+  {'x1': 4453.599969275634, 'y1': 2455.1538384948294, 'x2': 4477.4741502028755, 'y2': 2537.030403711404}
+
+STAGE 7: FINAL MEASUREMENT
+  {'length_mm': 85.28627349468738, 'length_deviation_mm': -8.463744257089871, 'length_deviation_pct': -9.0279921647582}
+  Edge Points: 60
+  Confidence: 0.892
+
+======================================================================
+
+======================================================================
+CALIBRATION VALIDATION REPORT
+======================================================================
+Pixel Size: 0.116200 mm/px
+OpenCV RMS: 0.0000 px
+TPS RMS Before: 1.3385 px
+TPS RMS After: 21.9587 px
+
+  Known (mm) Method            Meas (mm)   Error (mm)  Error (%)
+--------------------------------------------------------------
+
+--------------------------------------------------------------
+ANALYSIS
+
+ROOT CAUSE ANALYSIS
+======================================================================
+
+======================================================================
+TPS AUDIT REPORT
+======================================================================
+
+WHERE TPS IS APPLIED:
+  Measurement Pipeline: True
+  Image Load Dialog:    True
+  Registration:         False
+  Measurement Engine:   False
+
+TPS MAP STATUS:
+  Built: True
+  Samples: 1760
+  Image Size: (2592, 1944)
+  Mean Correction: 34.7610 px
+  Max Correction: 364.5876 px
+
+SCALE ANALYSIS:
+  Scale from affine matrix: 0.116505 mm/px
+  Scale from pixel_size_mm: 0.116200 mm/px
+  Consistent: True
+
+POINT-BY-POINT AUDIT:
+  Label                          Raw (px)          TPS Δ     Corrected (px)           World (mm)    Scale
+  --------------------------------------------------------------------------------------------------
+  line_p1              (3.54, 36.38)  (+278.269, +222.595)  (281.81, 258.98)  (4205.626, 2626.577)  0.1165
+  line_p2              (4.60, 1913.06)  (+4.689, +5.782)  (9.29, 1918.84)  (4174.844, 2433.038)  0.1165
+  line_p1              (22.80, 1.74)  (+268.164, +208.210)  (290.96, 209.95)  (4206.663, 2632.294)  0.1165
+  line_p2              (2589.02, 1.57)  (+50.489, -56.856)  (2639.51, -55.28)  (4480.123, 2664.565)  0.1165
+  line_p1              (9.68, 1942.35)  (-3.642, +10.081)  (6.03, 1952.43)  (4174.485, 2429.122)  0.1165
+  line_p2              (2575.90, 1941.79)  (-177.562, -107.026)  (2398.33, 1834.76)  (4453.128, 2444.227)  0.1165
+  circle_center        (115.86, 975.71)  (-9.950, +16.030)  (105.91, 991.74)  (4185.560, 2541.105)  0.1165
+  circle_center        (115.54, 1061.39)  (+30.646, -3.689)  (146.19, 1057.70)  (4190.291, 2533.443)  0.1165
+  line_p1              (785.72, 869.46)  (-7.063, +5.316)  (778.65, 874.78)  (4263.869, 2555.124)  0.1165
+  line_p2              (789.18, 228.30)  (+13.357, +42.369)  (802.53, 270.67)  (4266.299, 2625.519)  0.1165
+  line_p1              (347.69, 906.13)  (+15.519, +4.189)  (363.21, 910.32)  (4215.488, 2550.740)  0.1165
+  line_p2              (744.65, 908.76)  (+1.115, -2.806)  (745.77, 905.96)  (4260.056, 2551.473)  0.1165
+  line_p1              (307.60, 867.07)  (+27.597, +6.810)  (335.20, 873.88)  (4212.204, 2554.970)  0.1165
+  line_p2              (311.53, 225.91)  (+40.858, +56.415)  (352.39, 282.32)  (4213.862, 2623.899)  0.1165
+  line_p1              (328.00, 209.23)  (+2.176, +15.862)  (330.18, 225.09)  (4211.241, 2630.553)  0.1165
+  line_p2              (771.32, 211.19)  (+1.564, +14.246)  (772.89, 225.43)  (4262.818, 2630.772)  0.1165
+  line_p1              (303.87, 1727.10)  (+25.442, -1.530)  (329.31, 1725.57)  (4212.015, 2455.741)  0.1165
+  line_p2              (307.89, 1085.94)  (+3.370, +7.061)  (311.26, 1093.00)  (4209.543, 2529.427)  0.1165
+  line_p1              (346.98, 1047.02)  (+27.220, -2.617)  (374.20, 1044.40)  (4216.847, 2535.127)  0.1165
+  line_p2              (743.95, 1049.08)  (+0.953, -1.114)  (744.90, 1047.97)  (4260.038, 2534.927)  0.1165
+  line_p1              (781.95, 1729.50)  (+5.837, -6.727)  (787.79, 1722.77)  (4265.428, 2456.335)  0.1165
+  line_p2              (785.44, 1088.34)  (+3.255, -1.784)  (788.70, 1086.55)  (4265.162, 2530.457)  0.1165
+  line_p1              (320.31, 1744.66)  (+19.626, +2.958)  (339.94, 1747.62)  (4213.266, 2453.179)  0.1165
+  line_p2              (763.63, 1744.52)  (+17.013, -2.441)  (780.64, 1742.08)  (4264.607, 2454.082)  0.1165
+  circle_center        (393.82, 93.41)  (-112.921, -135.339)  (280.90, -41.93)  (4205.344, 2661.634)  0.1165
+  circle_center        (706.88, 95.11)  (+21.403, -16.955)  (728.28, 78.16)  (4257.536, 2647.904)  0.1165
+  circle_center        (384.95, 1860.36)  (-23.614, +19.531)  (361.33, 1879.89)  (4215.836, 2437.780)  0.1165
+  circle_center        (698.20, 1861.96)  (-31.637, +18.434)  (666.57, 1880.39)  (4251.397, 2437.900)  0.1165
+  line_p1              (311.14, 217.86)  (+36.052, +50.936)  (347.19, 268.79)  (4213.249, 2625.472)  0.1165
+  line_p2              (312.73, -0.08)  (-2.835, -46.512)  (309.90, -46.60)  (4208.719, 2662.194)  0.1165
+  line_p1              (788.94, 220.25)  (+13.577, +39.706)  (802.52, 259.96)  (4266.291, 2626.767)  0.1165
+  line_p2              (789.25, 2.33)  (+24.534, -49.172)  (813.78, -46.84)  (4267.424, 2662.517)  0.1165
+  line_p1              (614.00, 0.44)  (+11.844, -47.084)  (625.84, -46.64)  (4245.528, 2662.384)  0.1165
+  line_p2              (766.37, 1.03)  (+25.050, -47.690)  (791.42, -46.66)  (4264.818, 2662.483)  0.1165
+  line_p1              (126.22, 206.88)  (+82.921, +82.660)  (209.14, 289.54)  (4197.177, 2622.974)  0.1165
+  line_p2              (319.95, 208.74)  (+15.621, +29.042)  (335.58, 237.79)  (4211.877, 2629.078)  0.1165
+  line_p1              (122.71, 906.11)  (+29.425, +13.808)  (152.14, 919.91)  (4190.904, 2549.500)  0.1165
+  line_p2              (339.63, 907.61)  (+7.908, +5.297)  (347.54, 912.91)  (4213.664, 2550.430)  0.1165
+  line_p1              (148.04, 534.09)  (-23.611, +16.050)  (124.43, 550.14)  (4187.460, 2592.564)  0.1165
+  line_p2              (149.52, 231.10)  (-8.614, +7.882)  (140.90, 238.99)  (4189.198, 2628.824)  0.1165
+  line_p1              (145.49, 883.42)  (+35.651, +10.042)  (181.14, 893.46)  (4194.267, 2552.598)  0.1165
+  line_p2              (147.16, 580.44)  (-50.132, -2.490)  (97.03, 577.95)  (4184.284, 2589.308)  0.1165
+  line_p1              (310.31, 217.85)  (+36.207, +50.976)  (346.51, 268.83)  (4213.170, 2625.467)  0.1165
+  line_p2              (311.65, 0.90)  (-2.536, -45.919)  (309.12, -45.02)  (4208.629, 2662.010)  0.1165
+  line_p1              (911.55, 220.87)  (-14.174, +11.142)  (897.37, 232.01)  (4277.325, 2630.078)  0.1165
+  line_p2              (912.44, 3.91)  (+21.218, -65.662)  (933.66, -61.75)  (4281.381, 2664.324)  0.1165
+  line_p1              (32.81, 206.91)  (+196.577, +174.267)  (229.39, 381.18)  (4199.589, 2612.310)  0.1165
+  line_p2              (319.96, 208.51)  (+15.150, +28.481)  (335.11, 236.99)  (4211.822, 2629.170)  0.1165
+  line_p1              (28.62, 1044.12)  (+19.651, +21.806)  (48.27, 1065.93)  (4178.888, 2532.428)  0.1165
+  line_p2              (338.94, 1045.55)  (+30.308, -3.345)  (369.25, 1042.21)  (4216.269, 2535.379)  0.1165
+  line_p1              (53.75, 602.71)  (+50.036, +58.731)  (103.79, 661.45)  (4185.120, 2579.584)  0.1165
+  line_p2              (55.65, 230.63)  (+155.962, +142.206)  (211.61, 372.84)  (4197.514, 2613.271)  0.1165
+  line_p1              (51.75, 1021.15)  (+10.164, +19.539)  (61.91, 1040.68)  (4180.463, 2535.377)  0.1165
+  line_p2              (54.34, 649.07)  (+55.156, +54.121)  (109.50, 703.19)  (4185.810, 2574.724)  0.1165
+  line_p1              (846.64, 911.61)  (+13.592, +7.683)  (860.23, 919.29)  (4273.399, 2549.985)  0.1165
+  line_p2              (851.76, 106.94)  (+8.472, -19.701)  (860.23, 87.24)  (4272.913, 2646.923)  0.1165
+  line_p1              (305.52, 969.41)  (-20.670, +14.637)  (284.85, 984.05)  (4206.403, 2542.105)  0.1165
+  line_p2              (786.18, 971.68)  (+0.208, +1.965)  (786.39, 973.64)  (4264.828, 2543.610)  0.1165
+  line_p1              (246.44, 908.60)  (-2.225, -2.805)  (244.22, 905.80)  (4201.623, 2551.198)  0.1165
+  line_p2              (250.01, 103.93)  (+24.109, +11.278)  (274.12, 115.21)  (4204.645, 2643.323)  0.1165
+  line_p1              (310.16, 44.15)  (-23.844, -55.845)  (286.31, -11.69)  (4205.992, 2658.114)  0.1165
+  line_p2              (790.82, 46.25)  (+20.270, -37.392)  (811.09, 8.86)  (4267.142, 2656.026)  0.1165
+  line_p1              (839.65, 1851.45)  (-24.437, +15.100)  (815.22, 1866.55)  (4268.707, 2439.600)  0.1165
+  line_p2              (846.40, 1046.80)  (+7.575, +9.425)  (853.97, 1056.23)  (4272.750, 2534.028)  0.1165
+  line_p1              (300.82, 1910.20)  (-42.946, +17.882)  (257.88, 1928.08)  (4203.811, 2432.106)  0.1165
+  line_p2              (781.47, 1908.67)  (-51.264, +30.105)  (730.20, 1938.77)  (4258.845, 2431.136)  0.1165
+  line_p1              (238.93, 1848.44)  (-22.998, +6.495)  (215.93, 1854.94)  (4198.881, 2440.603)  0.1165
+  line_p2              (246.32, 1043.80)  (-3.864, +8.134)  (242.46, 1051.93)  (4201.503, 2534.172)  0.1165
+  line_p1              (305.45, 983.83)  (-14.240, +15.384)  (291.21, 999.21)  (4207.153, 2540.343)  0.1165
+  line_p2              (786.11, 986.52)  (+0.476, +3.473)  (786.58, 990.00)  (4264.860, 2541.705)  0.1165
+  line_p1              (1386.45, 872.47)  (-22.251, -0.960)  (1364.19, 871.51)  (4332.085, 2555.846)  0.1165
+  line_p2              (1390.42, 231.31)  (+6.610, -6.244)  (1397.03, 225.07)  (4335.534, 2631.179)  0.1165
+  line_p1              (948.50, 910.11)  (+3.900, -2.822)  (952.40, 907.29)  (4284.130, 2551.438)  0.1165
+  line_p2              (1345.48, 911.33)  (+1.985, -2.184)  (1347.46, 909.14)  (4330.157, 2551.452)  0.1165
+  line_p1              (909.20, 870.08)  (+3.314, +8.224)  (912.51, 878.30)  (4279.466, 2554.792)  0.1165
+  line_p2              (913.12, 228.92)  (-12.695, +11.836)  (900.42, 240.75)  (4277.685, 2629.061)  0.1165
+  line_p1              (928.82, 212.12)  (-5.303, -5.133)  (923.52, 206.99)  (4280.357, 2633.009)  0.1165
+  line_p2              (1372.14, 214.29)  (+16.003, -10.404)  (1388.15, 203.89)  (4334.486, 2633.641)  0.1165
+  line_p1              (905.23, 1730.12)  (+29.775, -9.232)  (935.01, 1720.88)  (4282.578, 2456.641)  0.1165
+  line_p2              (908.54, 1088.95)  (+15.838, +12.619)  (924.38, 1101.57)  (4280.979, 2528.787)  0.1165
+  line_p1              (947.80, 1050.00)  (-7.628, -0.076)  (940.17, 1049.92)  (4282.789, 2534.813)  0.1165
+  line_p2              (1344.77, 1052.16)  (-19.781, +0.722)  (1324.99, 1052.88)  (4327.623, 2534.693)  0.1165
+  line_p1              (1382.03, 1732.50)  (+9.467, -19.287)  (1391.49, 1713.22)  (4335.756, 2457.800)  0.1165
+  line_p2              (1385.32, 1091.34)  (-5.056, +0.922)  (1380.26, 1092.26)  (4334.085, 2530.137)  0.1165
+  line_p1              (921.14, 1746.88)  (+24.692, -5.973)  (945.83, 1740.91)  (4283.851, 2454.314)  0.1165
+  line_p2              (1364.46, 1749.36)  (+10.114, -17.302)  (1374.57, 1732.06)  (4333.796, 2455.595)  0.1165
+  circle_center        (993.74, 96.78)  (+6.138, -67.249)  (999.87, 29.53)  (4289.149, 2653.728)  0.1165
+  circle_center        (1307.90, 98.08)  (+53.210, -55.084)  (1361.11, 42.99)  (4331.242, 2652.370)  0.1165
+  circle_center        (985.63, 1862.82)  (-22.799, +19.550)  (962.83, 1882.37)  (4285.914, 2437.843)  0.1165
+  circle_center        (1299.58, 1864.26)  (-7.408, +23.291)  (1292.17, 1887.55)  (4324.287, 2437.431)  0.1165
+  line_p1              (1446.85, 914.62)  (+3.225, +5.073)  (1450.08, 919.69)  (4342.119, 2550.283)  0.1165
+  line_p2              (1451.51, 109.95)  (+103.742, -81.410)  (1555.25, 28.54)  (4353.852, 2654.168)  0.1165
+  line_p1              (906.35, 972.22)  (+8.873, +10.972)  (915.22, 983.19)  (4279.843, 2542.573)  0.1165
+  line_p2              (1387.00, 974.99)  (+11.462, +11.452)  (1398.47, 986.45)  (4336.145, 2542.476)  0.1165
+  line_p1              (846.67, 911.61)  (+13.595, +7.686)  (860.26, 919.30)  (4273.403, 2549.985)  0.1165
+  line_p2              (851.52, 106.94)  (+8.502, -19.674)  (860.02, 87.27)  (4272.889, 2646.920)  0.1165
+  line_p1              (910.98, 47.30)  (+13.509, -54.352)  (924.49, -7.06)  (4280.345, 2657.946)  0.1165
+  line_p2              (1391.64, 48.97)  (+92.941, -84.657)  (1484.58, -35.69)  (4345.581, 2661.609)  0.1165
+  line_p1              (1442.37, 1854.48)  (+3.250, +24.297)  (1445.62, 1878.77)  (4342.159, 2438.544)  0.1165
+  line_p2              (1446.73, 1049.80)  (-15.942, +0.853)  (1430.79, 1050.66)  (4339.948, 2535.014)  0.1165
+  line_p1              (901.65, 1911.18)  (-45.463, +31.542)  (856.18, 1942.72)  (4273.524, 2430.750)  0.1165
+  line_p2              (1382.30, 1913.52)  (-6.413, +45.698)  (1375.89, 1959.22)  (4334.082, 2429.131)  0.1165
+  line_p1              (839.65, 1851.45)  (-24.436, +15.100)  (815.22, 1866.55)  (4268.708, 2439.600)  0.1165
+  line_p2              (846.40, 1046.80)  (+7.575, +9.425)  (853.97, 1056.22)  (4272.750, 2534.029)  0.1165
+  line_p1              (906.27, 987.05)  (+7.761, +11.399)  (914.03, 998.45)  (4279.713, 2540.795)  0.1165
+  line_p2              (1386.93, 989.81)  (+11.888, +12.707)  (1398.82, 1002.52)  (4336.195, 2540.603)  0.1165
+  line_p1              (1984.94, 875.46)  (+2.126, +0.915)  (1987.06, 876.37)  (4404.654, 2555.643)  0.1165
+  line_p2              (1990.25, 234.31)  (+22.525, +25.937)  (2012.78, 260.25)  (4407.291, 2627.439)  0.1165
+  line_p1              (1549.33, 912.72)  (+4.781, +1.438)  (1554.11, 914.16)  (4354.235, 2550.989)  0.1165
+  line_p2              (1946.30, 914.86)  (-6.633, +3.946)  (1939.67, 918.81)  (4399.157, 2550.672)  0.1165
+  line_p1              (1510.80, 873.09)  (-11.641, -1.447)  (1499.16, 871.65)  (4347.808, 2555.909)  0.1165
+  line_p2              (1513.82, 231.93)  (+44.177, -17.713)  (1558.00, 214.21)  (4354.280, 2632.537)  0.1165
+  line_p1              (1529.64, 215.31)  (+43.299, -12.810)  (1572.94, 202.50)  (4356.015, 2633.911)  0.1165
+  line_p2              (1972.97, 217.46)  (+39.306, +41.857)  (2012.27, 259.31)  (4407.231, 2627.548)  0.1165
+  line_p1              (1506.21, 1733.13)  (-1.483, -32.741)  (1504.73, 1700.39)  (4348.941, 2459.361)  0.1165
+  line_p2              (1509.22, 1091.96)  (-2.944, -2.656)  (1506.28, 1089.31)  (4348.765, 2530.555)  0.1165
+  line_p1              (1548.62, 1053.20)  (-15.474, +2.591)  (1533.15, 1055.79)  (4351.877, 2534.476)  0.1165
+  line_p2              (1945.59, 1055.53)  (-12.277, +1.569)  (1933.32, 1057.09)  (4398.498, 2534.557)  0.1165
+  line_p1              (1981.26, 1735.51)  (-16.324, -23.866)  (1964.94, 1711.64)  (4402.564, 2458.318)  0.1165
+  line_p2              (1985.44, 1094.35)  (-8.242, +3.063)  (1977.19, 1097.41)  (4403.634, 2529.886)  0.1165
+  line_p1              (1521.96, 1750.04)  (+2.830, -27.953)  (1524.79, 1722.09)  (4351.291, 2456.844)  0.1165
+  line_p2              (1965.28, 1752.60)  (-8.634, -17.390)  (1956.64, 1735.21)  (4401.612, 2455.567)  0.1165
+  circle_center        (1594.97, 99.22)  (+35.876, -28.360)  (1630.85, 70.86)  (4362.684, 2649.281)  0.1165
+  circle_center        (1909.28, 100.79)  (+19.108, -20.577)  (1928.39, 80.21)  (4397.354, 2648.365)  0.1165
+  circle_center        (1585.60, 1866.18)  (+8.400, +35.755)  (1594.00, 1901.94)  (4359.459, 2435.932)  0.1165
+  circle_center        (1900.07, 1867.75)  (+33.018, +33.417)  (1933.08, 1901.17)  (4398.964, 2436.219)  0.1165
+  line_p1              (2047.87, 917.63)  (-10.615, +10.921)  (2037.26, 928.55)  (4410.533, 2549.594)  0.1165
+  line_p2              (2052.30, 112.95)  (+8.644, -9.404)  (2060.94, 103.55)  (4412.811, 2645.723)  0.1165
+  line_p1              (1507.17, 975.64)  (+10.528, +6.568)  (1517.70, 982.21)  (4350.033, 2543.039)  0.1165
+  line_p2              (1987.82, 978.48)  (-6.745, +8.550)  (1981.08, 987.03)  (4404.022, 2542.748)  0.1165
+  line_p1              (1446.38, 914.61)  (+3.316, +5.156)  (1449.70, 919.77)  (4342.075, 2550.274)  0.1165
+  line_p2              (1451.71, 109.95)  (+103.719, -81.382)  (1555.43, 28.56)  (4353.873, 2654.164)  0.1165
+  line_p1              (1511.81, 49.69)  (+80.458, -69.612)  (1592.26, -19.92)  (4358.136, 2659.835)  0.1165
+  line_p2              (1992.46, 52.49)  (+5.897, -24.142)  (1998.36, 28.35)  (4405.475, 2654.448)  0.1165
+  line_p1              (2045.37, 1857.50)  (+37.883, +28.468)  (2083.25, 1885.96)  (4416.450, 2438.078)  0.1165
+  line_p2              (2049.21, 1052.82)  (+3.879, +3.912)  (2053.09, 1056.73)  (4412.452, 2534.669)  0.1165
+  line_p1              (1502.46, 1914.87)  (+4.661, +52.637)  (1507.12, 1967.51)  (4349.376, 2428.241)  0.1165
+  line_p2              (1983.12, 1916.70)  (+49.728, +49.835)  (2032.85, 1966.54)  (4410.625, 2428.662)  0.1165
+  line_p1              (1441.56, 1854.47)  (+3.214, +24.261)  (1444.78, 1878.73)  (4342.061, 2438.548)  0.1165
+  line_p2              (1445.88, 1049.80)  (-15.676, +0.886)  (1430.20, 1050.69)  (4339.879, 2535.010)  0.1165
+  line_p1              (1507.09, 990.43)  (+14.104, +9.493)  (1521.20, 999.93)  (4350.451, 2540.977)  0.1165
+  line_p2              (1987.75, 992.97)  (-2.390, +7.320)  (1985.36, 1000.29)  (4404.528, 2541.205)  0.1165
+  line_p1              (2588.12, 878.49)  (+52.340, -28.369)  (2640.46, 850.12)  (4480.762, 2559.083)  0.1165
+  line_p2              (2588.53, 237.32)  (+58.539, -76.055)  (2647.06, 161.26)  (4481.130, 2639.341)  0.1165
+  line_p1              (2150.15, 915.99)  (-6.297, +4.274)  (2143.85, 920.27)  (4422.947, 2550.621)  0.1165
+  line_p2              (2547.12, 918.16)  (+41.749, -16.286)  (2588.87, 901.87)  (4474.782, 2553.024)  0.1165
+  line_p1              (2107.89, 876.08)  (-17.802, +1.191)  (2090.08, 877.27)  (4416.657, 2555.599)  0.1165
+  line_p2              (2112.72, 234.93)  (+22.142, -21.782)  (2134.86, 213.14)  (4421.486, 2632.998)  0.1165
+  line_p1              (2130.46, 218.80)  (+28.329, -3.757)  (2158.79, 215.04)  (4424.276, 2632.791)  0.1165
+  line_p2              (2573.79, 220.68)  (+56.218, -71.537)  (2630.01, 149.14)  (4479.135, 2640.744)  0.1165
+  line_p1              (2104.30, 1736.12)  (-35.941, -29.237)  (2068.36, 1706.88)  (4414.610, 2458.933)  0.1165
+  line_p2              (2107.94, 1094.96)  (-9.957, -3.434)  (2097.98, 1091.53)  (4417.702, 2530.642)  0.1165
+  line_p1              (2149.45, 1056.29)  (-22.964, +4.061)  (2126.48, 1060.36)  (4421.005, 2534.290)  0.1165
+  line_p2              (2546.42, 1057.88)  (+21.840, -8.341)  (2568.26, 1049.54)  (4472.467, 2535.808)  0.1165
+  line_p1              (2583.65, 1738.52)  (-167.827, -110.655)  (2415.83, 1627.87)  (4455.045, 2468.341)  0.1165
+  line_p2              (2586.20, 1097.36)  (+11.778, -15.399)  (2597.98, 1081.96)  (4475.948, 2532.048)  0.1165
+  line_p1              (2122.80, 1751.27)  (-29.433, -24.644)  (2093.37, 1726.63)  (4417.535, 2456.647)  0.1165
+  line_p2              (2566.10, 1755.69)  (-176.549, -116.784)  (2389.55, 1638.90)  (4451.991, 2467.040)  0.1165
+  circle_center        (2195.71, 102.24)  (+31.142, -4.484)  (2226.85, 97.75)  (4432.137, 2646.495)  0.1165
+  circle_center        (2510.01, 103.85)  (+44.509, -42.818)  (2554.52, 61.03)  (4470.290, 2650.965)  0.1165
+  circle_center        (2186.52, 1869.92)  (+8.988, +11.612)  (2195.51, 1881.53)  (4429.526, 2438.660)  0.1165
+  circle_center        (2501.17, 1871.40)  (-166.245, -104.703)  (2334.93, 1766.69)  (4445.702, 2452.120)  0.1165
+  line_p1              (2589.45, 116.00)  (+53.466, -63.613)  (2642.92, 52.39)  (4480.583, 2652.023)  0.1165
+  line_p2              (2589.72, 920.67)  (+45.625, -24.443)  (2635.35, 896.23)  (4480.194, 2553.708)  0.1165
+  line_p1              (2107.99, 978.46)  (-16.265, +10.485)  (2091.73, 988.95)  (4416.914, 2542.589)  0.1165
+  line_p2              (2588.65, 980.37)  (+35.604, -19.406)  (2624.26, 960.96)  (4478.939, 2546.160)  0.1165
+  line_p1              (2047.12, 917.62)  (-10.641, +11.199)  (2036.48, 928.82)  (4410.442, 2549.561)  0.1165
+  line_p2              (2052.19, 112.96)  (+8.611, -9.415)  (2060.80, 103.54)  (4412.794, 2645.724)  0.1165
+  line_p1              (2112.63, 52.63)  (+18.736, -12.861)  (2131.37, 39.77)  (4420.978, 2653.195)  0.1165
+  line_p2              (2585.13, 56.25)  (+51.136, -58.050)  (2636.27, -1.80)  (4479.777, 2658.333)  0.1165
+  line_p1              (2589.38, 1860.43)  (-186.527, -119.437)  (2402.85, 1741.00)  (4453.600, 2455.154)  0.1165
+  line_p2              (2589.77, 1055.75)  (+21.515, -16.494)  (2611.29, 1039.26)  (4477.474, 2537.030)  0.1165
+  line_p1              (2103.29, 1916.78)  (+40.589, +39.091)  (2143.88, 1955.87)  (4423.554, 2429.969)  0.1165
+  line_p2              (2583.95, 1919.95)  (-181.697, -111.808)  (2402.25, 1808.14)  (4453.569, 2447.331)  0.1165
+  line_p1              (2044.63, 1857.49)  (+37.898, +28.492)  (2082.53, 1885.99)  (4416.366, 2438.075)  0.1165
+  line_p2              (2048.98, 1052.82)  (+3.857, +3.927)  (2052.84, 1056.75)  (4412.423, 2534.667)  0.1165
+  line_p1              (2107.92, 993.86)  (-15.270, +9.367)  (2092.65, 1003.23)  (4417.029, 2540.926)  0.1165
+  line_p2              (2588.58, 995.28)  (+33.093, -18.494)  (2621.67, 976.79)  (4478.647, 2544.315)  0.1165
+  line_p1              (2589.45, 116.00)  (+53.466, -63.613)  (2642.92, 52.39)  (4480.583, 2652.023)  0.1165
+  line_p2              (2589.72, 920.67)  (+45.625, -24.443)  (2635.35, 896.23)  (4480.194, 2553.708)  0.1165
+  line_p1              (2589.38, 1860.43)  (-186.527, -119.437)  (2402.85, 1741.00)  (4453.600, 2455.154)  0.1165
+  line_p2              (2589.77, 1055.75)  (+21.515, -16.494)  (2611.29, 1039.26)  (4477.474, 2537.030)  0.1165
+
+WARNINGS:
+  * Image was undistorted by cv2.undistort in ImageLoadDialog, AND TPS correction is applied in MeasurementPipeline._correct_points. Verify TPS operates in undistorted-pixel space (it should).
+  * TPS corrections are large: mean=45.655 px. This may indicate TPS is being applied to the wrong coordinate space (e.g., raw pixels instead of undistorted).
+
+======================================================================
+
+======================================================================
+SCALE CALIBRATION AUDIT REPORT
+======================================================================
+
+SCALE SOURCES IN SYSTEM:
+  config.pixel_size_mm           = 0.116200 mm/px  (from AppConfig.pixel_size_mm, space: calibration_space)
+  affine_scale                   = 0.116505 mm/px  (from affine_solver.extract_params(T)['scale_x'], space: registration_space)
+  empirical_chessboard_raw       = 0.122447 mm/px  (from chessboard_cell_mm / mean_inter_corner_px (21.0mm grid), space: raw_pixel_space)
+  empirical_chessboard_tps       = 0.122884 mm/px  (from chessboard_cell_mm / mean_inter_corner_px_after_tps, space: tps_corrected_space)
+
+MEASUREMENT SCALE:
+  Value: 0.116200 mm/px
+  Source: config.pixel_size_mm
+
+CALIBRATION SCALE:
+  Value: 0.122447 mm/px
+  Space: raw_pixel_space
+
+AFFINE SCALE:
+  Value: 0.116505 mm/px
+
+CONSISTENT: False
+SCALE ERROR: +5.4395%
+
+PIPELINE ANALYSIS:
+  1. Pixel size calibration: chessboard corners → cell_mm / inter_corner_px
+     → stored as config.pixel_size_mm
+  
+  2. Image loading: ImageLoadDialog loads image
+     → if lens calibrated: cv2.undistort() applied to image
+     → pixel_size_mm set from config
+  
+  3. Registration: strategy.py converts image pixels to world mm
+     → img_world[:,0] *= pixel_size_mm  (img_contour_world)
+     → img_world[:,1] *= -pixel_size_mm  (Y-flip)
+     → Registration affine T maps CAD→image_world
+     → Image layer affine = inv(T) @ diag(pixel_size, -pixel_size, 1)
+     → This affine maps pixel→CAD_world
+  
+  4. Measurement Pipeline: MeasurementPipeline.__init__(affine=...)
+     → affine is the image_layer.affine (pixel→CAD_world)
+     → _correct_points() applies TPS correction to fitted pixel coords
+     → affine_solver.apply(affine, corrected_points) → world mm
+  
+  5. Query Evaluator: computes distances in world mm
+     → uses fitted_geometry_world directly
+
+WARNINGS:
+  * Empirical scale from empirical_chessboard_raw (0.122447) differs from config (0.116200) by +5.376%. Computed in raw_pixel_space.
+  * Empirical scale from empirical_chessboard_tps (0.122884) differs from config (0.116200) by +5.752%. Computed in tps_corrected_space.
+
+DIAGNOSIS:
+  Scale sources are inconsistent, but the specific cause needs manual investigation. See warnings above.
+======================================================================
+
+======================================================================
+COORDINATE SYSTEM CONSISTENCY REPORT
+======================================================================
+
+COORDINATE SPACES:
+  CAD:
+    Units: mm, Y: variable (DXF convention), Origin: DXF origin
+
+  Image Raw Pixels:
+    Units: pixels, Y: down, Origin: top-left corner (0,0)
+    top-left: (0.000, 0.000)
+    bottom-right: (2592.000, 1944.000)
+
+  Image World:
+    Units: mm, Y: up (Y-flipped from pixels), Origin: top-left corner = (0, 0), bottom = (0, h*pixel_size_mm)
+    pixel(0,0): (0.000, 0.000)
+    pixel(w,h): (301.190, -225.893)
+
+  Undistorted Pixels:
+    Units: pixels, Y: down, Origin: same as raw (cv2.undistort preserves coordinate system)
+
+  TPS Corrected Pixels:
+    Units: pixels, Y: down, Origin: undistorted pixels + TPS correction (built)
+
+  Measurement World:
+    Units: mm, Y: depends on affine, Origin: affine @ pixel_origin
+    scale: (0.117, 0.000)
+    rotation_deg: (0.287, 0.000)
+
+CONSISTENCY CHECKS:
+  [PASS] Pixel-to-world scale consistency
+    X scale: 0.116505 mm/px, Y scale: 0.116505 mm/px. Diff: 0.000%. Affine scale: 0.116505. pixel_size_mm: 0.116200.
+
+  [PASS] Affine direction check
+    Affine rotation: 0.2869deg. Affine[0,1]=0.000583, Affine[1,1]=-0.116504. For telecentric: scale should be ~pixel_size_mm=0.116200
+
+  [PASS] TPS sample point space
+    TPS samples: 1760 points. In image bounds: 100.0%. Max coordinate: 2461.5. Image size: 2592x1944 px.
+
+  [PASS] CAD-to-image projection reasonableness
+    CAD center (4411.8, 2543.0) → pixel (2047.9, 985.2). Image size: 2592x1944 px.
+
+  [PASS] Y-axis convention
+    Image pixels: Y-down. Image world: Y-flipped (* -pixel_size_mm). Affine incorporates Y-flip via T_pixel_to_imgworld. CAD/DXF Y convention depends on the drawing.
+
+DIAGNOSIS:
+  All coordinate system consistency checks passed.
+
+======================================================================
+
+======================================================================
+REFERENCE TEST REPORT
+======================================================================
+Pixel Size: 0.116200 mm/px
+Chessboard: 11x8, cell=21.0 mm
+
+Test                      Method              Known   Measured      Error     Err%
+--------------------------------------------------------------------------------
+1_cells_horizontal        raw                21.000    19.7215    -1.2785   -6.088%
+1_cells_horizontal        opencv_only        21.000    20.0258    -0.9742   -4.639%
+1_cells_horizontal        opencv_tps         21.000    18.6025    -2.3975  -11.417%
+2_cells_horizontal        raw                42.000    39.5460    -2.4540   -5.843%
+2_cells_horizontal        opencv_only        42.000    40.0369    -1.9631   -4.674%
+2_cells_horizontal        opencv_tps         42.000    38.4376    -3.5624   -8.482%
+3_cells_horizontal        raw                63.000    59.4977    -3.5023   -5.559%
+3_cells_horizontal        opencv_only        63.000    60.0839    -2.9161   -4.629%
+3_cells_horizontal        opencv_tps         63.000    57.7559    -5.2441   -8.324%
+5_cells_horizontal        raw               105.000    99.9006    -5.0994   -4.857%
+5_cells_horizontal        opencv_only       105.000   100.5252    -4.4748   -4.262%
+5_cells_horizontal        opencv_tps        105.000    97.5267    -7.4733   -7.117%
+
+--------------------------------------------------------------------------------
+SUMMARY:
+  Raw pixels mean error:     -5.5867%
+  OpenCV only mean error:    -4.5508%
+  OpenCV + TPS mean error:   -8.8350%
+
+WARNINGS:
+  * TPS introduces -4.284% error compared to OpenCV-only. This is significant and will affect all measurements.
+  * Raw pixel measurement has -5.587% error. pixel_size_mm calibration itself may be inaccurate.
+
+DIAGNOSIS:
+  OpenCV undistortion itself changes scale. Raw: -5.587%, OpenCV: -4.551%. The distortion model may be over-fitted or the calibration images may have insufficient coverage.
+
+======================================================================
+
+======================================================================
+ROOT CAUSE RECOMMENDATION
+======================================================================
+
+EVIDENCE COLLECTED:
+  [TPS AUDIT] Image was undistorted by cv2.undistort in ImageLoadDialog, AND TPS correction is applied in MeasurementPipeline._correct_points. Verify TPS operates in undistorted-pixel space (it should).
+  [TPS AUDIT] TPS corrections are large: mean=45.655 px. This may indicate TPS is being applied to the wrong coordinate space (e.g., raw pixels instead of undistorted).
+  [SCALE] Inconsistent: affine=0.116505 vs pixel_size_mm=0.116200 (diff=5.440%)
+  [SCALE DIAGNOSIS] Scale sources are inconsistent, but the specific cause needs manual investigation. See warnings above.
+  [SCALE WARNING] Empirical scale from empirical_chessboard_raw (0.122447) differs from config (0.116200) by +5.376%. Computed in raw_pixel_space.
+  [SCALE WARNING] Empirical scale from empirical_chessboard_tps (0.122884) differs from config (0.116200) by +5.752%. Computed in tps_corrected_space.
+  [REFTEST] OpenCV undistortion itself changes scale. Raw: -5.587%, OpenCV: -4.551%. The distortion model may be over-fitted or the calibration images may have insufficient coverage.
+  [REFTEST WARNING] TPS introduces -4.284% error compared to OpenCV-only. This is significant and will affect all measurements.
+  [REFTEST WARNING] Raw pixel measurement has -5.587% error. pixel_size_mm calibration itself may be inaccurate.
+
+RECOMMENDATION:
+
+  ROOT CAUSE: TPS residual distortion introduces scale error.
+
+  The TPS correction changes effective pixel spacing. This happens
+  because the residual map is built on undistorted-pixel coordinates
+  but the TPS interpolation can introduce systematic shifts at
+  locations between sample points.
+
+  IMMEDIATE FIX OPTIONS:
+  A. Disable TPS correction (set residual_map=None in config)
+     and verify the error disappears.
+  B. Rebuild TPS with smoothing to suppress scale distortion:
+     increase smoothing parameter from 0.001 to 0.01-0.1.
+  C. Switch from image-space TPS to coordinate-space correction:
+     apply TPS to world coordinates after affine, not to pixel
+     coordinates before affine. This keeps the scale calibration
+     independent of TPS.
+
+  PREFERRED ARCHITECTURE (long-term):
+  Image → Edge Detection → Feature Fitting → Coordinate Correction
+  This avoids TPS warping the image, which can change effective
+  pixel spacing and introduce scale errors.
+
+======================================================================

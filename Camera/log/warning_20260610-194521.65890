@@ -1,0 +1,16 @@
+Log file created at: 2026/06/10 19:45:21
+Running on machine: hotcat-EliteMini-Series
+Log line format: [IWEF]mmdd hh:mm:ss.uuuuuu threadid file:line] msg
+W0610 19:45:21.228147 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:enp3s0-192.168.2.110-Unknown-1500)Heart Fail:1
+W0610 19:45:23.556011 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:enp3s0-192.168.2.110-Unknown-1500)Heart Fail:2
+W0610 19:45:25.040838 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:3
+W0610 19:45:25.052273 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:4
+W0610 19:45:26.051524 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:5
+W0610 19:45:27.055930 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:6
+W0610 19:45:28.062767 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:7
+W0610 19:45:29.068027 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:8
+W0610 19:45:30.075259 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:9
+W0610 19:45:31.081749 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:10
+W0610 19:45:32.087607 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:11
+W0610 19:45:33.094935 65953 CameraGigeBase.cpp:3918] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)Heart Fail:12
+W0610 19:45:33.095696 65953 CameraGigeBase.cpp:3923] Device:(name:MV-GE502M-T sn:051020320319 cam:192.168.2.33-1000-8000 nic:-192.168.2.110-Unknown-0)CommIsFailed!!!

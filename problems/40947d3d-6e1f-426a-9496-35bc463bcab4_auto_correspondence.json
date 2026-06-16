@@ -1,0 +1,73 @@
+{
+  "version": 1,
+  "group_id": "40947d3d-6e1f-426a-9496-35bc463bcab4",
+  "pixel_size_mm": 0.1162,
+  "image_path": "/tmp/cadrefs_camera_capture.png",
+  "source_image_path": "/home/hotcat/Downloads/cadrefs/problems/cadrefs_camera_capture.png",
+  "calibration_applied": true,
+  "cad_fiducials": [
+    {
+      "label": "P1",
+      "world": [
+        4218.502639795327,
+        2645.947542064279
+      ],
+      "feature_id": "4d3c5375-eeaf-ba4f-2e2f-ec25e0266c5b",
+      "dxf_handle": "1A5BC",
+      "radius": 1.0
+    },
+    {
+      "label": "P2",
+      "world": [
+        4395.102634785177,
+        2440.047557088379
+      ],
+      "feature_id": "2ee201ee-6ff5-8fbb-a7d2-76d00f6d48d4",
+      "dxf_handle": "1A761",
+      "radius": 1.0
+    }
+  ],
+  "image_rois": [
+    [
+      282,
+      58,
+      100,
+      100
+    ],
+    [
+      1800,
+      1817,
+      100,
+      100
+    ]
+  ],
+  "pose_template_path": "/tmp/40947d3d-6e1f-426a-9496-35bc463bcab4_pose.json",
+  "detections": [
+    {
+      "center": [
+        303.0,
+        68.32499980926514
+      ],
+      "radius": 11.941859245300293,
+      "confidence": 0.7158463468121216,
+      "method": "contour_inv"
+    },
+    {
+      "center": [
+        1833.3372077941895,
+        1842.1976737976074
+      ],
+      "radius": 11.014436721801758,
+      "confidence": 0.7654347670631539,
+      "method": "contour_inv"
+    }
+  ],
+  "transform": {
+    "translation": [
+      -4190.694273836349,
+      -2675.520344003656
+    ],
+    "rotation_deg": 0.16503562343820563,
+    "scale": 1.003571512022073
+  }
+}

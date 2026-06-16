@@ -1,0 +1,57 @@
+
+Act as both a QA engineer and technical writer.
+
+Launch the application.
+
+Automatically exercise all major workflows.
+
+Capture screenshots at each important step.
+
+Generate a complete user manual in Markdown.
+
+Requirements:
+
+1. Create a docs/screenshots directory.
+
+2. Automatically capture screenshots for:
+
+   * Main Window
+   * DXF Loading
+   * CAD Canvas
+   * Camera live preview and paramters page
+   * Calibration Dialog
+   * Auto Registration Configuration
+   * Query Measurement Editor
+   * Measurement Log viewer
+   * Error Messages
+   * Troubleshooting Examples
+
+3. Screenshots must be generated from the actual running application.
+
+4. Use offscreen rendering if no display is available.
+
+5. Verify screenshots are not blank.
+
+6. Verify important controls are visible.
+
+7. Generate docs/UserManual.md.
+
+For each section include:
+
+* Purpose
+* Screenshot
+* Step-by-step instructions
+* Expected result
+* Common mistakes
+* Troubleshooting
+
+8. Include cross references between screenshots and workflow steps.
+
+9. If a screenshot does not clearly show the relevant UI element, automatically zoom or crop the relevant region and generate an additional image.
+
+10. Generate a final index page linking all screenshots and documentation sections.
+
+Treat the screenshots as the source of truth and verify the documentation matches the actual UI state shown in the images.
+
+the software running in Chinese Language mode, write the Simplify Chinese Language version of the document, that is docs/UserManual.md in Chinese. at last convert .md it to PDF format
+

@@ -1,0 +1,56 @@
+I continued the investigation, but the environment is now blocking the parts
+  needed to finish implementation:
+
+  bwrap: loopback: Failed RTM_NEWADDR: Operation not permitted
+
+  That prevents Python execution and all file writes, including apply_patch, so
+  I could not create the repro script or patch the code.
+
+  What I confirmed from the code:
+
+  - Two-fiducial auto registration is a similarity transform. It can align near
+    the two holes, but it cannot correct far-field drift or slight projective/
+    tilt error.
+
+  - Existing window_line_registration.py is not strong enough for your symptom.
+    It detects only scalar side positions, then builds a separable affine at
+    register_window_lines() / _build_affine_from_sides(). It throws away the
+    actual fitted edge angles, so it cannot enforce “the product edge is
+    perfectly straight/parallel” in the image.
+
+  - The image renderer already supports full 3x3 projective transforms, so a
+    homography-based registration can display correctly.
+
+  - FeatureROIPredictor still uses affine_solver.apply() for inverse projection,
+    which assumes affine behavior. If we use homography/projective registration,
+    ROI prediction must be changed to projective point mapping too, otherwise
+    overlay may improve while measurement search still uses the wrong local ROI.
+
+  Best next implementation:
+
+  1. Replace scalar window-side registration with fitted side-line registration:
+      - Segment the dark rounded window.
+      - Fit four robust image lines: left/right/top/bottom.
+      - Intersect them to get four image corners.
+      - Map those corners to the four CAD window-corner intersections.
+      - Solve both affine and homography candidates.
+      - Prefer homography only if local scale safety passes.
+
+  2. Make ROI prediction projective-aware:
+      - Add a projective apply_points() helper.
+      - Use it in FeatureROIPredictor.project_point(), predict_line_roi(),
+        predict_circle_roi(), and arc ROI projection.
+
+      - Keep measured world conversion using the same transform, not a separate
+        affine fallback.
+
+  3. Verification target:
+      - /tmp/cadrefs_camera_capture.png
+      - xintai.dxf
+      - query2.txt
+      - Compare overlays for two_fiducial, window_axis_affine, edge_affine,
+        edge_homography.
+
+      - Report query values against your ground truth, not only CAD nominal.
+
+  I’m currently blocked from patching by the sandbox, not by the code path.

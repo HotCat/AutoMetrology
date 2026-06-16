@@ -1,0 +1,107 @@
+{
+  "spaces": [
+    {
+      "name": "CAD",
+      "units": "mm",
+      "y_dir": "variable (DXF convention)",
+      "origin": "DXF origin",
+      "examples": {}
+    },
+    {
+      "name": "Image Raw Pixels",
+      "units": "pixels",
+      "y_dir": "down",
+      "origin": "top-left corner (0,0)",
+      "examples": {
+        "top-left": [
+          0,
+          0
+        ],
+        "bottom-right": [
+          2592,
+          1944
+        ]
+      }
+    },
+    {
+      "name": "Image World",
+      "units": "mm",
+      "y_dir": "up (Y-flipped from pixels)",
+      "origin": "top-left corner = (0, 0), bottom = (0, h*pixel_size_mm)",
+      "examples": {
+        "pixel(0,0)": [
+          0,
+          0
+        ],
+        "pixel(w,h)": [
+          301.1904,
+          -225.8928
+        ]
+      }
+    },
+    {
+      "name": "Undistorted Pixels",
+      "units": "pixels",
+      "y_dir": "down",
+      "origin": "same as raw (cv2.undistort preserves coordinate system)",
+      "examples": {}
+    },
+    {
+      "name": "TPS Corrected Pixels",
+      "units": "pixels",
+      "y_dir": "down",
+      "origin": "undistorted pixels + TPS correction (built)",
+      "examples": {}
+    },
+    {
+      "name": "Measurement World",
+      "units": "mm",
+      "y_dir": "depends on affine",
+      "origin": "affine @ pixel_origin",
+      "examples": {
+        "scale": [
+          0.11650543115834747,
+          0
+        ],
+        "rotation_deg": [
+          0.28693063262025803,
+          0
+        ]
+      }
+    }
+  ],
+  "checks": [
+    {
+      "name": "Pixel-to-world scale consistency",
+      "consistent": true,
+      "details": "X scale: 0.116505 mm/px, Y scale: 0.116505 mm/px. Diff: 0.000%. Affine scale: 0.116505. pixel_size_mm: 0.116200.",
+      "error": ""
+    },
+    {
+      "name": "Affine direction check",
+      "consistent": true,
+      "details": "Affine rotation: 0.2869deg. Affine[0,1]=0.000583, Affine[1,1]=-0.116504. For telecentric: scale should be ~pixel_size_mm=0.116200",
+      "error": ""
+    },
+    {
+      "name": "TPS sample point space",
+      "consistent": true,
+      "details": "TPS samples: 1760 points. In image bounds: 100.0%. Max coordinate: 2461.5. Image size: 2592x1944 px.",
+      "error": ""
+    },
+    {
+      "name": "CAD-to-image projection reasonableness",
+      "consistent": true,
+      "details": "CAD center (4411.8, 2543.0) \u2192 pixel (2047.9, 985.2). Image size: 2592x1944 px.",
+      "error": ""
+    },
+    {
+      "name": "Y-axis convention",
+      "consistent": true,
+      "details": "Image pixels: Y-down. Image world: Y-flipped (* -pixel_size_mm). Affine incorporates Y-flip via T_pixel_to_imgworld. CAD/DXF Y convention depends on the drawing.",
+      "error": ""
+    }
+  ],
+  "warnings": [],
+  "diagnosis": "All coordinate system consistency checks passed."
+}

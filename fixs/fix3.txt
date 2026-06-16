@@ -1,0 +1,56 @@
+Your output narrows it down well.
+
+  Key evidence:
+
+  bwrap --unshare-net --dev-bind / / true
+  # fails
+
+  sudo bwrap --unshare-net --dev-bind / / true
+  # succeeds
+
+  So kernel/bubblewrap basically works. The failure is specifically unprivileged
+  bwrap network namespace setup.
+
+  The likely blocker is this:
+
+  kernel.apparmor_restrict_unprivileged_userns = 1
+
+  You changed the user/net namespace limits, but not this AppArmor restriction.
+  Try this temporary test:
+
+  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+  bwrap --unshare-net --dev-bind / / true
+
+  If that command now succeeds, restart Codex completely and try Codex commands
+  again.
+
+  To persist it:
+
+  echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/
+  sysctl.d/99-codex-bwrap.conf
+  sudo sysctl --system
+
+  Then confirm:
+
+  sysctl kernel.apparmor_restrict_unprivileged_userns
+  bwrap --unshare-net --dev-bind / / true
+
+  Expected:
+
+  kernel.apparmor_restrict_unprivileged_userns = 0
+
+  and the bwrap command should produce no output and exit successfully.
+
+  Security note: this relaxes an Ubuntu/AppArmor hardening setting globally. If
+  you do not want that permanent change, leave it temporary and re-enable later:
+
+  sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=1
+
+  Also, your sudo sysctl --system output shows /usr/lib/sysctl.d/10-
+  apparmor.conf sets it back to 1, so if you want persistence your override must
+  be in /etc/sysctl.d/99-codex-bwrap.conf or another later-loading file.
+
+
+
+
+echo 'kernel.apparmor_restrict_unprivileged_userns=0' | sudo tee /etc/sysctl.d/99-codex-bwrap.conf

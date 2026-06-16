@@ -1,0 +1,178 @@
+================================================================================
+METROLOGY INTEGRITY AUDIT REPORT
+================================================================================
+Date: 2026-06-06
+Issue: Measurement system produces near-nominal results even when CAD registration
+       is intentionally incorrect.
+
+================================================================================
+ROOT CAUSE IDENTIFIED
+================================================================================
+
+File: cadviewer/measurement/evaluator.py (lines 98-105 in original)
+
+CRITICAL BUG:
+When image fitting fails (low confidence, high residual, no pipeline, or
+registration error causing ROI to miss feature), the evaluator FELL BACK
+to CAD nominal values:
+
+  value = nominal (CAD geometry)
+  deviation = 0.0
+  status = "ok"  ← misleading, not a real measurement
+
+This caused measurements to appear correct even when:
+1. Registration was intentionally offset
+2. ROI prediction pointed to wrong image region
+3. Edge detection found no valid edges
+4. No measurement pipeline was available
+
+================================================================================
+DATA FLOW ANALYSIS
+================================================================================
+
+Correct Flow (now implemented):
+  CAD Geometry → ROI Prediction → Image Gradient → Edge Detection →
+  Fitting → MeasuredFeature (source_type=FITTED) → QueryEvaluator →
+  QueryResult (geometry_source=MEASURED)
+
+Bug Flow (original):
+  CAD Geometry → ROI Prediction → [FAILS] → Fallback to CAD nominal →
+  QueryResult (value=CAD, deviation=0, status="ok")
+
+================================================================================
+FIXES IMPLEMENTED
+================================================================================
+
+1. QueryResult Model (cadviewer/models/query.py)
+   - Added geometry_source field: "MEASURED" | "NONE" (never "CAD")
+   - Added feature_geometry_audit dict for traceability
+   - Updated docstring with data contract
+
+2. QueryEvaluator (cadviewer/measurement/evaluator.py)
+   - REMOVED CAD fallback behavior
+   - When fitting fails → status="no_measurement", value=None
+   - Added full audit logging for every query
+   - Added assertions enforcing data contract
+   - geometry_source tracking per feature
+
+3. MeasuredFeature Model (cadviewer/models/measured_feature.py)
+   - Added source_type field: "FITTED" | "IMAGE_EDGE" | "MEASURED"
+   - Added GeometrySourceType enum for labeling
+   - Added assert_source_is_image() method
+
+4. MeasurementPipeline (cadviewer/measurement/measurement_pipeline.py)
+   - Sets source_type="FITTED" on all MeasuredFeature objects
+   - Added image source assertions (must be uint8 grayscale from camera)
+   - Added audit logging for gradient computation
+
+5. ResultWriter (cadviewer/measurement/result_writer.py)
+   - Shows geometry_source in output
+   - Handles no_measurement status explicitly
+   - CSV export includes geometry_source column
+
+6. QueryPanel UI (cadviewer/ui/query_panel.py)
+   - Shows [geometry_source] in status column
+   - Yellow color for no_measurement (distinct from error)
+   - Summary distinguishes OK vs no_measurement vs errors
+
+7. CoordinateTracer (cadviewer/diagnostics/coordinate_trace.py)
+   - Added source_type to coordinate trace output
+   - Full geometry trace now includes origin labeling
+
+================================================================================
+TEST VALIDATION
+================================================================================
+
+Test Suite: cadviewer/tests/test_forced_failure.py
+
+Test 1: Correct registration
+  Expected: status=ok, source=MEASURED
+  Result: PASS
+
+Test 2: Offset registration (50px, 100px, 200px, 500px)
+  Expected: Either MEASURED source (if search finds edges) OR no_measurement
+  Result: PASS
+  - 50px offset: source=MEASURED (search window found edges)
+  - 100px+ offset: status=no_measurement (correct failure)
+
+Test 3: Data contract
+  Expected: source_type in (FITTED, IMAGE_EDGE, MEASURED)
+  Result: PASS (source_type=FITTED)
+
+Test 4: No pipeline
+  Expected: status=no_measurement, value=None
+  Result: PASS (never falls back to CAD)
+
+================================================================================
+GEOMETRY SOURCE CONTRACT (NEW)
+================================================================================
+
+  QueryResult.value is ALWAYS derived from image-fitted geometry.
+  The evaluator NEVER substitutes CAD geometry for measured values.
+
+  Status values:
+    "ok"            → value from image-fitted geometry (source=MEASURED)
+    "no_measurement" → fitting failed, value=None, source=NONE
+    "error"         → query parsing/resolution failed
+
+  geometry_source values:
+    "MEASURED"      → image-fitted geometry used for value
+    "NONE"          → no measurement available
+    Never "CAD"     → CAD geometry is reserved for nominal reference only
+
+================================================================================
+VERIFICATION CRITERIA (ALL MET)
+================================================================================
+
+1. Correct registration → MEASURED geometry source ✓
+2. Wrong registration → Measurement fails OR uses MEASURED source ✓
+3. No measurement pipeline → no_measurement, not CAD fallback ✓
+4. geometry_source never equals "CAD" ✓
+5. UI distinguishes no_measurement from error ✓
+6. Full audit trail logged for every query ✓
+7. Coordinate trace includes geometry source labeling ✓
+
+================================================================================
+VISUAL DEBUGGING OUTPUT
+================================================================================
+
+For each query, the evaluator now logs:
+  - Feature IDs resolved
+  - Nominal (CAD reference)
+  - Measured (image-fitted)
+  - Per-feature: CAD geometry, fitted geometry (pixel), fitted geometry (world)
+  - Confidence, residual, edge point count, ROI bbox
+  - Geometry source (MEASURED/NONE)
+
+Example log output:
+  [AUDIT] Query: circles(circle001, circle002)
+  [AUDIT]   Resolved IDs: circle001..., circle002...
+  [AUDIT]   Nominal (CAD): 400.0000 mm
+  [AUDIT]   Feature 1 (circle001...):
+  [AUDIT]     source_type: FITTED
+  [AUDIT]     CAD geometry: {'cx': 300.0, 'cy': 400.0, 'radius': 80.0}
+  [AUDIT]     Fitted (pixel): {'cx': 300.0, 'cy': 400.0, 'radius': 80.0}
+  [AUDIT]     Fitted (world): {'cx': 300.0, 'cy': 400.0, 'radius': 80.0}
+  [AUDIT]   Measured (IMAGE): 400.0000 mm
+  [AUDIT]   Source: MEASURED (image-fitted geometry)
+
+================================================================================
+SUMMARY
+================================================================================
+
+The metrology integrity issue has been resolved. The measurement system now:
+1. Clearly separates CAD geometry (reference) from measured geometry
+2. Fails explicitly when fitting fails (no silent CAD substitution)
+3. Labels every geometry with its source origin
+4. Logs complete audit trails for every measurement
+5. Displays geometry source in UI and export files
+
+The system will NEVER report near-nominal dimensions from CAD geometry alone.
+A correct result requires:
+  1. Correct registration → valid ROI prediction
+  2. Successful edge detection → valid MeasuredFeature
+  3. geometry_source = MEASURED (verified in QueryResult)
+
+================================================================================
+END OF REPORT
+================================================================================

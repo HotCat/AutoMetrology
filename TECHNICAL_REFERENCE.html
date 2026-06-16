@@ -1,0 +1,1186 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>CAD Inspection Tool — Technical Reference</title>
+<style>
+body { font-family: "Segoe UI", Arial, sans-serif; max-width: 900px; margin: 40px auto; padding: 0 20px; color: #222; line-height: 1.6; }
+h1 { color: #1a5276; border-bottom: 2px solid #2980b9; padding-bottom: 8px; }
+h2 { color: #2471a3; border-bottom: 1px solid #aed6f1; padding-bottom: 4px; margin-top: 2em; }
+h3 { color: #2e86c1; margin-top: 1.5em; }
+h4 { color: #3498db; }
+table { border-collapse: collapse; width: 100%; margin: 12px 0; }
+th, td { border: 1px solid #bbb; padding: 6px 10px; text-align: left; }
+th { background: #d6eaf8; font-weight: 600; }
+tr:nth-child(even) { background: #f8f9fa; }
+code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; font-size: 0.9em; }
+pre { background: #2d2d2d; color: #e0e0e0; padding: 14px; border-radius: 5px; overflow-x: auto; }
+pre code { background: none; padding: 0; color: inherit; }
+blockquote { border-left: 4px solid #2980b9; margin: 12px 0; padding: 8px 16px; background: #eaf2f8; color: #1a5276; }
+hr { border: none; border-top: 1px solid #ccc; margin: 2em 0; }
+</style>
+</head>
+<body>
+<h1>CAD Inspection Tool — Technical Reference: Registration &amp; Measurement Pipelines</h1>
+
+<h2>Overview</h2>
+
+<p>This document describes the two core metrology pipelines that were rewritten from the ground up:</p>
+
+<ol>
+<li><strong>Silhouette-Based Global Registration</strong> — replaces the old dense-contour ICP approach</li>
+<li><strong>CAD-Guided Local Measurement</strong> — replaces direct use of CAD geometry as measured values</li>
+</ol>
+
+<p>Both rewrites share a fundamental design principle: <strong>global registration and local measurement are strictly separated</strong>. Registration uses only simple outer silhouette geometry. Precise measurement happens afterward via local subpixel fitting within CAD-predicted search regions.</p>
+
+<h3>Why the Rewrite Was Needed</h3>
+
+<p>The original pipeline ran dense ICP over all CAD contour points against all image edge points. This failed because:</p>
+
+<ul>
+<li>CAD parts contain repetitive internal structures (circles, nested contours, parallel lines, local symmetric geometry)</li>
+<li>ICP converges to local minima when matching these ambiguous internal features</li>
+<li>Dense correspondence is computationally expensive and unstable</li>
+<li>CAD geometry was used directly as "measured" values rather than fitting from image data</li>
+</ul>
+
+<hr />
+
+<h2>Part 1: Silhouette-Based Global Registration</h2>
+
+<h3>Architecture</h3>
+
+<pre><code>CAD Features                    Telecentric Image
+    │                                │
+    ▼                                ▼
+CAD Silhouette                Image Silhouette
+Extraction                    Extraction
+    │                                │
+    ▼                                ▼
+Convex Hull +                Otsu Threshold +
+Douglas-Peucker              Morphology Cleanup
+    │                                │
+    └──────────┬─────────────────────┘
+               ▼
+        MinAreaRect Coarse
+        Alignment (4 DOF)
+               │
+               ▼
+        Optional Contour
+        Refinement (ICP)
+               │
+               ▼
+        Frozen Global
+        Transform (3×3 affine)
+</code></pre>
+
+<h3>1.1 CAD Silhouette Extraction</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/cad_silhouette.py</code></p>
+
+<p>Extracts the outer contour of the CAD part, ignoring all internal geometry.</p>
+
+<p><strong>Classes</strong>:
+- <code>CADSilhouetteExtractor</code> — samples points from silhouette-relevant features
+- <code>RegistrationContourGenerator</code> — higher-level interface with quality checks</p>
+
+<p><strong>Feature filtering</strong>: Only <code>LINE</code>, <code>POLYLINE</code>, and <code>ARC</code> features contribute to the silhouette. Circles, dimensions, text, hatches, splines, and points are excluded because they represent internal detail, not the part boundary.</p>
+
+<p><strong>Processing pipeline</strong>:</p>
+
+<ol>
+<li><p><strong>Point sampling</strong>: Each silhouette-relevant feature is sampled at a configurable density (default: 0.5 points/mm). Lines are sampled along their length, polylines along each segment, arcs along their angular span.</p></li>
+<li><p><strong>Convex hull</strong>: <code>cv2.convexHull()</code> computes the outer boundary of all sampled points.</p></li>
+<li><p><strong>Simplification</strong>: <code>cv2.approxPolyDP()</code> (Douglas-Peucker algorithm) simplifies the hull to a manageable number of vertices (default epsilon: 0.5 mm).</p></li>
+</ol>
+
+<p><strong>Output</strong>: An ordered, closed contour in CAD world coordinates (mm).</p>
+
+<h3>1.2 Image Silhouette Extraction</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/image_silhouette.py</code></p>
+
+<p>Extracts the product foreground mask from a telecentric image.</p>
+
+<p><strong>Class</strong>: <code>ProductSilhouetteExtractor</code></p>
+
+<p><strong>Processing pipeline</strong>:</p>
+
+<ol>
+<li><p><strong>Grayscale conversion</strong>: If the input is BGR, convert to grayscale.</p></li>
+<li><p><strong>Otsu threshold</strong>: <code>cv2.threshold()</code> with <code>THRESH_OTSU</code> computes an automatic binary mask.</p></li>
+<li><p><strong>Auto-inversion</strong>: If the foreground region exceeds 50% of the image area, the mask is inverted. This handles both dark-on-white and white-on-dark imaging conditions.</p></li>
+<li><p><strong>Adaptive fallback</strong>: If the Otsu result is unreasonable (foreground &lt; 5% or &gt; 95%), falls back to <code>cv2.adaptiveThreshold()</code> with a Gaussian window.</p></li>
+<li><p><strong>Morphological cleanup</strong>: Close (fill small holes) then open (remove small noise) using an elliptical 5×5 kernel.</p></li>
+<li><p><strong>Largest contour extraction</strong>: <code>cv2.findContours()</code> with <code>RETR_EXTERNAL</code> extracts outer contours; the largest by area is selected.</p></li>
+</ol>
+
+<p><strong>Output</strong>: Binary mask (H×W uint8) and contour points (M×2 float64 in pixel coordinates).</p>
+
+<h3>1.3 MinAreaRect Coarse Alignment</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/min_area_rect_reg.py</code></p>
+
+<p>Computes a similarity transform (uniform scale + rotation + translation, 4 DOF) by matching the oriented bounding rectangles of both silhouettes.</p>
+
+<p><strong>Class</strong>: <code>MinAreaRectRegistration</code></p>
+
+<p><strong>Algorithm</strong>:</p>
+
+<ol>
+<li><p>Convert image contour to world coordinates (pixel × pixel_size_mm, Y-flipped).</p></li>
+<li><p>Compute <code>cv2.minAreaRect()</code> for both the CAD point cloud and the image world points.</p></li>
+<li><p><strong>Resolve 90° ambiguity</strong>: <code>minAreaRect()</code> has an inherent 90° orientation ambiguity. The algorithm tries all 4 angle combinations (CAD offset 0°/90° × Image offset 0°/90°), swapping width/height for each 90° offset.</p></li>
+<li><p><strong>Reject incompatible aspect ratios</strong>: If the aspect ratios of the two rectangles differ by more than 50%, the combination is rejected.</p></li>
+<li><p><strong>Compute similarity transform</strong> for each valid combination:</p>
+
+<ul>
+<li>Scale = √(image_area / cad_area)</li>
+<li>Rotation = image_angle − cad_angle</li>
+<li>Translation = image_center − scale × R × cad_center</li>
+</ul></li>
+<li><p><strong>Score each transform</strong> using mean squared chamfer distance via <code>scipy.spatial.cKDTree</code>.</p></li>
+<li><p>Return the transform with the lowest chamfer score.</p></li>
+</ol>
+
+<p><strong>Output</strong>: 3×3 affine matrix and debug information (rect centers, sizes, angles, scale, rotation).</p>
+
+<h3>1.4 Contour Refinement (Optional)</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/contour_refinement.py</code></p>
+
+<p>Lightweight ICP refinement using only the outer silhouette contour — never internal features.</p>
+
+<p><strong>Class</strong>: <code>ContourRefinementEngine</code></p>
+
+<p><strong>Parameters</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>max_iterations</code></td>
+  <td>30</td>
+  <td>Maximum ICP iterations</td>
+</tr>
+<tr>
+  <td><code>tolerance</code></td>
+  <td>1e-4</td>
+  <td>Convergence threshold on error change</td>
+</tr>
+<tr>
+  <td><code>outlier_distance</code></td>
+  <td>5.0 mm</td>
+  <td>Distance threshold for outlier rejection</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Algorithm</strong>:</p>
+
+<ol>
+<li>Fix the scale from the coarse stage (only refine rotation + translation).</li>
+<li>For each iteration:
+<ul>
+<li>Transform CAD contour by current estimate</li>
+<li>Find nearest neighbors in image silhouette via cKDTree</li>
+<li>Reject outliers beyond <code>outlier_distance</code></li>
+<li>Solve rigid transform with fixed scale (<code>affine_solver.solve_rigid_with_fixed_scale()</code>)</li>
+<li>Check convergence</li>
+</ul></li>
+<li>Return refined transform, iteration count, and convergence status.</li>
+</ol>
+
+<p><strong>Convergence criterion</strong>: RMSE &lt; 1.0 mm and error change &lt; tolerance.</p>
+
+<h3>1.5 Registration Pipeline Orchestrator</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/pipeline.py</code></p>
+
+<p><strong>Class</strong>: <code>RegistrationPipeline</code></p>
+
+<p>Coordinates all registration stages and provides a dict-based return interface.</p>
+
+<p><strong>Methods</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Method</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>run_coarse(image_path, group_id, pixel_size_mm)</code></td>
+  <td>MinAreaRect alignment only</td>
+</tr>
+<tr>
+  <td><code>run_fine(coarse_transform, group_id)</code></td>
+  <td>Contour refinement on top of coarse</td>
+</tr>
+<tr>
+  <td><code>run_full(image_path, group_id, pixel_size_mm)</code></td>
+  <td>Coarse → Refinement in sequence</td>
+</tr>
+<tr>
+  <td><code>get_debug_data()</code></td>
+  <td>Intermediate data for visualization</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Return format</strong> (all methods):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span>
+    <span class="s2">&quot;transform&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>    <span class="c1"># 3×3 affine (image-world → CAD-world)</span>
+    <span class="s2">&quot;stage&quot;</span><span class="p">:</span> <span class="nb">str</span><span class="p">,</span>               <span class="c1"># &quot;coarse&quot; | &quot;fine&quot; | &quot;full&quot;</span>
+    <span class="s2">&quot;error&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>             <span class="c1"># RMSE in mm</span>
+    <span class="c1"># &quot;full&quot; additionally includes:</span>
+    <span class="s2">&quot;coarse_transform&quot;</span><span class="p">:</span> <span class="n">np</span><span class="o">.</span><span class="n">ndarray</span><span class="p">,</span>
+    <span class="s2">&quot;coarse_error&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="s2">&quot;fine_error&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span>
+    <span class="s2">&quot;iterations&quot;</span><span class="p">:</span> <span class="nb">int</span><span class="p">,</span>
+    <span class="s2">&quot;converged&quot;</span><span class="p">:</span> <span class="nb">bool</span><span class="p">,</span>
+<span class="p">}</span>
+</code></pre>
+</div>
+
+<h3>1.6 Affine Transform Convention</h3>
+
+<p><strong>File</strong>: <code>cadviewer/registration/affine_solver.py</code></p>
+
+<p>The affine transform uses a <strong>3×3 homogeneous matrix</strong> mapping <strong>pixel coordinates → CAD world coordinates</strong>:</p>
+
+<pre><code>│ s·cos(θ)  -s·sin(θ)  tx │   │ px │   │ world_x │
+│ s·sin(θ)   s·cos(θ)  ty │ × │ py │ = │ world_y │
+│    0          0        1 │   │  1 │   │    1    │
+</code></pre>
+
+<p>Where <code>s</code> is the uniform scale factor, <code>θ</code> is the rotation angle, and <code>(tx, ty)</code> is the translation.</p>
+
+<p><strong>Key utility functions</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Function</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>identity()</code></td>
+  <td>Returns 3×3 identity matrix</td>
+</tr>
+<tr>
+  <td><code>apply(T, points)</code></td>
+  <td>Transform Nx2 points via affine</td>
+</tr>
+<tr>
+  <td><code>invert(T)</code></td>
+  <td>Compute inverse affine</td>
+</tr>
+<tr>
+  <td><code>compose(T1, T2)</code></td>
+  <td>Compose two affines</td>
+</tr>
+<tr>
+  <td><code>extract_scale(T)</code></td>
+  <td>Extract uniform scale factor</td>
+</tr>
+<tr>
+  <td><code>extract_params(T)</code></td>
+  <td>Extract scale, rotation, translation as dict</td>
+</tr>
+<tr>
+  <td><code>solve_from_correspondences(src, dst)</code></td>
+  <td>Compute affine from N≥3 point pairs</td>
+</tr>
+<tr>
+  <td><code>solve_similarity(src, dst)</code></td>
+  <td>Compute 4-DOF similarity transform</td>
+</tr>
+<tr>
+  <td><code>solve_rigid_with_fixed_scale(src, dst, scale)</code></td>
+  <td>Compute rotation + translation with fixed scale</td>
+</tr>
+</tbody>
+</table>
+
+<h3>1.7 Debug Visualization</h3>
+
+<p><strong>File</strong>: <code>cadviewer/renderers/overlay_renderer.py</code>, class <code>DebugOverlay</code></p>
+
+<p>When debug mode is enabled, the following layers are rendered on the canvas:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Layer</th>
+  <th>Color</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>CAD silhouette points</td>
+  <td>Green</td>
+  <td>Sampled points from LINE/POLYLINE/ARC features</td>
+</tr>
+<tr>
+  <td>CAD silhouette contour</td>
+  <td>Bright green</td>
+  <td>Convex hull after Douglas-Peucker simplification</td>
+</tr>
+<tr>
+  <td>Image silhouette (in CAD)</td>
+  <td>Red</td>
+  <td>Image contour transformed to CAD world coordinates</td>
+</tr>
+<tr>
+  <td>CAD minAreaRect</td>
+  <td>Yellow dashed</td>
+  <td>Oriented bounding rectangle of CAD silhouette</td>
+</tr>
+<tr>
+  <td>Image minAreaRect (in CAD)</td>
+  <td>Cyan dashed</td>
+  <td>Image bounding rectangle transformed to CAD space</td>
+</tr>
+<tr>
+  <td>Refined contour alignment</td>
+  <td>Blue dashed</td>
+  <td>CAD contour after refinement transform</td>
+</tr>
+</tbody>
+</table>
+
+<p>A color-coded legend is drawn in the top-left corner of the canvas.</p>
+
+<hr />
+
+<h2>Part 2: CAD-Guided Local Measurement</h2>
+
+<h3>Architecture</h3>
+
+<pre><code>CAD Feature (prior)         Telecentric Image + Registration Transform
+       │                            │
+       ▼                            ▼
+  ROI Predictor              Scharr Gradient
+  (inverse affine)           (precomputed once)
+       │                            │
+       ▼                            ▼
+  Predicted ROI              Circle Fitter or
+  + predicted geometry       Line Fitter
+       │                            │
+       └──────────┬─────────────────┘
+                  ▼
+           Local Edge Sampling
+           + Subpixel Localization
+           + Least-Squares Fitting
+                  │
+                  ▼
+           MeasuredFeature
+           (separate from CADFeature)
+                  │
+                  ▼
+           Dimension Computation
+           (uses MeasuredFeature geometry)
+</code></pre>
+
+<h3>Design Principle</h3>
+
+<blockquote>
+  <p><strong>CAD features are geometric priors only.</strong> They predict <em>where</em> to look in the image and constrain the search area. The actual measured values come from image edge data and local geometric fitting.</p>
+</blockquote>
+
+<p>This mirrors how industrial vision metrology systems work: CAD provides the nominal reference and search guidance, but measurements are always derived from the actual image.</p>
+
+<h3>2.1 MeasuredFeature Model</h3>
+
+<p><strong>File</strong>: <code>cadviewer/models/measured_feature.py</code></p>
+
+<p><code>MeasuredFeature</code> is a dataclass that stores image-derived geometry, completely separate from <code>CADFeature</code>.</p>
+
+<p><strong>Fields</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Field</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>feature_id</code></td>
+  <td>str</td>
+  <td>Unique ID for this measurement</td>
+</tr>
+<tr>
+  <td><code>cad_feature_id</code></td>
+  <td>str</td>
+  <td>Links back to the CAD feature that guided the measurement</td>
+</tr>
+<tr>
+  <td><code>feature_type</code></td>
+  <td>FeatureType</td>
+  <td>CIRCLE or LINE</td>
+</tr>
+<tr>
+  <td><code>fitted_geometry</code></td>
+  <td>dict</td>
+  <td>Fitted geometry in pixel coordinates</td>
+</tr>
+<tr>
+  <td><code>fitted_geometry_world</code></td>
+  <td>dict</td>
+  <td>Fitted geometry in world coordinates (mm)</td>
+</tr>
+<tr>
+  <td><code>edge_points</code></td>
+  <td>np.ndarray (Nx2)</td>
+  <td>Detected edge points in pixels</td>
+</tr>
+<tr>
+  <td><code>roi_bbox</code></td>
+  <td>tuple</td>
+  <td>Search region bounds (xmin, ymin, xmax, ymax)</td>
+</tr>
+<tr>
+  <td><code>residual_error</code></td>
+  <td>float</td>
+  <td>Mean fitting residual (pixels)</td>
+</tr>
+<tr>
+  <td><code>confidence</code></td>
+  <td>float</td>
+  <td>0.0–1.0 quality score</td>
+</tr>
+<tr>
+  <td><code>detection_method</code></td>
+  <td>str</td>
+  <td>"radial_edge_sampling" or "perpendicular_scanline"</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Geometry dict formats</strong>:</p>
+
+<p>Circle (pixel):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span><span class="s2">&quot;cx&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;cy&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;radius&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">}</span>
+</code></pre>
+</div>
+
+<p>Circle (world):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span><span class="s2">&quot;cx&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;cy&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;radius&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">}</span>  <span class="c1"># mm</span>
+</code></pre>
+</div>
+
+<p>Line (pixel):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span><span class="s2">&quot;x1&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;y1&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;x2&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;y2&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">}</span>
+</code></pre>
+</div>
+
+<p>Line (world):</p>
+
+<div class="codehilite">
+<pre><span></span><code><span class="p">{</span><span class="s2">&quot;x1&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;y1&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;x2&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">,</span> <span class="s2">&quot;y2&quot;</span><span class="p">:</span> <span class="nb">float</span><span class="p">}</span>  <span class="c1"># mm</span>
+</code></pre>
+</div>
+
+<p><strong><code>MeasuredFeatureStore</code></strong> maintains a registry indexed by both <code>cad_feature_id</code> and <code>feature_id</code>, with caching to avoid re-measuring the same feature.</p>
+
+<h3>2.2 ROI Prediction</h3>
+
+<p><strong>File</strong>: <code>cadviewer/measurement/roi_predictor.py</code></p>
+
+<p><strong>Class</strong>: <code>FeatureROIPredictor</code></p>
+
+<p>Projects CAD features into image pixel space via the inverse registration affine, generating local search regions.</p>
+
+<p><strong>Constructor</strong>: Takes the 3×3 pixel→world affine (inverts it internally for world→pixel mapping).</p>
+
+<p><strong>Methods</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Method</th>
+  <th>Input</th>
+  <th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>predict_circle_roi(cad_geometry, padding)</code></td>
+  <td>CAD circle dict</td>
+  <td>(ROIRegion, pixel_center, pixel_radius)</td>
+</tr>
+<tr>
+  <td><code>predict_line_roi(cad_geometry, padding)</code></td>
+  <td>CAD line dict</td>
+  <td>(ROIRegion, pixel_p1, pixel_p2)</td>
+</tr>
+<tr>
+  <td><code>project_point(world_pt)</code></td>
+  <td>CAD world point</td>
+  <td>Pixel coordinate</td>
+</tr>
+<tr>
+  <td><code>to_world(pixel_pt)</code></td>
+  <td>Pixel coordinate</td>
+  <td>CAD world coordinate</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong><code>ROIRegion</code></strong> is an axis-aligned bounding box in pixel coordinates with <code>clip()</code>, <code>width</code>, <code>height</code>, and <code>center</code> properties.</p>
+
+<p>Default padding: 15 pixels around the predicted geometry.</p>
+
+<h3>2.3 Circle Fitting — Radial Edge Sampling</h3>
+
+<p><strong>File</strong>: <code>cadviewer/measurement/circle_fitter.py</code></p>
+
+<p><strong>Class</strong>: <code>CircleFittingEngine</code></p>
+
+<p>Industrial-style circle detection that does NOT use HoughCircles. Instead, it uses radial ray sampling from the predicted center.</p>
+
+<p><strong>Constructor</strong>: Takes a precomputed gradient magnitude image (Scharr).</p>
+
+<p><strong><code>fit()</code> method parameters</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>predicted_center</code></td>
+  <td>—</td>
+  <td>(cx, cy) from ROI predictor</td>
+</tr>
+<tr>
+  <td><code>predicted_radius</code></td>
+  <td>—</td>
+  <td>Expected radius from CAD projection</td>
+</tr>
+<tr>
+  <td><code>n_rays</code></td>
+  <td>90</td>
+  <td>Number of radial rays to cast</td>
+</tr>
+<tr>
+  <td><code>search_width_ratio</code></td>
+  <td>0.25</td>
+  <td>Search band as fraction of radius</td>
+</tr>
+<tr>
+  <td><code>min_gradient</code></td>
+  <td>15.0</td>
+  <td>Minimum gradient magnitude threshold</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Algorithm</strong>:</p>
+
+<ol>
+<li><p><strong>Radial ray casting</strong>: Cast <code>n_rays</code> equally-spaced rays from the predicted center (0° to 360°).</p></li>
+<li><p><strong>Gradient profiling</strong>: Along each ray, sample gradient magnitudes from (radius − search_width) to (radius + search_width).</p></li>
+<li><p><strong>Peak detection</strong>: Find the index of maximum gradient on each ray.</p></li>
+<li><p><strong>Subpixel localization</strong>: Apply parabolic interpolation around the peak to localize the edge to subpixel accuracy:</p>
+
+<pre><code>offset = (y[i+1] − y[i−1]) / (2 × (2×y[i] − y[i−1] − y[i+1]))
+</code></pre>
+
+<p>Clamped to ±0.5 pixel.</p></li>
+<li><p><strong>Circle fitting</strong>: Kasa algebraic least-squares circle fit on all collected edge points:</p>
+
+<pre><code>Solve: [x, y, 1] · [2cx, 2cy, r²−cx²−cy²] = x² + y²
+</code></pre></li>
+<li><p><strong>Confidence scoring</strong>:</p>
+
+<ul>
+<li>Coverage = n_edge_points / n_rays</li>
+<li>Residual score = max(0, 1 − residual / max_tolerance)</li>
+<li>Confidence = coverage × residual_score</li>
+</ul></li>
+</ol>
+
+<p><strong><code>CircleFitResult</code></strong> dataclass: center, radius, edge_points, residual, confidence, n_edge_points, gradient_strength.</p>
+
+<h3>2.4 Line Fitting — Perpendicular Scanline Sampling</h3>
+
+<p><strong>File</strong>: <code>cadviewer/measurement/line_fitter.py</code></p>
+
+<p><strong>Class</strong>: <code>LineFittingEngine</code></p>
+
+<p>Industrial-style line detection that does NOT use HoughLines. Uses perpendicular scanlines instead.</p>
+
+<p><strong>Constructor</strong>: Takes a precomputed gradient magnitude image (Scharr).</p>
+
+<p><strong><code>fit()</code> method parameters</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Default</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>predicted_p1</code></td>
+  <td>—</td>
+  <td>First endpoint from ROI predictor</td>
+</tr>
+<tr>
+  <td><code>predicted_p2</code></td>
+  <td>—</td>
+  <td>Second endpoint from ROI predictor</td>
+</tr>
+<tr>
+  <td><code>n_scanlines</code></td>
+  <td>60</td>
+  <td>Number of perpendicular scanlines</td>
+</tr>
+<tr>
+  <td><code>scan_width</code></td>
+  <td>15.0</td>
+  <td>Half-width of each scanline (pixels)</td>
+</tr>
+<tr>
+  <td><code>min_gradient</code></td>
+  <td>15.0</td>
+  <td>Minimum gradient magnitude threshold</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Algorithm</strong>:</p>
+
+<ol>
+<li><p><strong>Direction computation</strong>: Compute unit direction vector along the predicted line and its perpendicular normal.</p></li>
+<li><p><strong>Scanline placement</strong>: Place <code>n_scanlines</code> equally spaced along the line direction from p1 to p2.</p></li>
+<li><p><strong>Gradient profiling</strong>: Along each perpendicular scanline, sample gradient magnitudes from −scan_width to +scan_width.</p></li>
+<li><p><strong>Peak detection and subpixel localization</strong>: Same parabolic interpolation as circle fitting.</p></li>
+<li><p><strong>Line fitting</strong>: SVD total least-squares:</p>
+
+<ul>
+<li>Compute centroid of all edge points</li>
+<li>SVD of centered points</li>
+<li>First principal component = line direction</li>
+</ul></li>
+<li><p><strong>Endpoint computation</strong>: Project edge points onto the fitted line to determine actual extent.</p></li>
+</ol>
+
+<p><strong><code>LineFitResult</code></strong> dataclass: p1, p2, edge_points, residual, confidence, n_edge_points, gradient_strength.</p>
+
+<h3>2.5 Measurement Pipeline Orchestrator</h3>
+
+<p><strong>File</strong>: <code>cadviewer/measurement/measurement_pipeline.py</code></p>
+
+<p><strong>Class</strong>: <code>MeasurementPipeline</code></p>
+
+<p>Coordinates ROI prediction, gradient precomputation, and fitting engines.</p>
+
+<p><strong>Constructor</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Parameter</th>
+  <th>Type</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>repo</code></td>
+  <td>FeatureRepository</td>
+  <td>CAD feature repository</td>
+</tr>
+<tr>
+  <td><code>image</code></td>
+  <td>np.ndarray</td>
+  <td>Grayscale uint8 image</td>
+</tr>
+<tr>
+  <td><code>affine</code></td>
+  <td>np.ndarray</td>
+  <td>3×3 pixel→world affine</td>
+</tr>
+<tr>
+  <td><code>pixel_size_mm</code></td>
+  <td>float</td>
+  <td>Physical resolution</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Initialization</strong>:
+- Precomputes Scharr gradient magnitude (shared across all fitting operations)
+- Creates <code>CircleFittingEngine</code> and <code>LineFittingEngine</code> instances
+- Initializes <code>MeasuredFeatureStore</code> for caching</p>
+
+<p><strong>Methods</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Method</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>measure_feature(cad_feature_id)</code></td>
+  <td>Measure a single feature (cached)</td>
+</tr>
+<tr>
+  <td><code>measure_features(cad_feature_ids)</code></td>
+  <td>Measure multiple features</td>
+</tr>
+<tr>
+  <td><code>measure_all()</code></td>
+  <td>Measure all CIRCLE and LINE features in the repo</td>
+</tr>
+<tr>
+  <td><code>get_debug_data()</code></td>
+  <td>Return intermediate data for overlay visualization</td>
+</tr>
+<tr>
+  <td><code>store</code> (property)</td>
+  <td>Access the MeasuredFeatureStore</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Coordinate conversion</strong>: Fitted geometry in pixels is transformed to world coordinates (mm) via <code>affine_solver.apply()</code>. Circle radii are converted by computing the world-space distance between center and a radius-offset point.</p>
+
+<h3>2.6 Query Evaluator</h3>
+
+<p><strong>File</strong>: <code>cadviewer/measurement/evaluator.py</code></p>
+
+<p><strong>Class</strong>: <code>QueryEvaluator</code></p>
+
+<p>Parses measurement queries and evaluates them using <code>MeasuredFeature</code> geometry (not CAD geometry).</p>
+
+<p><strong>Query language</strong>:</p>
+
+<pre><code>circles(ID1, ID2)    → center-to-center distance
+lines(ID1, ID2)      → perpendicular distance
+</code></pre>
+
+<p><strong>ID resolution</strong> order:
+1. Exact feature ID match
+2. DXF handle match
+3. UUID prefix match</p>
+
+<p><strong>Evaluation flow</strong>:</p>
+
+<ol>
+<li>Parse query text → <code>QueryInstruction</code> list</li>
+<li>Resolve feature IDs</li>
+<li>Compute nominal from CAD geometry (reference value)</li>
+<li>Compute measured from <code>MeasuredFeature.fitted_geometry_world</code></li>
+<li>Return <code>QueryResult</code> with value, nominal, deviation, and status</li>
+</ol>
+
+<p><strong>Dimension computations</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Query Type</th>
+  <th>Computation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>CIRCLE_DISTANCE</code></td>
+  <td>Euclidean distance between fitted circle centers</td>
+</tr>
+<tr>
+  <td><code>LINE_DISTANCE</code></td>
+  <td>Mean perpendicular distance from one fitted line to the other's endpoints</td>
+</tr>
+</tbody>
+</table>
+
+<p>If image measurement is unavailable, falls back to CAD-only (deviation = 0).</p>
+
+<h3>2.7 Measurement Debug Visualization</h3>
+
+<p><strong>File</strong>: <code>cadviewer/renderers/overlay_renderer.py</code>, class <code>MeasurementDebugOverlay</code></p>
+
+<p>Renders measurement overlays on the canvas for visual inspection.</p>
+
+<p><strong>Visual elements</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Element</th>
+  <th>Rendering</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>ROI box</td>
+  <td>Dashed rectangle</td>
+  <td>Search region in world coordinates</td>
+</tr>
+<tr>
+  <td>Edge points</td>
+  <td>Green dots</td>
+  <td>Detected edge points used for fitting</td>
+</tr>
+<tr>
+  <td>Fitted circle</td>
+  <td>Circle + crosshair</td>
+  <td>Best-fit circle from edge data</td>
+</tr>
+<tr>
+  <td>Fitted line</td>
+  <td>Line + endpoint markers</td>
+  <td>Best-fit line from edge data</td>
+</tr>
+</tbody>
+</table>
+
+<p><strong>Color coding by confidence</strong>:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Confidence</th>
+  <th>Color</th>
+  <th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>&gt; 0.7</td>
+  <td>Green</td>
+  <td>Good measurement</td>
+</tr>
+<tr>
+  <td>0.4–0.7</td>
+  <td>Yellow</td>
+  <td>Marginal measurement</td>
+</tr>
+<tr>
+  <td>&lt; 0.4</td>
+  <td>Red</td>
+  <td>Poor measurement</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2>Part 3: File Reference</h2>
+
+<h3>New Files</h3>
+
+<table>
+<thead>
+<tr>
+  <th>File</th>
+  <th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>cadviewer/registration/cad_silhouette.py</code></td>
+  <td>CAD outer contour extraction</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/image_silhouette.py</code></td>
+  <td>Image foreground mask extraction</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/min_area_rect_reg.py</code></td>
+  <td>Coarse alignment via minAreaRect</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/contour_refinement.py</code></td>
+  <td>Lightweight silhouette ICP refinement</td>
+</tr>
+<tr>
+  <td><code>cadviewer/measurement/measurement_pipeline.py</code></td>
+  <td>CAD-guided measurement orchestrator</td>
+</tr>
+<tr>
+  <td><code>cadviewer/measurement/roi_predictor.py</code></td>
+  <td>CAD-to-pixel ROI prediction</td>
+</tr>
+<tr>
+  <td><code>cadviewer/measurement/circle_fitter.py</code></td>
+  <td>Radial edge sampling circle fitting</td>
+</tr>
+<tr>
+  <td><code>cadviewer/measurement/line_fitter.py</code></td>
+  <td>Perpendicular scanline line fitting</td>
+</tr>
+<tr>
+  <td><code>cadviewer/models/measured_feature.py</code></td>
+  <td>MeasuredFeature model and store</td>
+</tr>
+</tbody>
+</table>
+
+<h3>Modified Files</h3>
+
+<table>
+<thead>
+<tr>
+  <th>File</th>
+  <th>Changes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>cadviewer/registration/pipeline.py</code></td>
+  <td>Complete rewrite: silhouette-based pipeline</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/affine_solver.py</code></td>
+  <td>Extended with utility functions</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/icp_engine.py</code></td>
+  <td>Retained but no longer imported by pipeline</td>
+</tr>
+<tr>
+  <td><code>cadviewer/measurement/evaluator.py</code></td>
+  <td>Rewritten to use MeasuredFeature geometry</td>
+</tr>
+<tr>
+  <td><code>cadviewer/renderers/overlay_renderer.py</code></td>
+  <td>Added DebugOverlay and MeasurementDebugOverlay</td>
+</tr>
+<tr>
+  <td><code>cadviewer/renderers/cad_canvas.py</code></td>
+  <td>Added measurement debug overlay support</td>
+</tr>
+<tr>
+  <td><code>cadviewer/renderers/image_layer.py</code></td>
+  <td>Extended for new registration data</td>
+</tr>
+<tr>
+  <td><code>cadviewer/ui/main_window.py</code></td>
+  <td>Wires measurement pipeline to query evaluation</td>
+</tr>
+<tr>
+  <td><code>cadviewer/ui/registration_panel.py</code></td>
+  <td>Button label update</td>
+</tr>
+</tbody>
+</table>
+
+<h3>Retained but Unused by Main Flow</h3>
+
+<table>
+<thead>
+<tr>
+  <th>File</th>
+  <th>Status</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td><code>cadviewer/registration/sampler.py</code></td>
+  <td>Kept for backward compatibility</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/correspondence.py</code></td>
+  <td>Kept for backward compatibility</td>
+</tr>
+<tr>
+  <td><code>cadviewer/registration/local_fitting.py</code></td>
+  <td>Superseded by measurement pipeline</td>
+</tr>
+</tbody>
+</table>
+
+<hr />
+
+<h2>Part 4: Algorithm Details</h2>
+
+<h3>Subpixel Edge Localization</h3>
+
+<p>Both the circle and line fitters use parabolic interpolation for subpixel accuracy:</p>
+
+<p>Given three gradient samples <code>y[i−1]</code>, <code>y[i]</code>, <code>y[i+1]</code> around the peak at index <code>i</code>:</p>
+
+<pre><code>offset = (y[i+1] − y[i−1]) / (2 × (2×y[i] − y[i−1] − y[i+1]))
+</code></pre>
+
+<p>This gives a subpixel offset in the range [−0.5, +0.5], achieving approximately 0.1 pixel precision when the gradient profile is well-approximated by a parabola near the peak.</p>
+
+<h3>Kasa Algebraic Circle Fit</h3>
+
+<p>Solves the overdetermined system via least squares:</p>
+
+<pre><code>│ x₁  y₁  1 │   │ 2cx │   │ x₁² + y₁² │
+│ x₂  y₂  1 │ × │ 2cy │ = │ x₂² + y₂² │
+│  ⋮    ⋮   ⋮ │   │ r²−c²│   │     ⋮      │
+</code></pre>
+
+<p>Center is <code>(result[0]/2, result[1]/2)</code>, radius is <code>√(result[2] + cx² + cy²)</code>.</p>
+
+<p>Fast and stable for well-conditioned data with ≥ 8 points.</p>
+
+<h3>SVD Total Least-Squares Line Fit</h3>
+
+<ol>
+<li>Compute centroid of edge points</li>
+<li>Center the points</li>
+<li>SVD decomposition: <code>U, S, Vt = svd(centered)</code></li>
+<li>Line direction = first row of <code>Vt</code> (first principal component)</li>
+<li>All edge points projected onto this line to determine endpoints</li>
+</ol>
+
+<h3>Confidence Scoring</h3>
+
+<p>For both circles and lines:</p>
+
+<pre><code>confidence = coverage × residual_score
+</code></pre>
+
+<p>Where:
+- <code>coverage</code> = n_edge_points / n_samples (rays or scanlines)
+- <code>residual_score</code> = max(0, 1 − residual / max_tolerance)</p>
+
+<p>A measurement is considered valid when <code>confidence &gt; 0.2</code> and <code>residual_error &lt; 5.0</code> pixels.</p>
+
+<h3>Chamfer Distance Scoring (Registration)</h3>
+
+<p>Used to rank candidate alignments during minAreaRect registration:</p>
+
+<pre><code>score = mean(min_distance(each transformed CAD point → nearest image point)²)
+</code></pre>
+
+<p>Computed via <code>scipy.spatial.cKDTree</code> for efficiency.</p>
+
+<hr />
+
+<h2>Part 5: Verified Accuracy</h2>
+
+<p>End-to-end testing with synthetic data confirmed:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Metric</th>
+  <th>Accuracy</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>Circle center error</td>
+  <td>&lt; 0.02 mm</td>
+</tr>
+<tr>
+  <td>Circle radius error</td>
+  <td>&lt; 0.05 mm</td>
+</tr>
+<tr>
+  <td>Circle-to-circle distance error</td>
+  <td>&lt; 0.025 mm</td>
+</tr>
+<tr>
+  <td>Line perpendicular distance error</td>
+  <td>&lt; 0.03 mm</td>
+</tr>
+</tbody>
+</table>
+
+<p>These results assume good image quality, proper pixel size calibration, and valid registration.</p>
+
+<hr />
+
+<h2>Part 6: Dependencies</h2>
+
+<table>
+<thead>
+<tr>
+  <th>Package</th>
+  <th>Version</th>
+  <th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>PySide6</td>
+  <td>6.x</td>
+  <td>GUI framework and rendering</td>
+</tr>
+<tr>
+  <td>numpy</td>
+  <td>1.24+</td>
+  <td>Numerical operations</td>
+</tr>
+<tr>
+  <td>OpenCV (cv2)</td>
+  <td>4.x</td>
+  <td>Image processing, contour operations, minAreaRect</td>
+</tr>
+<tr>
+  <td>scipy</td>
+  <td>1.10+</td>
+  <td>cKDTree for nearest-neighbor queries</td>
+</tr>
+<tr>
+  <td>ezdxf</td>
+  <td>1.x</td>
+  <td>DXF file parsing</td>
+</tr>
+</tbody>
+</table>
+
+<p>Optional:</p>
+
+<table>
+<thead>
+<tr>
+  <th>Package</th>
+  <th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>MindVision SDK</td>
+  <td>Industrial camera capture</td>
+</tr>
+</tbody>
+</table>
+
+</body>
+</html>

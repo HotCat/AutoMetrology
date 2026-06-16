@@ -1,0 +1,63 @@
+{
+  "scale_sources": [
+    {
+      "name": "config.pixel_size_mm",
+      "value": 0.1162,
+      "source": "AppConfig.pixel_size_mm",
+      "computed_in": "calibration_space"
+    },
+    {
+      "name": "affine_scale",
+      "value": 0.11650543115834747,
+      "source": "affine_solver.extract_params(T)['scale_x']",
+      "computed_in": "registration_space"
+    },
+    {
+      "name": "empirical_chessboard_raw",
+      "value": 0.12244743001594592,
+      "source": "chessboard_cell_mm / mean_inter_corner_px (21.0mm grid)",
+      "computed_in": "raw_pixel_space"
+    },
+    {
+      "name": "empirical_chessboard_tps",
+      "value": 0.12288434688224943,
+      "source": "chessboard_cell_mm / mean_inter_corner_px_after_tps",
+      "computed_in": "tps_corrected_space"
+    }
+  ],
+  "measurement_scale": 0.1162,
+  "measurement_scale_source": "config.pixel_size_mm",
+  "calibration_scale": 0.12244743001594592,
+  "calibration_space": "raw_pixel_space",
+  "affine_scale": 0.11650543115834747,
+  "scale_consistent": false,
+  "scale_error_pct": 5.439542994564253,
+  "pipeline_analysis": [
+    "1. Pixel size calibration: chessboard corners \u2192 cell_mm / inter_corner_px",
+    "   \u2192 stored as config.pixel_size_mm",
+    "",
+    "2. Image loading: ImageLoadDialog loads image",
+    "   \u2192 if lens calibrated: cv2.undistort() applied to image",
+    "   \u2192 pixel_size_mm set from config",
+    "",
+    "3. Registration: strategy.py converts image pixels to world mm",
+    "   \u2192 img_world[:,0] *= pixel_size_mm  (img_contour_world)",
+    "   \u2192 img_world[:,1] *= -pixel_size_mm  (Y-flip)",
+    "   \u2192 Registration affine T maps CAD\u2192image_world",
+    "   \u2192 Image layer affine = inv(T) @ diag(pixel_size, -pixel_size, 1)",
+    "   \u2192 This affine maps pixel\u2192CAD_world",
+    "",
+    "4. Measurement Pipeline: MeasurementPipeline.__init__(affine=...)",
+    "   \u2192 affine is the image_layer.affine (pixel\u2192CAD_world)",
+    "   \u2192 _correct_points() applies TPS correction to fitted pixel coords",
+    "   \u2192 affine_solver.apply(affine, corrected_points) \u2192 world mm",
+    "",
+    "5. Query Evaluator: computes distances in world mm",
+    "   \u2192 uses fitted_geometry_world directly"
+  ],
+  "warnings": [
+    "Empirical scale from empirical_chessboard_raw (0.122447) differs from config (0.116200) by +5.376%. Computed in raw_pixel_space.",
+    "Empirical scale from empirical_chessboard_tps (0.122884) differs from config (0.116200) by +5.752%. Computed in tps_corrected_space."
+  ],
+  "diagnosis": "Scale sources are inconsistent, but the specific cause needs manual investigation. See warnings above."
+}

@@ -1,0 +1,32 @@
+Root Cause
+
+  The measurement system was NOT using the wrong image (the raw camera image is
+  clean, verified 0 cyan pixels). The real problem was in the edge detection 
+  algorithm's gradient thresholding:
+
+  1. min_gradient=15.0 was effectively useless — the camera image has mean
+  gradient 82.5, and 87.9% of pixels exceed 15.0
+  2. _find_closest_peak() used "closest to center" bias — it always picked the
+  gradient peak nearest the CAD-predicted position
+  3. When registration was wrong, the algorithm found noise/texture peaks near
+  the wrong predicted position, converging to the CAD geometry instead of real
+  product edges
+  4. This produced near-nominal measurements (e.g., 81.314mm vs 81.400mm
+  nominal) because the fitted position essentially followed the CAD prediction
+
+  Fix (3 layers)
+
+  1. Adaptive peak threshold in _find_closest_peak (both circle_fitter.py and
+  line_fitter.py):
+    - Changed from fixed min_gradient=15.0 to max(min_gradient, profile_mean * 
+  3.0)
+    - For the camera image: effective threshold rises from 15 to ~250, rejecting
+   96% of noise
+  2. Gradient quality validation in both fitters:
+    - Added check: grad_strength < max(45, image_grad_mean * 3.0) → reject
+    - Camera image: threshold = 247.5, real edges have gradient 1000-3500, noise
+   has ~60
+  3. Gradient quality validation in measurement_pipeline.py:
+    - Same check as fallback safety layer at the pipeline level
+
+  Files changed: circle_fitter.py, line_fitter.py, measurement_pipeline.py

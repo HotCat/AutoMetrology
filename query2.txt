@@ -1,0 +1,6 @@
+lines(9e40c968, 7e6e8eb2), 0.8140
+lines(9c0bd3a0, 71490463), 0.5565
+lines(7bedd422, 9c0bd3a0), 0.0717
+lines(756f8ada, 9e40c968), 0.0718
+lines(7e6e8eb2, 4595cf5f), 0.1918
+lines(71490463, a8b8900b), 0.0718

@@ -144,6 +144,9 @@ class _PixelSizeTab(QWidget):
         self._computed_pixel_size: Optional[float] = None
         self._captured_frame: Optional[np.ndarray] = None
         self._latest_cam_frame: Optional[np.ndarray] = None
+        self._last_calibration_image: Optional[np.ndarray] = None
+        self._last_corners: Optional[np.ndarray] = None
+        self._last_board_center: Optional[np.ndarray] = None
 
         layout = QVBoxLayout(self)
 
@@ -209,6 +212,10 @@ class _PixelSizeTab(QWidget):
         self._btn_calibrate = QPushButton("Calibrate Pixel Size")
         self._btn_calibrate.clicked.connect(self._calibrate)
         cal_row.addWidget(self._btn_calibrate)
+        self._btn_pose = QPushButton("Compute Mount Angles")
+        self._btn_pose.clicked.connect(self._compute_mount_angles)
+        self._btn_pose.setEnabled(False)
+        cal_row.addWidget(self._btn_pose)
         cal_row.addStretch()
         layout.addLayout(cal_row)
 
@@ -273,6 +280,10 @@ class _PixelSizeTab(QWidget):
             self._path_edit.setText(path)
             self._computed_pixel_size = None
             self._captured_frame = None
+            self._last_calibration_image = None
+            self._last_corners = None
+            self._last_board_center = None
+            self._btn_pose.setEnabled(False)
             img = cv2.imread(path)
             if img is not None:
                 self._preview.setPixmap(_numpy_to_pixmap(img, 400))
@@ -339,12 +350,17 @@ class _PixelSizeTab(QWidget):
         avg_px = (np.mean(h_dists) + np.mean(v_dists)) / 2.0
         pixel_size = float(cell_mm / avg_px)
         self._computed_pixel_size = pixel_size
+        self._last_calibration_image = img.copy()
+        self._last_corners = corners.copy()
+        self._last_board_center = np.mean(pts, axis=0)
+        self._btn_pose.setEnabled(True)
         self._win._config.pixel_size_mm = pixel_size
         self._win._config.save()
 
         # Draw corners on preview
         vis = img.copy()
         cv2.drawChessboardCorners(vis, (cols, rows), corners, True)
+        self._draw_crosshair(vis, self._last_board_center)
         self._preview.setPixmap(_numpy_to_pixmap(vis, 400))
 
         self._result.setText(
@@ -352,6 +368,131 @@ class _PixelSizeTab(QWidget):
             f"{pixel_size:.4f} mm/px"
         )
         self._result.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    def _compute_mount_angles(self) -> None:
+        if not HAS_CV2:
+            self._result.setText("Error: OpenCV not available")
+            self._result.setStyleSheet("color: #ef5350;")
+            return
+        if self._last_corners is None or self._last_calibration_image is None:
+            self._result.setText("Calibrate pixel size first so chessboard corners are available.")
+            self._result.setStyleSheet("color: #ef5350;")
+            return
+
+        lc = self._win._config.lens_calibration
+        camera_matrix = lc.get_camera_matrix()
+        dist_coeffs = lc.get_dist_coeffs()
+        if camera_matrix is None or dist_coeffs is None:
+            self._result.setText(
+                "Run and save Lens Calibration first. Mount angles require camera intrinsics."
+            )
+            self._result.setStyleSheet("color: #ef5350;")
+            return
+
+        cols = self._win._cb_col.value()
+        rows = self._win._cb_row.value()
+        cell_mm = float(self._win._cb_cell.value())
+        objp = np.zeros((cols * rows, 3), np.float32)
+        objp[:, :2] = (
+            np.mgrid[0:cols, 0:rows].T.reshape(-1, 2).astype(np.float32)
+            * cell_mm
+        )
+        image_points = self._last_corners.reshape(-1, 2).astype(np.float32)
+
+        ok, rvec, tvec = cv2.solvePnP(
+            objp, image_points, camera_matrix, dist_coeffs,
+            flags=cv2.SOLVEPNP_ITERATIVE,
+        )
+        if not ok:
+            self._result.setText("Camera pose estimation failed.")
+            self._result.setStyleSheet("color: #ef5350;")
+            return
+
+        rotation, _ = cv2.Rodrigues(rvec)
+        pitch, roll, yaw = self._rotation_to_pitch_roll_yaw(rotation)
+        normal_cam = rotation @ np.array([0.0, 0.0, 1.0], dtype=np.float64)
+        tilt_deg = float(np.degrees(np.arccos(
+            np.clip(abs(normal_cam[2]) / max(np.linalg.norm(normal_cam), 1e-12), -1.0, 1.0)
+        )))
+        distance_mm = float(np.linalg.norm(tvec.reshape(3)))
+
+        vis = self._last_calibration_image.copy()
+        cv2.drawChessboardCorners(vis, (cols, rows), self._last_corners, True)
+        if self._last_board_center is not None:
+            self._draw_crosshair(vis, self._last_board_center)
+        self._draw_pose_axes(vis, camera_matrix, dist_coeffs, rvec, tvec, cell_mm)
+        self._preview.setPixmap(_numpy_to_pixmap(vis, 400))
+
+        center = self._last_board_center
+        center_text = (
+            f"Board center: ({center[0]:.1f}, {center[1]:.1f}) px"
+            if center is not None else "Board center: unavailable"
+        )
+        self._result.setText(
+            "Pixel size and mount pose:\n"
+            f"  Pixel size: {self._computed_pixel_size:.6f} mm/px\n"
+            f"  Pitch: {pitch:+.3f} deg\n"
+            f"  Roll:  {roll:+.3f} deg\n"
+            f"  Yaw:   {yaw:+.3f} deg\n"
+            f"  Optical-axis tilt from board normal: {tilt_deg:.3f} deg\n"
+            f"  Camera-to-board translation norm: {distance_mm:.1f} mm\n"
+            f"  {center_text}\n\n"
+            "Crosshair marks the detected chessboard center. Manual center arming is "
+            "not needed for pose estimation because solvePnP uses all ordered corners."
+        )
+        self._result.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    @staticmethod
+    def _rotation_to_pitch_roll_yaw(rotation: np.ndarray) -> tuple[float, float, float]:
+        """Return intrinsic XYZ-style pitch, roll, yaw from board-to-camera rotation."""
+        sy = float(np.sqrt(rotation[0, 0] ** 2 + rotation[1, 0] ** 2))
+        singular = sy < 1e-9
+        if not singular:
+            roll = np.degrees(np.arctan2(rotation[2, 1], rotation[2, 2]))
+            pitch = np.degrees(np.arctan2(-rotation[2, 0], sy))
+            yaw = np.degrees(np.arctan2(rotation[1, 0], rotation[0, 0]))
+        else:
+            roll = np.degrees(np.arctan2(-rotation[1, 2], rotation[1, 1]))
+            pitch = np.degrees(np.arctan2(-rotation[2, 0], sy))
+            yaw = 0.0
+        return float(pitch), float(roll), float(yaw)
+
+    @staticmethod
+    def _draw_crosshair(image: np.ndarray, center: np.ndarray) -> None:
+        x = int(round(float(center[0])))
+        y = int(round(float(center[1])))
+        h, w = image.shape[:2]
+        length = max(25, min(w, h) // 25)
+        color = (0, 255, 255)
+        cv2.line(image, (max(0, x - length), y), (min(w - 1, x + length), y), color, 2, cv2.LINE_AA)
+        cv2.line(image, (x, max(0, y - length)), (x, min(h - 1, y + length)), color, 2, cv2.LINE_AA)
+        cv2.circle(image, (x, y), max(6, length // 5), color, 2, cv2.LINE_AA)
+
+    @staticmethod
+    def _draw_pose_axes(
+        image: np.ndarray,
+        camera_matrix: np.ndarray,
+        dist_coeffs: np.ndarray,
+        rvec: np.ndarray,
+        tvec: np.ndarray,
+        cell_mm: float,
+    ) -> None:
+        axis_len = float(cell_mm * 2.0)
+        axes = np.array([
+            [0.0, 0.0, 0.0],
+            [axis_len, 0.0, 0.0],
+            [0.0, axis_len, 0.0],
+            [0.0, 0.0, -axis_len],
+        ], dtype=np.float32)
+        projected, _ = cv2.projectPoints(axes, rvec, tvec, camera_matrix, dist_coeffs)
+        pts = projected.reshape(-1, 2)
+        origin = tuple(np.round(pts[0]).astype(int))
+        x_axis = tuple(np.round(pts[1]).astype(int))
+        y_axis = tuple(np.round(pts[2]).astype(int))
+        z_axis = tuple(np.round(pts[3]).astype(int))
+        cv2.line(image, origin, x_axis, (0, 0, 255), 3, cv2.LINE_AA)
+        cv2.line(image, origin, y_axis, (0, 255, 0), 3, cv2.LINE_AA)
+        cv2.line(image, origin, z_axis, (255, 0, 0), 3, cv2.LINE_AA)
 
     def get_pixel_size(self) -> Optional[float]:
         return self._computed_pixel_size

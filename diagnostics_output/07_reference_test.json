@@ -1,0 +1,128 @@
+{
+  "pixel_size_mm": 0.1162,
+  "chessboard": {
+    "cols": 11,
+    "rows": 8,
+    "cell_mm": 21.0
+  },
+  "results": [
+    {
+      "test": "1_cells_horizontal",
+      "method": "raw",
+      "known_mm": 21.0,
+      "px_dist": 169.72040426831418,
+      "mm_dist": 19.72151097597811,
+      "abs_err_mm": -1.2784890240218907,
+      "rel_err_pct": -6.088042971532813
+    },
+    {
+      "test": "1_cells_horizontal",
+      "method": "opencv_only",
+      "known_mm": 21.0,
+      "px_dist": 172.33924801463536,
+      "mm_dist": 20.025820619300628,
+      "abs_err_mm": -0.9741793806993719,
+      "rel_err_pct": -4.6389494319017714
+    },
+    {
+      "test": "1_cells_horizontal",
+      "method": "opencv_tps",
+      "known_mm": 21.0,
+      "px_dist": 160.09016208332193,
+      "mm_dist": 18.602476834082008,
+      "abs_err_mm": -2.397523165917992,
+      "rel_err_pct": -11.416776980561865
+    },
+    {
+      "test": "2_cells_horizontal",
+      "method": "raw",
+      "known_mm": 42.0,
+      "px_dist": 340.3268993739696,
+      "mm_dist": 39.54598570725526,
+      "abs_err_mm": -2.4540142927447377,
+      "rel_err_pct": -5.842891173201757
+    },
+    {
+      "test": "2_cells_horizontal",
+      "method": "opencv_only",
+      "known_mm": 42.0,
+      "px_dist": 344.55203026901467,
+      "mm_dist": 40.0369459172595,
+      "abs_err_mm": -1.9630540827404985,
+      "rel_err_pct": -4.673938292239282
+    },
+    {
+      "test": "2_cells_horizontal",
+      "method": "opencv_tps",
+      "known_mm": 42.0,
+      "px_dist": 330.7882419374879,
+      "mm_dist": 38.437593713136096,
+      "abs_err_mm": -3.5624062868639044,
+      "rel_err_pct": -8.481919730628345
+    },
+    {
+      "test": "3_cells_horizontal",
+      "method": "raw",
+      "known_mm": 63.0,
+      "px_dist": 512.0280448862152,
+      "mm_dist": 59.4976588157782,
+      "abs_err_mm": -3.502341184221798,
+      "rel_err_pct": -5.559271720986982
+    },
+    {
+      "test": "3_cells_horizontal",
+      "method": "opencv_only",
+      "known_mm": 63.0,
+      "px_dist": 517.0731331252863,
+      "mm_dist": 60.083898069158266,
+      "abs_err_mm": -2.9161019308417337,
+      "rel_err_pct": -4.628733223558307
+    },
+    {
+      "test": "3_cells_horizontal",
+      "method": "opencv_tps",
+      "known_mm": 63.0,
+      "px_dist": 497.03909575245984,
+      "mm_dist": 57.755942926435836,
+      "abs_err_mm": -5.244057073564164,
+      "rel_err_pct": -8.323900116768515
+    },
+    {
+      "test": "5_cells_horizontal",
+      "method": "raw",
+      "known_mm": 105.0,
+      "px_dist": 859.7294632615542,
+      "mm_dist": 99.9005636309926,
+      "abs_err_mm": -5.099436369007407,
+      "rel_err_pct": -4.85660606572134
+    },
+    {
+      "test": "5_cells_horizontal",
+      "method": "opencv_only",
+      "known_mm": 105.0,
+      "px_dist": 865.1046179509158,
+      "mm_dist": 100.52515660589641,
+      "abs_err_mm": -4.474843394103587,
+      "rel_err_pct": -4.261755613431988
+    },
+    {
+      "test": "5_cells_horizontal",
+      "method": "opencv_tps",
+      "known_mm": 105.0,
+      "px_dist": 839.3003488588388,
+      "mm_dist": 97.52670053739706,
+      "abs_err_mm": -7.473299462602938,
+      "rel_err_pct": -7.1174280596218455
+    }
+  ],
+  "summary": {
+    "raw_mean_error_pct": -5.586702982860723,
+    "opencv_mean_error_pct": -4.550844140282837,
+    "tps_mean_error_pct": -8.835006221895142
+  },
+  "diagnosis": "OpenCV undistortion itself changes scale. Raw: -5.587%, OpenCV: -4.551%. The distortion model may be over-fitted or the calibration images may have insufficient coverage.",
+  "warnings": [
+    "TPS introduces -4.284% error compared to OpenCV-only. This is significant and will affect all measurements.",
+    "Raw pixel measurement has -5.587% error. pixel_size_mm calibration itself may be inaccurate."
+  ]
+}

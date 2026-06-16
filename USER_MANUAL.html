@@ -1,0 +1,915 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CAD Inspection Tool — User Manual</title>
+<style>
+  @page {
+    size: A4;
+    margin: 2cm 2.2cm;
+    @bottom-center {
+      content: counter(page);
+      font-size: 9pt;
+      color: #888;
+    }
+  }
+
+  body {
+    font-family: "Segoe UI", "Ubuntu", "Helvetica Neue", Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.6;
+    color: #2c2c2c;
+    max-width: none;
+  }
+
+  h1 {
+    font-size: 22pt;
+    color: #1a1a2e;
+    border-bottom: 3px solid #007acc;
+    padding-bottom: 10px;
+    margin-top: 0;
+    page-break-before: auto;
+  }
+
+  h2 {
+    font-size: 16pt;
+    color: #1a1a2e;
+    border-bottom: 1.5px solid #ddd;
+    padding-bottom: 6px;
+    margin-top: 32px;
+    page-break-after: avoid;
+  }
+
+  h3 {
+    font-size: 13pt;
+    color: #333;
+    margin-top: 24px;
+    page-break-after: avoid;
+  }
+
+  table {
+    border-collapse: collapse;
+    width: 100%;
+    margin: 12px 0;
+    font-size: 10pt;
+    page-break-inside: avoid;
+  }
+
+  th {
+    background-color: #1a1a2e;
+    color: white;
+    padding: 8px 12px;
+    text-align: left;
+    font-weight: 600;
+  }
+
+  td {
+    padding: 7px 12px;
+    border-bottom: 1px solid #e0e0e0;
+  }
+
+  tr:nth-child(even) td {
+    background-color: #f8f9fa;
+  }
+
+  tr:hover td {
+    background-color: #e8f0fe;
+  }
+
+  code {
+    font-family: "JetBrains Mono", "Fira Code", "Consolas", monospace;
+    background-color: #f0f0f0;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-size: 9.5pt;
+  }
+
+  pre {
+    background-color: #1e1e2e;
+    color: #cdd6f4;
+    padding: 14px 18px;
+    border-radius: 6px;
+    overflow-x: auto;
+    font-size: 9pt;
+    line-height: 1.5;
+    page-break-inside: avoid;
+  }
+
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+    font-size: inherit;
+  }
+
+  a {
+    color: #007acc;
+    text-decoration: none;
+  }
+
+  a:hover {
+    text-decoration: underline;
+  }
+
+  ul, ol {
+    padding-left: 24px;
+  }
+
+  li {
+    margin-bottom: 3px;
+  }
+
+  hr {
+    border: none;
+    border-top: 1px solid #ddd;
+    margin: 24px 0;
+  }
+
+  blockquote {
+    border-left: 4px solid #007acc;
+    margin: 12px 0;
+    padding: 8px 16px;
+    background: #f0f7ff;
+    color: #444;
+  }
+
+  strong {
+    color: #1a1a2e;
+  }
+
+  /* Cover-style first heading */
+  body > h1:first-of-type {
+    text-align: center;
+    font-size: 28pt;
+    padding-top: 60px;
+    padding-bottom: 20px;
+    border-bottom: 4px solid #007acc;
+    margin-bottom: 8px;
+  }
+</style>
+</head>
+<body>
+<h1 id="cad-inspection-tool-user-manual">CAD Inspection Tool — User Manual</h1>
+<h2 id="table-of-contents">Table of Contents</h2>
+<ol>
+<li><a href="#1-overview">Overview</a></li>
+<li><a href="#2-getting-started">Getting Started</a></li>
+<li><a href="#3-application-layout">Application Layout</a></li>
+<li><a href="#4-opening-cad-files">Opening CAD Files</a></li>
+<li><a href="#5-navigating-the-canvas">Navigating the Canvas</a></li>
+<li><a href="#6-feature-tree-browser">Feature Tree Browser</a></li>
+<li><a href="#7-property-inspector">Property Inspector</a></li>
+<li><a href="#8-registration-groups">Registration Groups</a></li>
+<li><a href="#9-image-registration">Image Registration</a></li>
+<li><a href="#10-camera-capture">Camera Capture</a></li>
+<li><a href="#11-measurement-queries">Measurement Queries</a></li>
+<li><a href="#12-keyboard-shortcuts-reference">Keyboard Shortcuts Reference</a></li>
+<li><a href="#13-supported-file-formats">Supported File Formats</a></li>
+<li><a href="#14-troubleshooting">Troubleshooting</a></li>
+</ol>
+<hr />
+<h2 id="1-overview">1. Overview</h2>
+<p>CAD Inspection Tool is a metrology-oriented DXF/DWG viewer designed for machine vision alignment and automatic dimension measurement. It allows you to:</p>
+<ul>
+<li>Load and inspect DXF and DWG CAD drawings</li>
+<li>Browse and select individual geometric features</li>
+<li>Capture images from an industrial camera (MindVision)</li>
+<li>Register captured images to CAD geometry for visual alignment</li>
+<li>Define measurement queries for automated inspection</li>
+</ul>
+<p>The application uses a dark theme throughout and requires no persistent configuration.</p>
+<p><strong>Technology</strong>: Built with PySide6 (Qt) and QPainter for high-performance 2D rendering.</p>
+<hr />
+<h2 id="2-getting-started">2. Getting Started</h2>
+<h3 id="launching-the-application">Launching the Application</h3>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>main.py
+</code></pre></div>
+
+<p>To open a file on startup:</p>
+<div class="codehilite"><pre><span></span><code>python<span class="w"> </span>main.py<span class="w"> </span>path/to/drawing.dxf
+python<span class="w"> </span>main.py<span class="w"> </span>path/to/drawing.dwg
+</code></pre></div>
+
+<h3 id="dependencies">Dependencies</h3>
+<table>
+<thead>
+<tr>
+<th>Package</th>
+<th>Required</th>
+<th>Purpose</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>PySide6</td>
+<td>Yes</td>
+<td>GUI framework</td>
+</tr>
+<tr>
+<td>ezdxf</td>
+<td>Yes</td>
+<td>DXF parsing</td>
+</tr>
+<tr>
+<td>numpy</td>
+<td>Yes</td>
+<td>Numerical operations</td>
+</tr>
+<tr>
+<td>OpenCV</td>
+<td>For registration</td>
+<td>Image loading and edge detection</td>
+</tr>
+<tr>
+<td>scipy</td>
+<td>For ICP registration</td>
+<td>Nearest-neighbor search</td>
+</tr>
+<tr>
+<td>MindVision SDK</td>
+<td>Optional</td>
+<td>Industrial camera support</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="3-application-layout">3. Application Layout</h2>
+<div class="codehilite"><pre><span></span><code><span class="nb">+--------------------------------------------------------------+</span>
+<span class="c">|  Menu Bar: </span><span class="k">[</span><span class="c">File</span><span class="k">]</span><span class="c"> </span><span class="k">[</span><span class="c">View</span><span class="k">]</span><span class="c"> </span><span class="k">[</span><span class="c">Settings</span><span class="k">]</span><span class="c"> </span><span class="k">[</span><span class="c">Help</span><span class="k">]</span><span class="c">                   |</span>
+<span class="c">|  Toolbar: </span><span class="k">[</span><span class="c">Open DXF</span><span class="k">]</span><span class="c"> </span><span class="k">[</span><span class="c">Import DWG</span><span class="k">]</span><span class="c"> | </span><span class="k">[</span><span class="c">Fit All</span><span class="k">]</span><span class="c"> | </span><span class="k">[</span><span class="c">Pan</span><span class="k">][</span><span class="c">Select</span><span class="k">]</span><span class="c">|</span>
+<span class="nb">+----------+----------------------------+----------------------+</span>
+<span class="c">| Feature  |                            |  Property            |</span>
+<span class="c">| Tree     |   CAD 2D Viewer Canvas     |  Panel               |</span>
+<span class="c">| Panel    |                            |                      |</span>
+<span class="nb">+----------+----------------------------+----------------------+</span>
+<span class="c">|  Status Bar                                                  |</span>
+<span class="nb">+--------------------------------------------------------------+</span>
+</code></pre></div>
+
+<p>Two additional panels are available as dockable windows:</p>
+<ul>
+<li><strong>Registration Panel</strong> (View → Registration Panel) — docks on the right</li>
+<li><strong>Measurement Queries</strong> (View → Query Panel) — docks at the bottom</li>
+</ul>
+<p>All panels and the main splitter are resizable by dragging their borders.</p>
+<hr />
+<h2 id="4-opening-cad-files">4. Opening CAD Files</h2>
+<h3 id="opening-a-dxf-file">Opening a DXF File</h3>
+<ol>
+<li>Click <strong>Open DXF</strong> in the toolbar, or choose <strong>File → Open DXF&hellip;</strong> (Ctrl+O).</li>
+<li>Select a <code>.dxf</code> file from the file dialog.</li>
+<li>The file is parsed immediately and all features appear in the tree and canvas.</li>
+</ol>
+<h3 id="importing-a-dwg-file">Importing a DWG File</h3>
+<p>DWG files require a converter backend (ODA File Converter or libredwg) to be installed.</p>
+<ol>
+<li>Click <strong>Import DWG</strong> in the toolbar, or choose <strong>File → Import DWG&hellip;</strong> (Ctrl+D).</li>
+<li>Select a <code>.dwg</code> file.</li>
+<li>A progress dialog shows the conversion stages:</li>
+<li>Detecting DWG version</li>
+<li>Running the converter</li>
+<li>Validating the DXF output</li>
+<li>Loading features</li>
+<li>On completion, the converted DXF loads automatically.</li>
+</ol>
+<p>If the &ldquo;Import DWG&rdquo; button is grayed out, no converter is installed. Install one of:</p>
+<ul>
+<li><strong>ODA File Converter</strong>: https://www.opendesign.com/guestfiles/oda_file_converter</li>
+<li><strong>libredwg</strong>: <code>sudo apt install libredwg-utils</code></li>
+</ul>
+<p>Then configure the path via <strong>Settings → Configure DWG Converter&hellip;</strong>.</p>
+<h3 id="supported-dwg-versions">Supported DWG Versions</h3>
+<table>
+<thead>
+<tr>
+<th>Version Code</th>
+<th>AutoCAD Version</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>AC1032</td>
+<td>2018+</td>
+</tr>
+<tr>
+<td>AC1027</td>
+<td>2013</td>
+</tr>
+<tr>
+<td>AC1024</td>
+<td>2010</td>
+</tr>
+<tr>
+<td>AC1021</td>
+<td>2007</td>
+</tr>
+<tr>
+<td>AC1018</td>
+<td>2004</td>
+</tr>
+<tr>
+<td>AC1015</td>
+<td>2000</td>
+</tr>
+<tr>
+<td>AC1014</td>
+<td>R14</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="5-navigating-the-canvas">5. Navigating the Canvas</h2>
+<p>The central area displays the CAD drawing rendered on a dark background with an adaptive grid.</p>
+<h3 id="mouse-controls">Mouse Controls</h3>
+<table>
+<thead>
+<tr>
+<th>Action</th>
+<th>Control</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Pan</strong></td>
+<td>Middle-button drag or right-button drag</td>
+</tr>
+<tr>
+<td><strong>Zoom in</strong></td>
+<td>Scroll wheel up (1.15x, centered on cursor)</td>
+</tr>
+<tr>
+<td><strong>Zoom out</strong></td>
+<td>Scroll wheel down (1/1.15x, centered on cursor)</td>
+</tr>
+<tr>
+<td><strong>Select feature</strong></td>
+<td>Left-click on a feature</td>
+</tr>
+<tr>
+<td><strong>Deselect</strong></td>
+<td>Left-click on empty area</td>
+</tr>
+</tbody>
+</table>
+<h3 id="canvas-overlays">Canvas Overlays</h3>
+<ul>
+<li><strong>Grid</strong>: Adaptive dotted grid. Spacing adjusts automatically as you zoom.</li>
+<li><strong>Origin marker</strong>: Red/green crosshair at coordinate (0, 0).</li>
+<li><strong>Zoom indicator</strong>: Shows current zoom percentage in the bottom-left corner.</li>
+<li><strong>Feature highlight</strong>: Selected features glow cyan with an outer halo effect.</li>
+</ul>
+<h3 id="fit-all">Fit All</h3>
+<p>Press <strong>Ctrl+F</strong> or click <strong>Fit All</strong> in the toolbar to fit all geometry into the viewport.</p>
+<hr />
+<h2 id="6-feature-tree-browser">6. Feature Tree Browser</h2>
+<p>The left panel shows all loaded features organized by type and layer.</p>
+<h3 id="tree-structure">Tree Structure</h3>
+<div class="codehilite"><pre><span></span><code>Geometry Features
+  ├── Lines (142)
+  │     ├── LINE [1A2B3C]
+  │     └── LINE [2C3D4E]
+  ├── Circles (28)
+  ├── Arcs (54)
+  ├── Polylines (12)
+  └── Splines (8)
+Dimensions (36)
+Annotations (20)
+Layers
+  ├── 0 (210)
+  └── Outline (50)
+Registration Groups
+  └── Group 1 (5)
+</code></pre></div>
+
+<h3 id="searching">Searching</h3>
+<p>Type in the <strong>Filter features&hellip;</strong> text box at the top to search features by name. Matching is case-insensitive and filters in real time.</p>
+<h3 id="interacting-with-features">Interacting with Features</h3>
+<ul>
+<li><strong>Click a feature</strong>: Highlights it on the canvas (cyan glow), zooms to fit it, and shows its properties in the Property Panel.</li>
+<li><strong>Click a group/layer/category node</strong>: Deselects the current feature.</li>
+<li><strong>Double-click a node</strong>: Expands or collapses it.</li>
+</ul>
+<h3 id="context-menu">Context Menu</h3>
+<p>Right-click a feature to open the context menu:</p>
+<ul>
+<li><strong>Add to Group → New Group&hellip;</strong>: Creates a new registration group and adds the feature.</li>
+<li><strong>Add to Group → [Existing Group]</strong>: Adds the feature to an existing group.</li>
+</ul>
+<p>Right-click a group node:</p>
+<ul>
+<li><strong>Zoom to Group</strong>: Fits the group&rsquo;s bounding box in the canvas.</li>
+<li><strong>Delete Group</strong>: Removes the group.</li>
+</ul>
+<h3 id="feature-type-colors">Feature Type Colors</h3>
+<table>
+<thead>
+<tr>
+<th>Type</th>
+<th>Color</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Lines</td>
+<td>White</td>
+</tr>
+<tr>
+<td>Circles</td>
+<td>Cyan</td>
+</tr>
+<tr>
+<td>Arcs</td>
+<td>Yellow</td>
+</tr>
+<tr>
+<td>Polylines</td>
+<td>Green</td>
+</tr>
+<tr>
+<td>Splines</td>
+<td>Magenta</td>
+</tr>
+<tr>
+<td>Dimensions</td>
+<td>Red</td>
+</tr>
+<tr>
+<td>Annotations</td>
+<td>Gray</td>
+</tr>
+<tr>
+<td>Hatches</td>
+<td>Dark gray</td>
+</tr>
+<tr>
+<td>Points</td>
+<td>Orange</td>
+</tr>
+<tr>
+<td>Leaders</td>
+<td>Amber</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="7-property-inspector">7. Property Inspector</h2>
+<p>The right panel shows details for the currently selected feature.</p>
+<h3 id="general-properties">General Properties</h3>
+<table>
+<thead>
+<tr>
+<th>Field</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type</td>
+<td>Feature type (LINE, CIRCLE, etc.)</td>
+</tr>
+<tr>
+<td>Layer</td>
+<td>DXF layer name</td>
+</tr>
+<tr>
+<td>DXF Handle</td>
+<td>Original DXF entity handle</td>
+</tr>
+<tr>
+<td>ID</td>
+<td>Internal feature identifier</td>
+</tr>
+<tr>
+<td>Color</td>
+<td>DXF color index</td>
+</tr>
+</tbody>
+</table>
+<h3 id="geometry-properties-type-dependent">Geometry Properties (type-dependent)</h3>
+<ul>
+<li><strong>Line</strong>: Start point, end point, length</li>
+<li><strong>Circle</strong>: Center point, radius</li>
+<li><strong>Arc</strong>: Center point, radius, start angle, end angle</li>
+<li><strong>Polyline</strong>: Vertex count, open/closed, extent</li>
+<li><strong>Spline</strong>: Degree, control points count, fit points count</li>
+<li><strong>Text</strong>: Text content, position, height, rotation</li>
+</ul>
+<h3 id="measurement-properties">Measurement Properties</h3>
+<p>Reserved for future integration with machine vision measurement. Fields: Nominal, Measured, Deviation, Status (PASS/FAIL).</p>
+<p>All values are text-selectable for copy-paste.</p>
+<hr />
+<h2 id="8-registration-groups">8. Registration Groups</h2>
+<p>Registration groups are named collections of CAD features used for image-to-CAD alignment. Each group has a unique color.</p>
+<h3 id="creating-groups">Creating Groups</h3>
+<p><strong>Method 1</strong>: Right-click a feature in the tree → <strong>Add to Group → New Group&hellip;</strong> → enter a name.</p>
+<p><strong>Method 2</strong>: In the Registration Panel, click <strong>New</strong> → enter a name.</p>
+<h3 id="managing-groups">Managing Groups</h3>
+<p>In the Registration Panel:</p>
+<ul>
+<li><strong>New</strong>: Create a new group with an auto-generated name.</li>
+<li><strong>Rename</strong>: Rename the selected group.</li>
+<li><strong>Delete</strong>: Remove the selected group.</li>
+</ul>
+<h3 id="addingremoving-features">Adding/Removing Features</h3>
+<ol>
+<li>Click a feature in the tree or canvas to highlight it.</li>
+<li>In the Registration Panel, with the target group selected, click <strong>Add Selected Feature</strong>.</li>
+<li>To remove a feature, select it in the group&rsquo;s feature list and click <strong>Remove</strong>.</li>
+</ol>
+<h3 id="group-statistics">Group Statistics</h3>
+<p>When a group is selected, the Statistics section shows:</p>
+<ul>
+<li><strong>Features</strong>: Total count</li>
+<li><strong>Centroid</strong>: Center point (x, y) of all features</li>
+<li><strong>Types</strong>: Breakdown by type (e.g., &ldquo;LINE: 3, CIRCLE: 2&rdquo;)</li>
+</ul>
+<h3 id="group-visualization">Group Visualization</h3>
+<p>Groups are displayed on the canvas as:</p>
+<ul>
+<li>Dashed colored boundary rectangle</li>
+<li>Semi-transparent colored fill</li>
+<li>Diamond-shaped centroid marker</li>
+<li>Group name and feature count labels</li>
+</ul>
+<hr />
+<h2 id="9-image-registration">9. Image Registration</h2>
+<p>Image registration aligns a captured (or loaded) image with CAD geometry using the features in a registration group.</p>
+<h3 id="prerequisites">Prerequisites</h3>
+<ol>
+<li>A CAD file is loaded.</li>
+<li>A registration group is created with relevant features (circles and lines work best).</li>
+<li>An image is loaded (from file or camera capture).</li>
+</ol>
+<h3 id="loading-an-image-from-file">Loading an Image from File</h3>
+<ol>
+<li>Open the Registration Panel (<strong>View → Registration Panel</strong>).</li>
+<li>Click <strong>Load Image&hellip;</strong>.</li>
+<li>Select an image file (PNG, BMP, or TIFF).</li>
+<li>Set the <strong>Pixel Size</strong> (mm/pixel) for your imaging system. Default: 0.01 mm/pixel.</li>
+<li>Click <strong>OK</strong>.</li>
+</ol>
+<p>The image appears as a semi-transparent background layer under the CAD geometry.</p>
+<h3 id="registration-workflow">Registration Workflow</h3>
+<p>There are three registration modes:</p>
+<p><strong>Coarse Registration</strong>
+- Aligns image and CAD by matching centroids and bounding boxes.
+- Provides a rough initial alignment. Fast, but not pixel-accurate.</p>
+<p><strong>Fine Registration (ICP)</strong>
+- Refines the coarse result using Iterative Closest Point.
+- Requires a successful coarse registration first.
+- Reports iteration count and convergence status.</p>
+<p><strong>Full Registration</strong>
+- Runs coarse then fine in sequence. Recommended for most use cases.</p>
+<h3 id="steps">Steps</h3>
+<ol>
+<li>Select a registration group.</li>
+<li>Load or capture an image.</li>
+<li>Click <strong>Full Registration</strong>.</li>
+<li>Check the status label for results (error values in mm, iteration count, convergence).</li>
+<li>The image shifts to align with the CAD geometry on the canvas.</li>
+</ol>
+<h3 id="interpreting-results">Interpreting Results</h3>
+<p>The status label shows:</p>
+<ul>
+<li><strong>Coarse</strong>: RMSE error in mm (lower is better)</li>
+<li><strong>Fine</strong>: Iteration count, RMSE error, convergence flag</li>
+<li><strong>Full</strong>: Coarse error → Fine error, iteration count</li>
+</ul>
+<p>A well-registered result typically has a fine error below 0.5 mm.</p>
+<hr />
+<h2 id="10-camera-capture">10. Camera Capture</h2>
+<p>If a MindVision industrial camera is connected and the SDK is installed, you can capture images directly from the Registration Panel.</p>
+<h3 id="requirements">Requirements</h3>
+<ul>
+<li>MindVision camera (USB or GigE)</li>
+<li>MindVision MVCAM SDK (<code>libMVSDK.so</code>) installed on the system</li>
+</ul>
+<p>If the SDK is not installed, the Camera Capture section is hidden and only file-based image loading is available.</p>
+<h3 id="camera-workflow">Camera Workflow</h3>
+<ol>
+<li>Open the Registration Panel (<strong>View → Registration Panel</strong>).</li>
+<li>The <strong>Camera Capture</strong> section appears at the top of the panel.</li>
+<li>Click <strong>Refresh</strong> to scan for connected cameras.</li>
+<li>Select a camera from the dropdown list.</li>
+<li>Click <strong>Open</strong> — the live preview starts.</li>
+<li>Adjust camera settings as needed (see below).</li>
+<li>Click <strong>Capture Frame</strong> — the current frame is frozen and loaded as the image layer.</li>
+<li>The registration buttons become active. Proceed with registration as described in Section 9.</li>
+<li>Click <strong>Close</strong> to stop the camera when finished.</li>
+</ol>
+<h3 id="camera-settings">Camera Settings</h3>
+<p>Click the <strong>Settings</strong> button to expand the settings panel:</p>
+<table>
+<thead>
+<tr>
+<th>Parameter</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>Auto Exposure</strong></td>
+<td>Enables automatic exposure control. When on, the exposure slider is disabled.</td>
+</tr>
+<tr>
+<td><strong>Exposure</strong></td>
+<td>Manual exposure time in microseconds. Range depends on camera hardware.</td>
+</tr>
+<tr>
+<td><strong>Gamma</strong></td>
+<td>Gamma correction value. Range depends on camera hardware.</td>
+</tr>
+<tr>
+<td><strong>Contrast</strong></td>
+<td>Contrast adjustment. Range depends on camera hardware.</td>
+</tr>
+<tr>
+<td><strong>Analog Gain</strong></td>
+<td>Analog gain setting. Higher values increase brightness but may add noise.</td>
+</tr>
+<tr>
+<td><strong>Mirror Horizontal</strong></td>
+<td>Flips the image left-right.</td>
+</tr>
+<tr>
+<td><strong>Mirror Vertical</strong></td>
+<td>Flips the image top-bottom.</td>
+</tr>
+</tbody>
+</table>
+<p>Settings are applied to the camera hardware immediately when changed.</p>
+<h3 id="re-capturing">Re-capturing</h3>
+<p>You can click <strong>Capture Frame</strong> again at any time while the camera is open. The previous capture is overwritten and the canvas updates with the new image.</p>
+<hr />
+<h2 id="11-measurement-queries">11. Measurement Queries</h2>
+<p>The Query Panel allows you to define and evaluate automated measurement queries against loaded CAD features.</p>
+<h3 id="opening-the-query-panel">Opening the Query Panel</h3>
+<p>Choose <strong>View → Query Panel</strong>.</p>
+<h3 id="query-language">Query Language</h3>
+<p>Enter one query per line. Lines starting with <code>#</code> are comments.</p>
+<p><strong>Circle center distance</strong>:</p>
+<div class="codehilite"><pre><span></span><code>circles(ID1, ID2)
+</code></pre></div>
+
+<p>Measures the center-to-center distance between two circle features.</p>
+<p><strong>Line perpendicular distance</strong>:</p>
+<div class="codehilite"><pre><span></span><code>lines(ID1, ID2)
+</code></pre></div>
+
+<p>Measures the perpendicular distance between two line features.</p>
+<h3 id="feature-id-resolution">Feature ID Resolution</h3>
+<p>Queries can reference features by:</p>
+<ol>
+<li>Full feature ID (UUID)</li>
+<li>DXF handle</li>
+<li>Partial UUID prefix</li>
+</ol>
+<h3 id="example">Example</h3>
+<div class="codehilite"><pre><span></span><code># Measure distance between two mounting holes
+circles(1A2B, 3C4D)
+
+# Measure gap between two edges
+lines(F5E6, A7B8)
+</code></pre></div>
+
+<h3 id="evaluating-queries">Evaluating Queries</h3>
+<p>Click <strong>Evaluate</strong> to run all queries. Results appear in the table:</p>
+<table>
+<thead>
+<tr>
+<th>Column</th>
+<th>Description</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Query</td>
+<td>The query expression</td>
+</tr>
+<tr>
+<td>Value</td>
+<td>Measured value in mm</td>
+</tr>
+<tr>
+<td>Nominal</td>
+<td>CAD nominal value</td>
+</tr>
+<tr>
+<td>Deviation</td>
+<td>Measured minus nominal</td>
+</tr>
+<tr>
+<td>Status</td>
+<td>&ldquo;ok&rdquo; (green) or error (red)</td>
+</tr>
+</tbody>
+</table>
+<p>A summary line shows: &ldquo;Evaluated: N queries | OK: M | Errors: K&rdquo;</p>
+<h3 id="saving-and-loading">Saving and Loading</h3>
+<ul>
+<li><strong>Load</strong>: Opens a <code>.txt</code> or <code>.query</code> file into the editor.</li>
+<li><strong>Save</strong>: Saves the editor contents to a <code>.txt</code> file.</li>
+<li><strong>Export Results</strong>: Saves evaluation results to <code>.txt</code> or <code>.csv</code> format.</li>
+</ul>
+<hr />
+<h2 id="12-keyboard-shortcuts-reference">12. Keyboard Shortcuts Reference</h2>
+<table>
+<thead>
+<tr>
+<th>Shortcut</th>
+<th>Action</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Ctrl+O</td>
+<td>Open DXF file</td>
+</tr>
+<tr>
+<td>Ctrl+D</td>
+<td>Import DWG file</td>
+</tr>
+<tr>
+<td>Ctrl+F</td>
+<td>Fit All (zoom to fit)</td>
+</tr>
+<tr>
+<td>Ctrl+Q</td>
+<td>Exit application</td>
+</tr>
+<tr>
+<td>Scroll wheel</td>
+<td>Zoom in/out (centered on cursor)</td>
+</tr>
+<tr>
+<td>Middle/right drag</td>
+<td>Pan</td>
+</tr>
+<tr>
+<td>Left click</td>
+<td>Select feature</td>
+</tr>
+<tr>
+<td>Right-click (tree)</td>
+<td>Context menu</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="13-supported-file-formats">13. Supported File Formats</h2>
+<h3 id="input-formats">Input Formats</h3>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Extension</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>DXF</td>
+<td><code>.dxf</code></td>
+<td>Native support via ezdxf</td>
+</tr>
+<tr>
+<td>DWG</td>
+<td><code>.dwg</code></td>
+<td>Converted to DXF via ODA or libredwg</td>
+</tr>
+<tr>
+<td>Images</td>
+<td><code>.png</code>, <code>.bmp</code>, <code>.tif</code>, <code>.tiff</code></td>
+<td>Loaded as registration image layer</td>
+</tr>
+</tbody>
+</table>
+<h3 id="supported-dxf-entity-types">Supported DXF Entity Types</h3>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Rendered</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>LINE</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>CIRCLE</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>ARC</td>
+<td>Yes</td>
+<td>Circular and elliptical arcs</td>
+</tr>
+<tr>
+<td>ELLIPSE</td>
+<td>Yes</td>
+<td>Rendered as elliptical arc</td>
+</tr>
+<tr>
+<td>POLYLINE / LWPOLYLINE</td>
+<td>Yes</td>
+<td>Open, closed, and filled</td>
+</tr>
+<tr>
+<td>SPLINE</td>
+<td>Yes</td>
+<td>Evaluated with ezdxf BSpline engine</td>
+</tr>
+<tr>
+<td>TEXT / MTEXT</td>
+<td>Yes</td>
+<td>With formatting code conversion</td>
+</tr>
+<tr>
+<td>DIMENSION</td>
+<td>Yes</td>
+<td>Decomposed into lines, solids, text</td>
+</tr>
+<tr>
+<td>HATCH</td>
+<td>Yes</td>
+<td>All edge types supported</td>
+</tr>
+<tr>
+<td>POINT</td>
+<td>Yes</td>
+<td></td>
+</tr>
+<tr>
+<td>LEADER</td>
+<td>Yes</td>
+<td>With arrowhead</td>
+</tr>
+<tr>
+<td>INSERT</td>
+<td>Decomposed</td>
+<td>Block references exploded into child entities</td>
+</tr>
+</tbody>
+</table>
+<h3 id="output-formats">Output Formats</h3>
+<table>
+<thead>
+<tr>
+<th>Format</th>
+<th>Extension</th>
+<th>Notes</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Query results (text)</td>
+<td><code>.txt</code></td>
+<td>Human-readable results</td>
+</tr>
+<tr>
+<td>Query results (CSV)</td>
+<td><code>.csv</code></td>
+<td>Structured data export</td>
+</tr>
+</tbody>
+</table>
+<hr />
+<h2 id="14-troubleshooting">14. Troubleshooting</h2>
+<h3 id="import-dwg-button-is-disabled">&ldquo;Import DWG&rdquo; button is disabled</h3>
+<p>No DWG converter backend is detected. Install ODA File Converter or libredwg, then configure via <strong>Settings → Configure DWG Converter&hellip;</strong>.</p>
+<h3 id="dwg-conversion-fails">DWG conversion fails</h3>
+<ul>
+<li>Verify the DWG file is not corrupted (try opening in a CAD viewer).</li>
+<li>Check that the converter executable is in your PATH or configured correctly.</li>
+<li>For large files, the 300-second timeout may be insufficient. Contact support.</li>
+</ul>
+<h3 id="canvas-appears-blank-after-loading-a-file">Canvas appears blank after loading a file</h3>
+<ul>
+<li>Click <strong>Fit All</strong> (Ctrl+F) to reset the viewport.</li>
+<li>The file may contain features at very different coordinate ranges. Check the Feature Tree to verify features were loaded.</li>
+</ul>
+<h3 id="camera-not-detected">Camera not detected</h3>
+<ul>
+<li>Ensure the MindVision SDK (<code>libMVSDK.so</code>) is installed.</li>
+<li>Verify the camera is connected (USB cable or Ethernet for GigE cameras).</li>
+<li>Click <strong>Refresh</strong> in the Camera Capture section.</li>
+<li>For GigE cameras, ensure the camera and computer are on the same network subnet.</li>
+</ul>
+<h3 id="registration-produces-poor-alignment">Registration produces poor alignment</h3>
+<ul>
+<li>Ensure the registration group contains relevant features (circles and lines are most effective).</li>
+<li>Verify the <strong>Pixel Size</strong> is correct for your imaging system.</li>
+<li>Check that the captured image shows the correct area of the part.</li>
+<li>Try adding more features to the registration group.</li>
+<li>The image should contain clear edges corresponding to the CAD features in the group.</li>
+</ul>
+<h3 id="application-crashes-on-dwg-import">Application crashes on DWG import</h3>
+<p>This was a known issue where DWG conversion callbacks executed GUI operations from a background thread. Ensure you are running the latest version where this has been fixed.</p>
+</body>
+</html>

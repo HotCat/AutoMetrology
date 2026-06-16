@@ -1,0 +1,379 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+@page { size: A4; margin: 16mm 13mm; }
+body { font-family: "Noto Sans CJK SC", "WenQuanYi Micro Hei", "Microsoft YaHei", sans-serif; color: #222; line-height: 1.48; font-size: 11pt; }
+h1 { font-size: 22pt; border-bottom: 2px solid #333; padding-bottom: 6px; }
+h2 { font-size: 17pt; margin-top: 20pt; border-bottom: 1px solid #aaa; padding-bottom: 3px; }
+h3 { font-size: 12.5pt; margin-top: 12pt; }
+img { max-width: 100%; border: 1px solid #999; margin: 4pt 0 8pt 0; }
+code { font-family: monospace; background: #eee; padding: 1px 3px; }
+table { border-collapse: collapse; width: 100%; font-size: 9pt; }
+th, td { border: 1px solid #999; padding: 4px; word-break: break-all; }
+th { background: #eee; }
+</style></head><body><h1 id="cad-inspection-tool">CAD Inspection Tool 用户手册（简体中文）</h1>
+<p>本文档由实际运行的应用程序自动截图生成。截图保存在 <code>docs/screenshots/</code>，并作为本文档描述 UI 状态的依据。当前截图使用中文界面、<code>xintai.dxf</code>、<code>cadrefs_camera_capture.png</code> 和 <code>query2.txt</code> 生成。</p>
+<h2 id="_1">文档索引</h2>
+<ul>
+<li><a href="#1-主窗口">1. 主窗口</a></li>
+<li><a href="#2-加载-dxf">2. 加载 DXF</a></li>
+<li><a href="#3-cad-画布浏览">3. CAD 画布浏览</a></li>
+<li><a href="#4-相机实时预览与参数">4. 相机实时预览与参数</a></li>
+<li><a href="#5-标定窗口">5. 标定窗口</a></li>
+<li><a href="#6-自动注册配置">6. 自动注册配置</a></li>
+<li><a href="#7-测量查询编辑器">7. 测量查询编辑器</a></li>
+<li><a href="#8-测量叠加与结果选择">8. 测量叠加与结果选择</a></li>
+<li><a href="#9-生产测量日志查看器">9. 生产测量日志查看器</a></li>
+<li><a href="#10-错误信息">10. 错误信息</a></li>
+<li><a href="#11-故障排查示例">11. 故障排查示例</a></li>
+<li><a href="#截图索引">截图索引</a></li>
+</ul>
+<h2 id="1">1. 主窗口</h2>
+<h3 id="_2">用途</h3>
+<p>主窗口用于集中显示 DXF 特征树、CAD 画布、属性面板、工具栏和状态栏。它是加载图纸、查看特征、打开注册面板和测量窗口的入口。</p>
+<p><img alt="主窗口" src="screenshots/01_main_window.png" /></p>
+<p>图：主窗口。</p>
+<h3 id="_3">操作步骤</h3>
+<ol>
+<li>启动软件后确认菜单栏、工具栏、左侧特征树、中间 CAD 画布、右侧属性区域和底部状态栏可见。</li>
+<li>使用工具栏的 <code>Open DXF</code> 打开图纸，或从菜单 <code>File</code> 中选择打开。</li>
+<li>需要测量时，打开 <code>View</code> 菜单中的 <code>Measurement Window</code>；需要注册时，打开 <code>Registration Panel</code>。</li>
+</ol>
+<h3 id="_4">预期结果</h3>
+<p>主界面应完整显示，底部状态栏显示当前状态，特征计数区域显示当前加载的特征数量。</p>
+<h3 id="_5">常见错误</h3>
+<ul>
+<li>只看见空画布：通常是尚未加载 DXF。</li>
+<li>工具窗口不可见：检查 <code>View</code> 菜单中的面板开关。</li>
+</ul>
+<h3 id="_6">故障排查</h3>
+<p>如果窗口内容不完整，先放大主窗口；如果仍不可见，关闭后重新启动应用。参见<a href="#11-故障排查示例">第 11 节</a>。</p>
+<h2 id="2-dxf">2. 加载 DXF</h2>
+<h3 id="_7">用途</h3>
+<p>DXF 加载工作流将图纸解析为线、圆、圆弧等可测量 CAD 特征，并填充左侧特征树。</p>
+<p><img alt="DXF 加载完成" src="screenshots/02_dxf_loading.png" /></p>
+<p>图：DXF 加载完成。</p>
+<p>补充局部图：</p>
+<p><img alt="DXF 特征树局部" src="screenshots/02a_feature_tree_crop.png" /></p>
+<p>图：DXF 特征树局部。</p>
+<h3 id="_8">操作步骤</h3>
+<ol>
+<li>点击工具栏 <code>Open DXF</code>。</li>
+<li>选择 <code>xintai.dxf</code> 或生产对应的 DXF 文件。</li>
+<li>等待状态栏显示已加载的特征数量。</li>
+<li>在左侧特征树中展开 Lines、Circles、Arcs 等分类。</li>
+</ol>
+<h3 id="_9">预期结果</h3>
+<p>状态栏显示已加载特征，特征树列出分类和条目，CAD 画布显示图形。</p>
+<h3 id="_10">常见错误</h3>
+<ul>
+<li>文件未显示：可能选择了 DWG 或损坏 DXF。</li>
+<li>特征树为空：DXF 中没有受支持实体，或导入失败。</li>
+</ul>
+<h3 id="_11">故障排查</h3>
+<p>确认文件路径存在，并优先使用 DXF 格式。DWG 需要先配置转换器。</p>
+<h2 id="3-cad">3. CAD 画布浏览</h2>
+<h3 id="_12">用途</h3>
+<p>CAD 画布用于查看图纸、缩放平移、选择特征，并显示图像叠加、注册结果和测量调试结果。</p>
+<p><img alt="CAD 画布" src="screenshots/03_cad_canvas.png" /></p>
+<p>图：CAD 画布。</p>
+<h3 id="_13">操作步骤</h3>
+<ol>
+<li>加载 DXF 后点击 <code>Fit All</code> 适配全部图形。</li>
+<li>使用鼠标滚轮缩放，拖动画布平移。</li>
+<li>点击 CAD 特征，左侧树和右侧属性面板会同步选中。</li>
+<li>测量查询选中结果后，画布会高亮对应 CAD 和图像拟合特征。</li>
+</ol>
+<h3 id="_14">预期结果</h3>
+<p>CAD 线条保持图纸颜色；拟合线、拟合圆和圆弧拟合圆以绿色显示。</p>
+<h3 id="_15">常见错误</h3>
+<ul>
+<li>图纸看不见：先点击 <code>Fit All</code>。</li>
+<li>高亮位置不对：检查自动注册参数和相机图像是否匹配。</li>
+</ul>
+<h3 id="_16">故障排查</h3>
+<p>如果 CAD 与图像错位，重新执行自动注册，并检查 P1/P2 ROI 是否框住基准圆。</p>
+<h2 id="4">4. 相机实时预览与参数</h2>
+<h3 id="_17">用途</h3>
+<p>相机实时预览窗口用于对焦、观察采集画面，并调整曝光、Gamma、对比度、模拟增益和镜像参数。</p>
+<p><img alt="相机实时预览与参数" src="screenshots/05_camera_live_preview_parameters.png" /></p>
+<p>图：相机实时预览与参数。</p>
+<p>参数局部图：</p>
+<p><img alt="相机参数局部" src="screenshots/05a_camera_parameters_crop.png" /></p>
+<p>图：相机参数局部。</p>
+<h3 id="_18">操作步骤</h3>
+<ol>
+<li>在注册面板的相机区域选择设备并点击 <code>Open</code>。</li>
+<li>点击 <code>Focus Preview</code> 打开实时预览窗口。</li>
+<li>调整 Exposure、Gamma、Contrast、Analog Gain。</li>
+<li>对焦完成后点击 <code>Capture Frame</code> 将当前帧送入测量流程。</li>
+</ol>
+<h3 id="_19">预期结果</h3>
+<p>左侧显示实时图像，右侧显示参数控件，底部显示采集按钮和分辨率。</p>
+<h3 id="_20">常见错误</h3>
+<ul>
+<li><code>No camera detected</code>：系统未识别相机或驱动未加载。</li>
+<li>图像过暗或过亮：调整曝光或启用自动曝光。</li>
+</ul>
+<h3 id="_21">故障排查</h3>
+<p>先刷新设备列表，再检查相机连接、驱动和权限。无相机时可用文件图像进行注册测试。</p>
+<h2 id="5">5. 标定窗口</h2>
+<h3 id="_22">用途</h3>
+<p>标定窗口用于计算像素尺寸 mm/px，并执行镜头畸变标定。标定结果会影响注册和测量精度。</p>
+<p><img alt="像素尺寸标定页" src="screenshots/06_calibration_dialog.png" /></p>
+<p>图：像素尺寸标定页。</p>
+<p>镜头标定页：</p>
+<p><img alt="镜头标定页" src="screenshots/06a_lens_calibration_tab.png" /></p>
+<p>图：镜头标定页。</p>
+<h3 id="_23">操作步骤</h3>
+<ol>
+<li>从 <code>Settings</code> 菜单打开 <code>Camera Calibration...</code>。</li>
+<li>设置棋盘格列数、行数和单格尺寸。</li>
+<li>在 <code>Pixel Size Calibration</code> 中选择棋盘图像，点击 <code>Calibrate Pixel Size</code>。</li>
+<li>在 <code>Lens Calibration</code> 中添加多张棋盘图像，点击 <code>Run Calibration</code>。</li>
+<li>标定成功后保存到配置。</li>
+</ol>
+<h3 id="_24">预期结果</h3>
+<p>像素尺寸页显示 mm/px；镜头标定页显示 RMS 误差和保存按钮。</p>
+<h3 id="_25">常见错误</h3>
+<ul>
+<li>棋盘角点检测失败：棋盘不清晰、列/行数量设置错误或曝光不合适。</li>
+<li>标定误差过大：采样姿态单一或图像数量不足。</li>
+</ul>
+<h3 id="_26">故障排查</h3>
+<p>使用清晰、无遮挡、不同位置和角度的棋盘图像；确认 <code>Cols</code> 和 <code>Rows</code> 是内角点数量。</p>
+<h2 id="6">6. 自动注册配置</h2>
+<h3 id="_27">用途</h3>
+<p>自动注册配置通过两个 CAD 基准圆和图像 ROI 自动求解相机图像到 CAD 的变换。</p>
+<p><img alt="自动注册配置" src="screenshots/04_auto_registration_configuration.png" /></p>
+<p>图：自动注册配置。</p>
+<p>局部放大：</p>
+<p><img alt="自动注册配置局部" src="screenshots/04a_auto_registration_crop.png" /></p>
+<p>图：自动注册配置局部。</p>
+<h3 id="_28">操作步骤</h3>
+<ol>
+<li>加载 DXF 和相机图像。</li>
+<li>在 <code>Production Parameters</code> 中选择生产参数配置。</li>
+<li>设置 CAD P1、CAD P2，可以使用 DXF handle 或已选特征。</li>
+<li>设置 ROI P1、ROI P2，格式为 <code>x,y,w,h</code>。</li>
+<li>点击 <code>Auto Register</code>。</li>
+<li>注册成功后再运行测量查询。</li>
+</ol>
+<h3 id="_29">预期结果</h3>
+<p>状态区显示自动注册成功，图像与 CAD 对齐，画布中基准圆位置一致。</p>
+<h3 id="_30">常见错误</h3>
+<ul>
+<li>ROI 格式错误：必须是四个整数。</li>
+<li>ROI 未框住基准圆：自动检测会失败或注册偏移。</li>
+<li>P1/P2 顺序反了：图像会旋转或平移错误。</li>
+</ul>
+<h3 id="_31">故障排查</h3>
+<p>使用 <code>Pick ROIs...</code> 重新框选，确认 CAD P1/P2 与图像 P1/P2 一一对应。</p>
+<h2 id="7">7. 测量查询编辑器</h2>
+<h3 id="_32">用途</h3>
+<p>测量查询编辑器用于编写测量指令、运行评价、查看 Value/Nominal/Deviation/Threshold/Status 表格，并进入生产日志查看器。</p>
+<p><img alt="测量查询编辑器" src="screenshots/07_query_measurement_editor.png" /></p>
+<p>图：测量查询编辑器。</p>
+<p>结果表局部图：</p>
+<p><img alt="测量结果表局部" src="screenshots/07a_query_results_table_crop.png" /></p>
+<p>图：测量结果表局部。</p>
+<h3 id="_33">操作步骤</h3>
+<ol>
+<li>打开 <code>Measurement Window</code>。</li>
+<li>点击 <code>Load</code> 载入查询文件，或直接输入查询。</li>
+<li>支持 <code>lines(ID1, ID2)</code>、<code>circles(ID1, ID2)</code>、<code>circle(ID)</code>、<code>arcs(ID)</code>。</li>
+<li>点击 <code>Evaluate</code>。</li>
+<li>点击结果表中的任一行查看对应 CAD 和图像拟合特征。</li>
+<li>点击 <code>Run Production</code> 可按生产流程采集、注册、评价并保存日志。</li>
+</ol>
+<h3 id="_34">预期结果</h3>
+<p>表格显示 Query、Value、Nominal、Deviation、Threshold、Status。OK/NG 状态用于快速判断是否超差。</p>
+<h3 id="_35">常见错误</h3>
+<ul>
+<li>ID 无法解析：查询中的 ID、handle 或前缀写错。</li>
+<li><code>No Measurement</code>：图像未加载、未注册或边缘拟合失败。</li>
+</ul>
+<h3 id="_36">故障排查</h3>
+<p>优先检查 DXF 是否正确加载；然后检查图像、自动注册和 ROI；最后检查查询语法。</p>
+<h2 id="8">8. 测量叠加与结果选择</h2>
+<h3 id="_37">用途</h3>
+<p>选择测量结果后，画布会显示对应测量调试叠加。拟合线和拟合圆为绿色，CAD 线条保持原颜色。圆弧查询会显示绿色拟合整圆，便于判断拟合质量。</p>
+<p><img alt="测量叠加显示" src="screenshots/08_measurement_overlay_canvas.png" /></p>
+<p>图：测量叠加显示。</p>
+<h3 id="_38">操作步骤</h3>
+<ol>
+<li>在测量结果表中单击一行。</li>
+<li>观察 CAD 画布中高亮的 CAD 特征和图像边缘点。</li>
+<li>对圆弧查询，重点查看绿色拟合圆是否落在目标内弧或外弧上。</li>
+<li>若拟合不正确，回到自动注册和 ROI 设置检查图像对齐。</li>
+</ol>
+<h3 id="_39">预期结果</h3>
+<p>被选查询的特征被高亮，绿色拟合几何与图像实际边缘重合。</p>
+<h3 id="_40">常见错误</h3>
+<ul>
+<li>拟合到外弧：图像边缘对比度或 ROI 限制不足。</li>
+<li>绿色拟合圆偏离 CAD：注册参数或像素尺寸可能错误。</li>
+</ul>
+<h3 id="_41">故障排查</h3>
+<p>重新执行自动注册；必要时调整相机曝光，确保目标边缘清晰。</p>
+<h2 id="9">9. 生产测量日志查看器</h2>
+<h3 id="_42">用途</h3>
+<p>生产日志查看器按日历组织生产测量记录，按 OK/NG 分类，并显示每条记录的查询结果表。日志可用于复查 CAD、相机图像、注册参数和测量结果。</p>
+<p><img alt="生产测量日志查看器" src="screenshots/09_measurement_log_viewer.png" /></p>
+<p>图：生产测量日志查看器。</p>
+<p>结果表局部图：</p>
+<p><img alt="日志结果表局部" src="screenshots/09a_log_results_table_crop.png" /></p>
+<p>图：日志结果表局部。</p>
+<h3 id="_43">操作步骤</h3>
+<ol>
+<li>在测量窗口点击 <code>View Logs</code>。</li>
+<li>在日历中选择月份和日期。</li>
+<li>在 Daily Records 中展开 OK 或 NG。</li>
+<li>点击具体记录，右侧表格显示该记录的测量结果。</li>
+<li>点击结果行，主画布会加载对应 CAD/图像上下文并高亮相关特征。</li>
+<li>点击 <code>Measurement Queries</code> 返回实时查询编辑器。</li>
+</ol>
+<h3 id="_44">预期结果</h3>
+<p>日历显示记录分布，左侧按 OK/NG 分类，右侧显示与查询编辑器一致的结果表头。</p>
+<h3 id="_45">常见错误</h3>
+<ul>
+<li>某天没有记录：未执行生产流程或日志数据库路径不同。</li>
+<li>记录无法复现：原 CAD 或图像文件被移动。</li>
+</ul>
+<h3 id="_46">故障排查</h3>
+<p>保留生产图像和 CAD 文件；日志记录中包含文件名、仿射矩阵、注册参数和标定参数。</p>
+<h2 id="10">10. 错误信息</h2>
+<h3 id="_47">用途</h3>
+<p>错误信息用于指出查询语法、ID 解析、图像测量或生产流程中的失败原因。</p>
+<p><img alt="查询错误信息" src="screenshots/10_error_messages_query.png" /></p>
+<p>图：查询错误信息。</p>
+<p>错误表局部图：</p>
+<p><img alt="错误结果表局部" src="screenshots/10a_error_table_crop.png" /></p>
+<p>图：错误结果表局部。</p>
+<p>警告对话框示例：</p>
+<p><img alt="警告对话框" src="screenshots/10b_warning_dialog.png" /></p>
+<p>图：警告对话框。</p>
+<h3 id="_48">操作步骤</h3>
+<ol>
+<li>查看结果表中的 Status 和错误说明。</li>
+<li>若提示 <code>Cannot resolve ID</code>，检查查询 ID 是否存在于特征树。</li>
+<li>若提示无测量结果，检查图像和注册状态。</li>
+<li>修改查询后重新点击 <code>Evaluate</code>。</li>
+</ol>
+<h3 id="_49">预期结果</h3>
+<p>错误行不会被误判为 OK；用户可以根据错误文本定位问题。</p>
+<h3 id="_50">常见错误</h3>
+<ul>
+<li>复制了错误的短 ID。</li>
+<li>使用了圆查询函数测量圆弧，或使用了线查询函数测量圆。</li>
+</ul>
+<h3 id="_51">故障排查</h3>
+<p>使用 <code>Pick Lines Pair</code>、<code>Pick Circle</code>、<code>Pick Arc</code> 生成查询，可减少手写 ID 错误。</p>
+<h2 id="11">11. 故障排查示例</h2>
+<h3 id="_52">用途</h3>
+<p>本节展示常见生产问题的界面状态，帮助操作员快速定位问题。</p>
+<p><img alt="无相机故障排查示例" src="screenshots/11_troubleshooting_no_camera.png" /></p>
+<p>图：无相机故障排查示例。</p>
+<h3 id="_53">操作步骤</h3>
+<ol>
+<li>如果 <code>Run Production</code> 失败，先查看底部状态栏。</li>
+<li>如果提示相机未打开，进入注册面板确认 Camera Capture 区域。</li>
+<li>如果没有设备，点击 <code>Refresh</code> 并检查硬件连接。</li>
+<li>如果只是做离线验证，可使用 <code>Load Image...</code> 载入图像文件。</li>
+<li>图像加载后重新执行自动注册，再运行测量。</li>
+</ol>
+<h3 id="_54">预期结果</h3>
+<p>问题原因应能从状态栏、相机状态或测量结果表中定位。</p>
+<h3 id="_55">常见错误</h3>
+<ul>
+<li>未打开相机直接运行生产。</li>
+<li>加载了图像但未执行自动注册。</li>
+<li>使用了不匹配当前产品的生产参数配置。</li>
+</ul>
+<h3 id="_56">故障排查</h3>
+<p>按顺序检查：相机连接 → 图像是否加载 → 自动注册 P1/P2 → 查询语法 → 测量结果表。</p>
+<h2 id="_57">截图索引</h2>
+<table>
+<thead>
+<tr>
+<th>文件</th>
+<th>说明</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><a href="screenshots/01_main_window.png">01_main_window.png</a></td>
+<td>主窗口</td>
+</tr>
+<tr>
+<td><a href="screenshots/02_dxf_loading.png">02_dxf_loading.png</a></td>
+<td>DXF 加载完成</td>
+</tr>
+<tr>
+<td><a href="screenshots/02a_feature_tree_crop.png">02a_feature_tree_crop.png</a></td>
+<td>DXF 特征树局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/03_cad_canvas.png">03_cad_canvas.png</a></td>
+<td>CAD 画布</td>
+</tr>
+<tr>
+<td><a href="screenshots/04_auto_registration_configuration.png">04_auto_registration_configuration.png</a></td>
+<td>自动注册配置</td>
+</tr>
+<tr>
+<td><a href="screenshots/04a_auto_registration_crop.png">04a_auto_registration_crop.png</a></td>
+<td>自动注册配置局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/05_camera_live_preview_parameters.png">05_camera_live_preview_parameters.png</a></td>
+<td>相机实时预览与参数</td>
+</tr>
+<tr>
+<td><a href="screenshots/05a_camera_parameters_crop.png">05a_camera_parameters_crop.png</a></td>
+<td>相机参数局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/06_calibration_dialog.png">06_calibration_dialog.png</a></td>
+<td>标定窗口</td>
+</tr>
+<tr>
+<td><a href="screenshots/06a_lens_calibration_tab.png">06a_lens_calibration_tab.png</a></td>
+<td>镜头标定页</td>
+</tr>
+<tr>
+<td><a href="screenshots/07_query_measurement_editor.png">07_query_measurement_editor.png</a></td>
+<td>测量查询编辑器</td>
+</tr>
+<tr>
+<td><a href="screenshots/07a_query_results_table_crop.png">07a_query_results_table_crop.png</a></td>
+<td>测量结果表局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/08_measurement_overlay_canvas.png">08_measurement_overlay_canvas.png</a></td>
+<td>测量叠加显示</td>
+</tr>
+<tr>
+<td><a href="screenshots/09_measurement_log_viewer.png">09_measurement_log_viewer.png</a></td>
+<td>生产测量日志查看器</td>
+</tr>
+<tr>
+<td><a href="screenshots/09a_log_results_table_crop.png">09a_log_results_table_crop.png</a></td>
+<td>日志结果表局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/10_error_messages_query.png">10_error_messages_query.png</a></td>
+<td>查询错误信息</td>
+</tr>
+<tr>
+<td><a href="screenshots/10a_error_table_crop.png">10a_error_table_crop.png</a></td>
+<td>错误结果表局部</td>
+</tr>
+<tr>
+<td><a href="screenshots/11_troubleshooting_no_camera.png">11_troubleshooting_no_camera.png</a></td>
+<td>无相机故障排查示例</td>
+</tr>
+<tr>
+<td><a href="screenshots/10b_warning_dialog.png">10b_warning_dialog.png</a></td>
+<td>警告对话框</td>
+</tr>
+</tbody>
+</table></body></html>

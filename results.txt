@@ -1,0 +1,6 @@
+lines(9e40c968, 7e6e8eb2), 0.8140 = 81.353 mm [nominal: 81.400] [dev: -0.046] [threshold: +/-0.814] [status: OK] [source: MEASURED]
+lines(9c0bd3a0, 71490463), 0.5565 = 55.598 mm [nominal: 55.650] [dev: -0.052] [threshold: +/-0.556] [status: OK] [source: MEASURED]
+lines(7bedd422, 9c0bd3a0), 0.0717 = 7.196 mm [nominal: 7.175] [dev: +0.021] [threshold: +/-0.072] [status: OK] [source: MEASURED]
+lines(756f8ada, 9e40c968), 0.0718 = 7.184 mm [nominal: 7.175] [dev: +0.009] [threshold: +/-0.072] [status: OK] [source: MEASURED]
+lines(7e6e8eb2, 4595cf5f), 0.1918 = 19.206 mm [nominal: 19.175] [dev: +0.031] [threshold: +/-0.192] [status: OK] [source: MEASURED]
+lines(71490463, a8b8900b), 0.0718 = 7.138 mm [nominal: 7.175] [dev: -0.037] [threshold: +/-0.072] [status: OK] [source: MEASURED]

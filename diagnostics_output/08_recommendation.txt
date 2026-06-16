@@ -1,0 +1,40 @@
+======================================================================
+ROOT CAUSE RECOMMENDATION
+======================================================================
+
+EVIDENCE COLLECTED:
+  [TPS AUDIT] Image was undistorted by cv2.undistort in ImageLoadDialog, AND TPS correction is applied in MeasurementPipeline._correct_points. Verify TPS operates in undistorted-pixel space (it should).
+  [TPS AUDIT] TPS corrections are large: mean=45.655 px. This may indicate TPS is being applied to the wrong coordinate space (e.g., raw pixels instead of undistorted).
+  [SCALE] Inconsistent: affine=0.116505 vs pixel_size_mm=0.116200 (diff=5.440%)
+  [SCALE DIAGNOSIS] Scale sources are inconsistent, but the specific cause needs manual investigation. See warnings above.
+  [SCALE WARNING] Empirical scale from empirical_chessboard_raw (0.122447) differs from config (0.116200) by +5.376%. Computed in raw_pixel_space.
+  [SCALE WARNING] Empirical scale from empirical_chessboard_tps (0.122884) differs from config (0.116200) by +5.752%. Computed in tps_corrected_space.
+  [REFTEST] OpenCV undistortion itself changes scale. Raw: -5.587%, OpenCV: -4.551%. The distortion model may be over-fitted or the calibration images may have insufficient coverage.
+  [REFTEST WARNING] TPS introduces -4.284% error compared to OpenCV-only. This is significant and will affect all measurements.
+  [REFTEST WARNING] Raw pixel measurement has -5.587% error. pixel_size_mm calibration itself may be inaccurate.
+
+RECOMMENDATION:
+
+  ROOT CAUSE: TPS residual distortion introduces scale error.
+
+  The TPS correction changes effective pixel spacing. This happens
+  because the residual map is built on undistorted-pixel coordinates
+  but the TPS interpolation can introduce systematic shifts at
+  locations between sample points.
+
+  IMMEDIATE FIX OPTIONS:
+  A. Disable TPS correction (set residual_map=None in config)
+     and verify the error disappears.
+  B. Rebuild TPS with smoothing to suppress scale distortion:
+     increase smoothing parameter from 0.001 to 0.01-0.1.
+  C. Switch from image-space TPS to coordinate-space correction:
+     apply TPS to world coordinates after affine, not to pixel
+     coordinates before affine. This keeps the scale calibration
+     independent of TPS.
+
+  PREFERRED ARCHITECTURE (long-term):
+  Image → Edge Detection → Feature Fitting → Coordinate Correction
+  This avoids TPS warping the image, which can change effective
+  pixel spacing and introduce scale errors.
+
+======================================================================
