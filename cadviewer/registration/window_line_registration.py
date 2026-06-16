@@ -164,22 +164,17 @@ def _detect_window_geometry(
     comp = labels == best_idx
 
     scan = _scan_component_sides(comp, xmin, ymin, xmax, ymax)
-    if target_aspect is not None and np.isfinite(target_aspect) and target_aspect > 0:
-        side_positions = dict(scan)
-        side_lines = _axis_aligned_side_lines(side_positions)
-        image_corners = _side_line_corners(side_lines)
-    else:
-        side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
-        image_corners = _side_line_corners(side_lines)
+    side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
+    image_corners = _side_line_corners(side_lines)
 
-        cx = (xmin + xmax) / 2.0
-        cy = (ymin + ymax) / 2.0
-        side_positions = {
-            "left": _line_x_at_y(side_lines["left"], cy, scan["left"]),
-            "right": _line_x_at_y(side_lines["right"], cy, scan["right"]),
-            "top": _line_y_at_x(side_lines["top"], cx, scan["top"]),
-            "bottom": _line_y_at_x(side_lines["bottom"], cx, scan["bottom"]),
-        }
+    cx = (xmin + xmax) / 2.0
+    cy = (ymin + ymax) / 2.0
+    side_positions = {
+        "left": _line_x_at_y(side_lines["left"], cy, scan["left"]),
+        "right": _line_x_at_y(side_lines["right"], cy, scan["right"]),
+        "top": _line_y_at_x(side_lines["top"], cx, scan["top"]),
+        "bottom": _line_y_at_x(side_lines["bottom"], cx, scan["bottom"]),
+    }
 
     width = side_positions["right"] - side_positions["left"]
     height = side_positions["bottom"] - side_positions["top"]
@@ -751,11 +746,10 @@ def _select_cad_corner_order(
 def _cad_corner_order_candidates(corners: np.ndarray) -> list[np.ndarray]:
     pts = np.asarray(corners, dtype=np.float64)
     candidates = []
-    for base in (pts, pts[::-1]):
-        for shift in range(4):
-            cur = np.roll(base, -shift, axis=0)
-            if not any(np.allclose(cur, prev, atol=1e-9) for prev in candidates):
-                candidates.append(cur.copy())
+    for shift in range(4):
+        cur = np.roll(pts, -shift, axis=0)
+        if not any(np.allclose(cur, prev, atol=1e-9) for prev in candidates):
+            candidates.append(cur.copy())
     return candidates
 
 
@@ -892,10 +886,10 @@ def _cad_corners_from_line_features(features: list) -> np.ndarray:
             vertical.append(feature)
     if len(horizontal) == 2 and len(vertical) == 2:
         return np.array([
-            [min_x, max_y],
             [min_x, min_y],
-            [max_x, min_y],
+            [min_x, max_y],
             [max_x, max_y],
+            [max_x, min_y],
         ], dtype=np.float64)
 
     lines = [_cad_line_equation(feature.geometry) for feature in features]
