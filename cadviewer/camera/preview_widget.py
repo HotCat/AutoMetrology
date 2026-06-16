@@ -7,6 +7,7 @@ and scales to widget size while maintaining aspect ratio.
 
 from __future__ import annotations
 
+import time
 import numpy as np
 from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QImage, QPixmap
@@ -19,6 +20,8 @@ class CameraPreviewWidget(QWidget):
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._latest_frame: np.ndarray | None = None
+        self._frame_counter: int = 0
+        self._latest_frame_time: float = 0.0
 
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
@@ -40,6 +43,11 @@ class CameraPreviewWidget(QWidget):
     def display_frame(self, frame: np.ndarray) -> None:
         """Display a BGR numpy frame, scaled to widget size."""
         self._latest_frame = frame
+        self._frame_counter += 1
+        self._latest_frame_time = time.monotonic()
+        self._render_frame(frame)
+
+    def _render_frame(self, frame: np.ndarray) -> None:
         if frame is None:
             return
 
@@ -72,8 +80,18 @@ class CameraPreviewWidget(QWidget):
         """Return the most recently displayed frame."""
         return self._latest_frame
 
+    @property
+    def frame_counter(self) -> int:
+        return self._frame_counter
+
+    @property
+    def latest_frame_age_s(self) -> float:
+        if self._latest_frame_time <= 0.0:
+            return float("inf")
+        return max(0.0, time.monotonic() - self._latest_frame_time)
+
     def resizeEvent(self, event) -> None:
         """Re-scale pixmap on resize."""
         super().resizeEvent(event)
         if self._latest_frame is not None:
-            self.display_frame(self._latest_frame)
+            self._render_frame(self._latest_frame)

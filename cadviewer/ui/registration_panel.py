@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QGroupBox, QFormLayout, QLineEdit,
     QInputDialog, QAbstractItemView, QSplitter, QComboBox, QCheckBox,
-    QMessageBox,
+    QMessageBox, QApplication,
 )
 
 from ..models.feature import FeatureType
@@ -1027,7 +1027,7 @@ class RegistrationPanel(QWidget):
         if self._live_window is not None:
             self._live_window.clear()
 
-    def _capture_from_camera(self) -> bool:
+    def _capture_from_camera(self, wait_for_fresh_frame: bool = False) -> bool:
         """Capture current frame and load it as the image layer."""
         if not HAS_CAMERA or self._camera is None:
             self._reg_status.setText(tr("Camera support is not available"))
@@ -1038,6 +1038,24 @@ class RegistrationPanel(QWidget):
         if not hasattr(self, '_canvas'):
             self._reg_status.setText(tr("Canvas is not available"))
             return False
+
+        if wait_for_fresh_frame:
+            start_counter = int(getattr(self._camera_preview, "frame_counter", 0))
+            import time
+            deadline = time.monotonic() + 0.75
+            fresh_frame = False
+            while time.monotonic() < deadline:
+                QApplication.processEvents()
+                frame = self._camera_preview.get_latest_frame()
+                counter = int(getattr(self._camera_preview, "frame_counter", 0))
+                if frame is not None and counter > start_counter:
+                    fresh_frame = True
+                    break
+                time.sleep(0.01)
+            if not fresh_frame:
+                self._camera_status.setText(tr("No fresh frame to capture"))
+                self._reg_status.setText(tr("No fresh frame to capture"))
+                return False
 
         frame = self._camera_preview.get_latest_frame()
         if frame is None:
@@ -1071,7 +1089,7 @@ class RegistrationPanel(QWidget):
         return True
 
     def capture_current_frame_for_production(self) -> bool:
-        return self._capture_from_camera()
+        return self._capture_from_camera(wait_for_fresh_frame=True)
 
     def _open_focus_preview(self) -> None:
         """Open a dedicated full-size live preview window for focus adjustment."""
