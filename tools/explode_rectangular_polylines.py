@@ -1,5 +1,9 @@
 #!/usr/bin/env python3
-"""Convert closed rectangular DXF polylines into LINE entities."""
+"""Convert DXF polyline segments into LINE entities.
+
+By default this explodes any closed POLYLINE/LWPOLYLINE with at least three
+vertices. Use --only-rectangular to keep the older 4-vertex-only behavior.
+"""
 
 from __future__ import annotations
 
@@ -44,6 +48,7 @@ def explode_rectangular_polylines(
     output_path: str | Path,
     handles: set[str] | None = None,
     keep_source: bool = False,
+    only_rectangular: bool = False,
 ) -> int:
     doc = ezdxf.readfile(str(input_path))
     msp = doc.modelspace()
@@ -58,7 +63,9 @@ def explode_rectangular_polylines(
         if handle_filter and handle.lower() not in handle_filter:
             continue
         points = _polyline_points(entity)
-        if len(points) != 4:
+        if len(points) < 3:
+            continue
+        if only_rectangular and len(points) != 4:
             continue
         for idx, start in enumerate(points):
             end = points[(idx + 1) % len(points)]
@@ -90,6 +97,11 @@ def main(argv: list[str]) -> int:
         action="store_true",
         help="Keep source polylines instead of replacing them.",
     )
+    parser.add_argument(
+        "--only-rectangular",
+        action="store_true",
+        help="Only explode 4-vertex closed polylines.",
+    )
     args = parser.parse_args(argv)
 
     count = explode_rectangular_polylines(
@@ -97,8 +109,9 @@ def main(argv: list[str]) -> int:
         args.output,
         handles=set(args.handle),
         keep_source=bool(args.keep_source),
+        only_rectangular=bool(args.only_rectangular),
     )
-    print(f"exploded_rectangular_polylines={count}")
+    print(f"exploded_polylines={count}")
     print(f"output={args.output}")
     return 0
 

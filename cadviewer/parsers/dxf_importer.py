@@ -109,16 +109,18 @@ class DXFImporter:
         self.repo.add(feat)
         self._entity_index += 1
 
-    def _add_rectangular_polyline_edges(
+    def _add_polyline_edges(
         self,
         points: list,
         handle: str,
+        closed: bool,
         layer: str = "0",
         color: int = 7,
     ) -> None:
-        for idx in range(4):
+        segment_count = len(points) if closed else len(points) - 1
+        for idx in range(segment_count):
             p1 = points[idx]
-            p2 = points[(idx + 1) % 4]
+            p2 = points[(idx + 1) % len(points)]
             geom = {"x1": p1[0], "y1": p1[1], "x2": p2[0], "y2": p2[1]}
             edge_handle = f"{handle}:{idx + 1}" if handle else ""
             self._add_line_feature(geom, edge_handle, layer=layer, color=color)
@@ -214,9 +216,9 @@ class DXFImporter:
             geom = {"x1": points[0][0], "y1": points[0][1],
                       "x2": points[1][0], "y2": points[1][1]}
             self._add_line_feature(geom, handle, layer=layer, color=color)
-        elif len(points) == 4 and closed:
-            self._add_rectangular_polyline_edges(
-                points, handle, layer=layer, color=color,
+        elif len(points) >= 3 and closed:
+            self._add_polyline_edges(
+                points, handle, closed=True, layer=layer, color=color,
             )
         else:
             geom = {"points": points, "closed": closed}
@@ -240,9 +242,9 @@ class DXFImporter:
         layer = e.dxf.layer if hasattr(e.dxf, "layer") else "0"
         color = e.dxf.color if hasattr(e.dxf, "color") else 7
         handle = e.dxf.handle
-        if len(points) == 4 and closed:
-            self._add_rectangular_polyline_edges(
-                points, handle, layer=layer, color=color,
+        if len(points) >= 3 and closed:
+            self._add_polyline_edges(
+                points, handle, closed=True, layer=layer, color=color,
             )
             return
         geom = {"points": points, "closed": closed}
