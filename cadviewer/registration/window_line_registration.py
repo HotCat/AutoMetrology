@@ -61,8 +61,9 @@ def register_window_lines(
     edge_tokens: Optional[list[str]] = None,
     pixel_size_mm: Optional[float] = None,
     prefer_homography: bool = True,
+    detection_mode: str = "auto",
 ) -> WindowLineRegistrationResult:
-    """Compute a pixel -> CAD world transform from the dark product window."""
+    """Compute a pixel -> CAD world transform from the product window."""
     if not HAS_CV2:
         raise RuntimeError("OpenCV is required for window line registration")
     if image is None:
@@ -79,7 +80,7 @@ def register_window_lines(
         target_aspect = None
     gray = _to_gray(image)
     side_positions, bbox, confidence, side_lines, image_corners = (
-        _detect_registration_geometry(gray, target_aspect)
+        _detect_registration_geometry(gray, target_aspect, detection_mode)
     )
     affine = _build_affine_from_corners(image_corners, cad_corners)
     homography = _build_homography_from_corners(image_corners, cad_corners)
@@ -102,6 +103,9 @@ def register_window_lines(
                     safety_reason = safety.reason
             except Exception as exc:
                 safety_reason = str(exc)
+    method = "window_line_registration"
+    if detection_mode and detection_mode != "auto":
+        method = f"{method}_{detection_mode}"
     return WindowLineRegistrationResult(
         affine=affine,
         side_positions=side_positions,
@@ -114,6 +118,7 @@ def register_window_lines(
         image_corners=image_corners,
         cad_corners=cad_corners,
         homography_safety=safety_reason,
+        method=method,
     )
 
 
@@ -190,9 +195,9 @@ def _detect_window_geometry(
     return side_positions, (xmin, ymin, xmax, ymax), confidence, side_lines, image_corners
 
 
-def _detect_registration_geometry(
+def _detect_bright_window_geometry(
     gray: np.ndarray,
-    target_aspect: Optional[float],
+    target_aspect: Optional[float] = None,
 ) -> tuple[
     dict[str, float],
     tuple[int, int, int, int],
@@ -200,6 +205,85 @@ def _detect_registration_geometry(
     dict[str, tuple[float, float, float]],
     np.ndarray,
 ]:
+    labels = None
+    best = None
+    best_score = float("-inf")
+    for threshold in _bright_window_threshold_candidates(gray):
+        mask = (gray > threshold).astype(np.uint8)
+        mask = cv2.morphologyEx(
+            mask,
+            cv2.MORPH_CLOSE,
+            cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7)),
+        )
+        n, cur_labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
+        if n <= 1:
+            continue
+        candidate, score = _select_window_component(
+            gray.shape, stats, centroids, target_aspect,
+        )
+        if candidate is not None and score > best_score:
+            best = (candidate, stats)
+            labels = cur_labels
+            best_score = score
+    if best is None or labels is None:
+        raise RuntimeError("No suitable bright backlight window component detected")
+
+    best_idx, stats = best
+    x, y, bw, bh, _area = [int(v) for v in stats[best_idx]]
+    xmin, ymin = x, y
+    xmax, ymax = x + bw - 1, y + bh - 1
+    comp = labels == best_idx
+
+    scan = _scan_component_sides(comp, xmin, ymin, xmax, ymax)
+    side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
+    image_corners = _side_line_corners(side_lines)
+
+    cx = (xmin + xmax) / 2.0
+    cy = (ymin + ymax) / 2.0
+    side_positions = {
+        "left": _line_x_at_y(side_lines["left"], cy, scan["left"]),
+        "right": _line_x_at_y(side_lines["right"], cy, scan["right"]),
+        "top": _line_y_at_x(side_lines["top"], cx, scan["top"]),
+        "bottom": _line_y_at_x(side_lines["bottom"], cx, scan["bottom"]),
+    }
+
+    width = side_positions["right"] - side_positions["left"]
+    height = side_positions["bottom"] - side_positions["top"]
+    if width <= 100 or height <= 100:
+        raise RuntimeError(f"Invalid bright window side positions: {side_positions}")
+    if not np.all(np.isfinite(image_corners)):
+        raise RuntimeError("Invalid fitted bright window corners")
+    if abs(_polygon_area(image_corners)) < 10000.0:
+        raise RuntimeError("Fitted bright window corners are degenerate")
+
+    coverage = min(
+        1.0,
+        max(0.0, width / max(float(bw), 1.0))
+        * max(0.0, height / max(float(bh), 1.0)),
+    )
+    confidence = float(0.78 + 0.22 * coverage)
+    return side_positions, (xmin, ymin, xmax, ymax), confidence, side_lines, image_corners
+
+
+def _detect_registration_geometry(
+    gray: np.ndarray,
+    target_aspect: Optional[float],
+    detection_mode: str = "auto",
+) -> tuple[
+    dict[str, float],
+    tuple[int, int, int, int],
+    float,
+    dict[str, tuple[float, float, float]],
+    np.ndarray,
+]:
+    mode = str(detection_mode or "auto").strip().lower()
+    if mode == "bright":
+        return _detect_bright_window_geometry(gray, target_aspect)
+    if mode == "dark":
+        return _detect_window_geometry(gray, target_aspect)
+    if mode == "grid":
+        return _detect_grid_cell_geometry(gray)
+
     dark = _detect_window_geometry(gray, target_aspect)
     if target_aspect is None or not np.isfinite(target_aspect) or target_aspect <= 0:
         return dark
@@ -388,6 +472,25 @@ def _window_threshold_candidates(gray: np.ndarray) -> list[int]:
     percentiles = np.percentile(gray, [10, 20, 30, 40])
     values.extend(int(round(float(v))) for v in percentiles)
     return sorted({int(np.clip(v, 70, 180)) for v in values})
+
+
+def _bright_window_threshold_candidates(gray: np.ndarray) -> list[int]:
+    """Return bright thresholds for transmitted backlight registration."""
+    values = [170, 180, 190, 200, 210, 220, 230, 240, 245]
+    try:
+        otsu, _ = cv2.threshold(
+            gray, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU,
+        )
+        values.extend([
+            int(round(float(otsu) + 10.0)),
+            int(round(float(otsu) + 25.0)),
+            int(round(float(otsu) + 40.0)),
+        ])
+    except Exception:
+        pass
+    percentiles = np.percentile(gray, [60, 70, 75, 80, 85])
+    values.extend(int(round(float(v))) for v in percentiles)
+    return sorted({int(np.clip(v, 150, 250)) for v in values})
 
 
 def _select_window_component(

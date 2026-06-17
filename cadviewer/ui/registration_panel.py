@@ -60,6 +60,7 @@ class RegistrationPanel(QWidget):
         self._config = config
         self._auto_cad_ids = ["", ""]
         self._window_edge_ids: list[str] = []
+        self._window_detection_mode = "auto"
         self._image_calibration_applied = False
         self._auto_source_image_path = ""
         self._last_auto_registration = {}
@@ -382,6 +383,22 @@ class RegistrationPanel(QWidget):
         window_group.setStyleSheet(reg_group.styleSheet())
         window_layout = QVBoxLayout(window_group)
 
+        mode_row = QHBoxLayout()
+        mode_label = QLabel("Detect:")
+        mode_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        mode_row.addWidget(mode_label)
+        self._window_mode_combo = QComboBox()
+        self._window_mode_combo.addItem("Auto", "auto")
+        self._window_mode_combo.addItem("Dark window", "dark")
+        self._window_mode_combo.addItem("Bright backlight", "bright")
+        self._window_mode_combo.addItem("Printed grid", "grid")
+        self._window_mode_combo.currentIndexChanged.connect(
+            self._on_window_detection_mode_changed
+        )
+        self._window_mode_combo.setStyleSheet(self._method_combo.styleSheet())
+        mode_row.addWidget(self._window_mode_combo)
+        window_layout.addLayout(mode_row)
+
         self._window_edges_edit = QLineEdit()
         self._window_edges_edit.setReadOnly(True)
         self._window_edges_edit.setPlaceholderText("Select CAD edge, click Add; need 4")
@@ -555,6 +572,7 @@ class RegistrationPanel(QWidget):
         return {
             "edge_ids": list(self._window_edge_ids),
             "edge_labels": labels,
+            "detection_mode": self._window_detection_mode,
         }
 
     def _snapshot_production_profile(self, name: str) -> dict:
@@ -734,6 +752,16 @@ class RegistrationPanel(QWidget):
             str(feature_id) for feature_id in edge_ids
             if isinstance(feature_id, str) and self._repo.get(feature_id) is not None
         ][:4]
+        mode = str(window_data.get("detection_mode", "auto")).strip().lower()
+        if mode not in {"auto", "dark", "bright", "grid"}:
+            mode = "auto"
+        self._window_detection_mode = mode
+        if hasattr(self, "_window_mode_combo"):
+            idx = self._window_mode_combo.findData(mode)
+            if idx >= 0:
+                self._window_mode_combo.blockSignals(True)
+                self._window_mode_combo.setCurrentIndex(idx)
+                self._window_mode_combo.blockSignals(False)
         self._refresh_window_edges_edit()
 
     def _apply_production_profile(self, profile: dict) -> None:
@@ -1216,6 +1244,16 @@ class RegistrationPanel(QWidget):
         self._refresh_window_edges_edit()
         self._save_selected_production_profile(silent=True)
         self._reg_status.setText("Window CAD edges cleared.")
+
+    def _on_window_detection_mode_changed(self, index: int) -> None:
+        if index < 0 or not hasattr(self, "_window_mode_combo"):
+            return
+        mode = str(self._window_mode_combo.currentData() or "auto")
+        if mode not in {"auto", "dark", "bright", "grid"}:
+            mode = "auto"
+        self._window_detection_mode = mode
+        self._save_selected_production_profile(silent=True)
+        self._reg_status.setText(f"Window detection mode: {self._window_mode_combo.currentText()}")
 
     def _get_selected_group(self):
         return None
@@ -1751,6 +1789,7 @@ class RegistrationPanel(QWidget):
                 image,
                 edge_tokens=edge_tokens if len(edge_tokens) == 4 else None,
                 pixel_size_mm=self._pixel_size_mm,
+                detection_mode=self._window_detection_mode,
             )
             transform = result.transform
             affine = result.affine
