@@ -377,6 +377,7 @@ class MainWindow(QMainWindow):
         # Track last DXF path for auto-restore
         self._last_dxf_path = path
         self._config.last_dxf_path = path
+        self._config.save()
 
         # Print type summary
         counts = self._repo.type_counts()
@@ -493,7 +494,7 @@ class MainWindow(QMainWindow):
         record_id = self._save_current_production_log()
         if record_id:
             if self._production_log_viewer is not None:
-                self._production_log_viewer.refresh()
+                self._production_log_viewer.refresh(select_record_id=record_id)
             self._status_label.setText(
                 f"Production cycle complete — evaluated {count} queries; log {record_id[:8]}"
             )

@@ -46,9 +46,12 @@ class ProductionLogViewer(QWidget):
     def current_record_id(self) -> str:
         return self._current_record_id
 
-    def refresh(self) -> None:
+    def refresh(self, select_record_id: str = "") -> None:
         self._refresh_month_marks()
-        self._load_day(self._calendar.selectedDate())
+        self._load_day(
+            self._calendar.selectedDate(),
+            preferred_record_id=select_record_id,
+        )
 
     def _setup_ui(self) -> None:
         root = QVBoxLayout(self)
@@ -162,7 +165,11 @@ class ProductionLogViewer(QWidget):
             self._calendar.setDateTextFormat(QDate(y, m, d), fmt)
 
     @Slot(QDate)
-    def _load_day(self, qdate: QDate) -> None:
+    def _load_day(
+        self,
+        qdate: QDate,
+        preferred_record_id: str = "",
+    ) -> None:
         date_text = qdate.toString("yyyy-MM-dd")
         records = self._store.records_for_day(date_text)
         self._records.clear()
@@ -194,8 +201,21 @@ class ProductionLogViewer(QWidget):
             group.setText(2, str(group.childCount()))
 
         if records:
-            first_group = groups["ng"] if groups["ng"].childCount() else groups["ok"]
-            self._records.setCurrentItem(first_group.child(0))
+            preferred_item = None
+            if preferred_record_id:
+                for group in groups.values():
+                    for i in range(group.childCount()):
+                        item = group.child(i)
+                        if item.data(0, Qt.UserRole) == preferred_record_id:
+                            preferred_item = item
+                            break
+                    if preferred_item is not None:
+                        break
+            if preferred_item is not None:
+                self._records.setCurrentItem(preferred_item)
+            else:
+                first_group = groups["ng"] if groups["ng"].childCount() else groups["ok"]
+                self._records.setCurrentItem(first_group.child(0))
         else:
             self._clear_record()
 
