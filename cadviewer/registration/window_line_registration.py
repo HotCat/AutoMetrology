@@ -236,6 +236,9 @@ def _detect_bright_window_geometry(
 
     scan = _scan_component_sides(comp, xmin, ymin, xmax, ymax)
     side_lines = _fit_component_side_lines(comp, xmin, ymin, xmax, ymax)
+    side_lines = _refine_bright_side_lines_from_gradient(
+        gray, side_lines, scan, xmin, ymin, xmax, ymax,
+    )
     image_corners = _side_line_corners(side_lines)
 
     cx = (xmin + xmax) / 2.0
@@ -263,6 +266,102 @@ def _detect_bright_window_geometry(
     )
     confidence = float(0.78 + 0.22 * coverage)
     return side_positions, (xmin, ymin, xmax, ymax), confidence, side_lines, image_corners
+
+
+def _refine_bright_side_lines_from_gradient(
+    gray: np.ndarray,
+    initial_lines: dict[str, tuple[float, float, float]],
+    side_positions: dict[str, float],
+    xmin: int,
+    ymin: int,
+    xmax: int,
+    ymax: int,
+) -> dict[str, tuple[float, float, float]]:
+    """Fit backlight window sides at the strongest local transition.
+
+    Thresholded bright blobs are very repeatable, but their binary boundary
+    can move with exposure/gamma/saturation. Measurement line fitting uses
+    gradient peaks, so bright registration refines each side to the same edge
+    definition before solving the CAD transform.
+    """
+    grad_x = cv2.Scharr(gray, cv2.CV_64F, 1, 0)
+    grad_y = cv2.Scharr(gray, cv2.CV_64F, 0, 1)
+    gradient = np.sqrt(grad_x ** 2 + grad_y ** 2)
+    h, w = gray.shape[:2]
+    width = xmax - xmin + 1
+    height = ymax - ymin + 1
+
+    refined = dict(initial_lines)
+    vertical_specs = [
+        ("left", float(side_positions["left"])),
+        ("right", float(side_positions["right"])),
+    ]
+    for name, x0 in vertical_specs:
+        pts = []
+        y_values = np.linspace(
+            ymin + height * 0.12,
+            ymax - height * 0.12,
+            max(80, int(height * 0.25)),
+        )
+        for y in y_values:
+            yy = int(round(y))
+            lo = max(0, int(round(x0 - 35.0)))
+            hi = min(w - 1, int(round(x0 + 35.0)))
+            if hi - lo < 6 or yy < 0 or yy >= h:
+                continue
+            profile = gradient[yy, lo:hi + 1]
+            peak = _strongest_local_peak(profile)
+            if peak is None:
+                continue
+            pts.append((float(lo + peak), float(y)))
+        if len(pts) >= 20:
+            refined[name] = _fit_line_ransac(np.asarray(pts, dtype=np.float64))
+
+    horizontal_specs = [
+        ("top", float(side_positions["top"])),
+        ("bottom", float(side_positions["bottom"])),
+    ]
+    for name, y0 in horizontal_specs:
+        pts = []
+        x_values = np.linspace(
+            xmin + width * 0.12,
+            xmax - width * 0.12,
+            max(80, int(width * 0.25)),
+        )
+        for x in x_values:
+            xx = int(round(x))
+            lo = max(0, int(round(y0 - 35.0)))
+            hi = min(h - 1, int(round(y0 + 35.0)))
+            if hi - lo < 6 or xx < 0 or xx >= w:
+                continue
+            profile = gradient[lo:hi + 1, xx]
+            peak = _strongest_local_peak(profile)
+            if peak is None:
+                continue
+            pts.append((float(x), float(lo + peak)))
+        if len(pts) >= 20:
+            refined[name] = _fit_line_ransac(np.asarray(pts, dtype=np.float64))
+
+    return refined
+
+
+def _strongest_local_peak(profile: np.ndarray) -> Optional[int]:
+    if profile.size < 3:
+        return None
+    threshold = max(45.0, float(np.mean(profile)) * 2.0)
+    candidates = []
+    for idx in range(1, profile.size - 1):
+        if (
+            profile[idx] >= threshold
+            and profile[idx] >= profile[idx - 1]
+            and profile[idx] >= profile[idx + 1]
+        ):
+            candidates.append(idx)
+    if not candidates:
+        idx = int(np.argmax(profile))
+        return idx if float(profile[idx]) >= threshold else None
+    center = (profile.size - 1) / 2.0
+    return max(candidates, key=lambda idx: (float(profile[idx]), -abs(idx - center)))
 
 
 def _detect_registration_geometry(
