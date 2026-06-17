@@ -268,6 +268,7 @@ class RegistrationPanel(QWidget):
         self._btn_debug.setStyleSheet("color: #aaa; font-size: 10px;")
         self._btn_debug.toggled.connect(self._toggle_debug)
         reg_layout.addWidget(self._btn_debug)
+        self._btn_debug.hide()
 
         # Teach pose controls
         teach_row = QHBoxLayout()
@@ -365,7 +366,7 @@ class RegistrationPanel(QWidget):
         self._btn_auto_register.clicked.connect(self._run_auto_correspondence)
         self._btn_window_register = QPushButton("Window Register")
         self._btn_window_register.clicked.connect(self._run_window_line_registration)
-        for btn in [self._btn_pick_auto_rois, self._btn_auto_register, self._btn_window_register]:
+        for btn in [self._btn_pick_auto_rois, self._btn_auto_register]:
             btn.setStyleSheet("""
                 QPushButton {
                     background: #264f78; color: white; border: none;
@@ -378,6 +379,7 @@ class RegistrationPanel(QWidget):
         auto_layout.addLayout(auto_btn_row)
 
         reg_layout.addWidget(auto_group)
+        auto_group.hide()
 
         window_group = QGroupBox("Window CAD Edges")
         window_group.setStyleSheet(reg_group.styleSheet())
@@ -421,6 +423,16 @@ class RegistrationPanel(QWidget):
             """)
             window_btn_row.addWidget(btn)
         window_layout.addLayout(window_btn_row)
+
+        self._btn_window_register.setStyleSheet("""
+            QPushButton {
+                background: #264f78; color: white; border: none;
+                padding: 4px 6px; border-radius: 3px; font-size: 10px;
+            }
+            QPushButton:hover { background: #306898; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        window_layout.addWidget(self._btn_window_register)
 
         reg_layout.addWidget(window_group)
 

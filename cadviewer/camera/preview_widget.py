@@ -28,7 +28,7 @@ class CameraPreviewWidget(QWidget):
 
         self._label = QLabel("No camera")
         self._label.setAlignment(Qt.AlignCenter)
-        self._label.setMinimumHeight(180)
+        self._label.setMinimumHeight(120)
         self._label.setStyleSheet("""
             QLabel {
                 background-color: #111;
