@@ -8,7 +8,7 @@ Grammar:
   pair_instruction := ('circles' | 'lines') '(' id ',' id ')' [',' threshold]
   radius_instruction := ('circle' | 'arcs') '(' id ')' [',' threshold]
   func_name   := 'circles' | 'lines' | 'circle' | 'arcs'
-  id          := [A-Za-z0-9_-]+
+  id          := [A-Za-z0-9_:-]+
   threshold   := non-negative decimal absolute deviation in mm
   comment     := '#' ...
 """
@@ -23,10 +23,10 @@ from ..models.query import QueryInstruction, QueryType
 # Regexes for parsing a single instruction line
 _NUMBER_RE = r'(?:\d+(?:\.\d*)?|\.\d+)'
 _PAIR_INSTRUCTION_RE = re.compile(
-    rf'^\s*(circles|lines)\s*\(\s*([A-Za-z0-9_-]+)\s*,\s*([A-Za-z0-9_-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
+    rf'^\s*(circles|lines)\s*\(\s*([A-Za-z0-9_:-]+)\s*,\s*([A-Za-z0-9_:-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
 )
 _RADIUS_INSTRUCTION_RE = re.compile(
-    rf'^\s*(circle|arcs)\s*\(\s*([A-Za-z0-9_-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
+    rf'^\s*(circle|arcs)\s*\(\s*([A-Za-z0-9_:-]+)\s*\)\s*(?:,\s*({_NUMBER_RE}))?\s*$'
 )
 
 
