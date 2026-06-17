@@ -1475,11 +1475,16 @@ class MeasurementPipeline:
                         lock_line_direction = True
                         line_normal = np.array([-line_dir[1], line_dir[0]])
                         pair_gap_px = abs(float((paired_center - own_center) @ line_normal))
+                        cad_gap = self._parallel_line_gap_mm(geom, paired_geometry)
                         # Only close line pairs should force the inward
                         # edge. Distant line-distance queries are independent
                         # features; using the other line as a side target can
                         # pull the fit onto unrelated internal window edges.
-                        if 1e-6 < pair_gap_px <= 250.0:
+                        if (
+                            1e-6 < pair_gap_px <= 250.0
+                            and cad_gap is not None
+                            and cad_gap <= 5.0
+                        ):
                             preferred_side_point = paired_center
                             max_scan_width = max(12.0, pair_gap_px * 0.45)
                             prefer_extreme_side = True
@@ -1580,3 +1585,32 @@ class MeasurementPipeline:
         }
 
         return mf
+
+    @staticmethod
+    def _parallel_line_gap_mm(
+        geom: dict,
+        paired_geometry: Optional[dict],
+    ) -> Optional[float]:
+        if paired_geometry is None:
+            return None
+        try:
+            x1 = float(geom["x1"])
+            y1 = float(geom["y1"])
+            x2 = float(geom["x2"])
+            y2 = float(geom["y2"])
+            px1 = float(paired_geometry["x1"])
+            py1 = float(paired_geometry["y1"])
+            px2 = float(paired_geometry["x2"])
+            py2 = float(paired_geometry["y2"])
+        except Exception:
+            return None
+        dx = x2 - x1
+        dy = y2 - y1
+        length = float(np.hypot(dx, dy))
+        if length <= 1e-12:
+            return None
+        nx = -dy / length
+        ny = dx / length
+        d1 = abs((px1 - x1) * nx + (py1 - y1) * ny)
+        d2 = abs((px2 - x1) * nx + (py2 - y1) * ny)
+        return float((d1 + d2) / 2.0)
