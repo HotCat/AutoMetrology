@@ -294,6 +294,7 @@ class MainWindow(QMainWindow):
         self._query_panel.result_selected.connect(self._on_query_result_selected)
         self._query_panel.production_run_requested.connect(self._run_production_measurement_cycle)
         self._query_panel.production_log_requested.connect(self._show_production_log_viewer)
+        self._query_panel.live_query_view_requested.connect(self._restore_live_production_context)
         if self._production_log_viewer is not None:
             self._production_log_viewer.record_selected.connect(self._on_production_log_record_selected)
             self._production_log_viewer.result_selected.connect(self._on_query_result_selected)
@@ -475,6 +476,7 @@ class MainWindow(QMainWindow):
         """Capture camera frame, auto-register, and evaluate loaded queries."""
         if self._query_pair_pick_mode is not None:
             self._cancel_query_pair_pick(update_panel=True)
+        self._restore_live_production_context()
 
         self._status_label.setText(tr("Production cycle: capturing camera frame..."))
         QApplication.processEvents()
@@ -538,6 +540,19 @@ class MainWindow(QMainWindow):
             self._on_production_log_record_selected(
                 self._production_log_viewer.current_record_id()
             )
+
+    @Slot()
+    def _restore_live_production_context(self) -> None:
+        """Leave production-log replay state before live capture/production."""
+        try:
+            self._last_measurement_debug = {}
+            self._last_measurement_affine = None
+            self._viewer.set_measurement_debug({}, None)
+            if hasattr(self, "_reg_panel"):
+                self._reg_panel.apply_active_production_profile()
+            self._viewer.update()
+        except Exception:
+            pass
 
     @Slot(str)
     def _on_production_log_record_selected(self, record_id: str) -> None:

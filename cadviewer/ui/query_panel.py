@@ -36,6 +36,7 @@ class QueryPanel(QWidget):
     pair_pick_cancelled = Signal()
     production_run_requested = Signal()
     production_log_requested = Signal()
+    live_query_view_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -249,6 +250,7 @@ class QueryPanel(QWidget):
         for widget in self._query_view_widgets:
             widget.show()
         self._btn_queries.hide()
+        self.live_query_view_requested.emit()
 
     def get_query_text(self) -> str:
         return self._editor.toPlainText()
