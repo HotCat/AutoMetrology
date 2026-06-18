@@ -20,6 +20,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
     QFileDialog, QSplitter, QAbstractItemView, QDoubleSpinBox,
+    QCheckBox,
 )
 
 from ..models.query import QueryResult
@@ -150,6 +151,18 @@ class QueryPanel(QWidget):
                 padding: 3px; border-radius: 3px; font-size: 11px;
             }
         """)
+        self._force_nearest_line_bias = QCheckBox("Force nearest line bias")
+        self._force_nearest_line_bias.setToolTip(
+            "For stroke/window line pairs, use the stroke edge nearest the window edge"
+        )
+        self._force_nearest_line_bias.setStyleSheet("""
+            QCheckBox {
+                color: #aaa; font-size: 10px; padding-left: 8px;
+            }
+            QCheckBox::indicator {
+                width: 12px; height: 12px;
+            }
+        """)
 
         for btn in [self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle, self._btn_pick_arc, self._btn_cancel_pick]:
             btn.setStyleSheet("""
@@ -163,6 +176,7 @@ class QueryPanel(QWidget):
             pick_layout.addWidget(btn)
         pick_layout.addWidget(self._tol_percent_label)
         pick_layout.addWidget(self._tol_percent)
+        pick_layout.addWidget(self._force_nearest_line_bias)
         pick_layout.addWidget(self._pair_pick_status, stretch=1)
         layout.addLayout(pick_layout)
 
@@ -219,7 +233,8 @@ class QueryPanel(QWidget):
             self._btn_evaluate, self._btn_export, self._btn_logs,
             self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle,
             self._btn_pick_arc, self._btn_cancel_pick, self._pair_pick_status,
-            self._tol_percent_label, self._tol_percent, self._table, self._summary,
+            self._tol_percent_label, self._tol_percent,
+            self._force_nearest_line_bias, self._table, self._summary,
         ]
 
     def set_production_log_viewer(self, viewer: QWidget) -> None:
@@ -257,6 +272,9 @@ class QueryPanel(QWidget):
 
     def tolerance_percent(self) -> float:
         return float(self._tol_percent.value())
+
+    def force_nearest_line_bias(self) -> bool:
+        return bool(self._force_nearest_line_bias.isChecked())
 
     def results(self) -> List[QueryResult]:
         return list(self._results)

@@ -450,6 +450,11 @@ class MainWindow(QMainWindow):
                             self._reg_panel.measurement_pixel_to_world_transform(image_layer.path)
                             if hasattr(self, "_reg_panel") else None
                         ),
+                        line_pair_bias_mode=(
+                            "nearest"
+                            if self._query_panel.force_nearest_line_bias()
+                            else "center"
+                        ),
                     )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
@@ -613,6 +618,11 @@ class MainWindow(QMainWindow):
                 pixel_size_mm=float(record.get("pixel_size_mm") or self._config.pixel_size_mm),
                 residual_map=residual_map_from_config(self._config),
                 pixel_to_world_transform=measurement_transform,
+                line_pair_bias_mode=(
+                    "nearest"
+                    if self._query_panel.force_nearest_line_bias()
+                    else "center"
+                ),
             )
             query_text = "\n".join(
                 r.instruction.raw_text for r in results if r.instruction is not None

@@ -6,6 +6,7 @@ import numpy as np
 
 from cadviewer.models.feature import FeatureType
 from cadviewer.models.measured_feature import MeasuredFeature
+from cadviewer.models.repository import FeatureRepository
 from cadviewer.measurement.measurement_pipeline import MeasurementPipeline
 
 
@@ -62,6 +63,26 @@ class MeasurementPipelineTest(unittest.TestCase):
         self.assertAlmostEqual(centered.fitted_geometry_world["y1"], 12.0)
         self.assertAlmostEqual(centered.fitted_geometry_world["y2"], 12.0)
         self.assertEqual(len(centered.edge_points), 4)
+
+    def test_line_pair_bias_mode_defaults_to_center(self) -> None:
+        pipeline = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_pair_bias_mode="unsupported",
+        )
+
+        self.assertEqual(pipeline._line_pair_bias_mode, "center")
+
+    def test_line_pair_bias_mode_accepts_nearest(self) -> None:
+        pipeline = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_pair_bias_mode="nearest",
+        )
+
+        self.assertEqual(pipeline._line_pair_bias_mode, "nearest")
 
     @staticmethod
     def _line_measurement(cad_id: str, y: float) -> MeasuredFeature:

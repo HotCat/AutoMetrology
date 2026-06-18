@@ -77,6 +77,7 @@ class MeasurementPipeline:
         pixel_size_mm: float = 0.01,
         residual_map: Optional[ResidualDistortionMap] = None,
         pixel_to_world_transform: Optional[np.ndarray] = None,
+        line_pair_bias_mode: str = "center",
     ) -> None:
         """
         Args:
@@ -88,12 +89,18 @@ class MeasurementPipeline:
             pixel_to_world_transform: optional 3x3 affine/projective matrix used
                 for ROI prediction and final fitted pixel -> CAD world geometry
                 after safety validation.
+            line_pair_bias_mode: stroke/window line pair behavior. "center"
+                averages the two visible stroke sides; "nearest" uses the
+                stroke side nearest the paired window edge.
         """
         self._repo = repo
         self._image = image
         self._affine = affine
         self._pixel_size_mm = pixel_size_mm
         self._residual_map = residual_map
+        self._line_pair_bias_mode = (
+            "nearest" if str(line_pair_bias_mode).lower() == "nearest" else "center"
+        )
         self._pixel_to_world_transform = None
         if pixel_to_world_transform is not None:
             candidate = np.asarray(pixel_to_world_transform, dtype=np.float64)
@@ -1594,15 +1601,16 @@ class MeasurementPipeline:
         feat1: CADFeature,
         feat2: CADFeature,
     ) -> Optional[tuple[Optional[MeasuredFeature], Optional[MeasuredFeature]]]:
-        """Resolve moderate-gap stroke/window pairs with stroke center fitting.
+        """Resolve moderate-gap stroke/window pairs with explicit bias policy.
 
         Printed stroke lines have two visible gradient edges. For window-to-
         stroke measurements the window side should keep its normal closest-
-        edge fit, while the stroke CAD line is best represented by the center
-        between its two visible gradient edges. Trying to force both lines
-        inward can pull the window fit onto unrelated bright-window structure.
-        This helper is limited to moderate-gap, parallel pairs where one line
-        is clearly longer than the other, matching a stroke/nearby-window
+        edge fit. In the default "center" mode, the stroke CAD line is
+        represented by the center between its two visible gradient edges. In
+        "nearest" mode, the stroke side nearest the window edge is selected to
+        expose printing shrink/expansion relative to the CNC-machined window.
+        This helper is limited to moderate-gap, parallel pairs where one line is
+        clearly longer than the other, matching a stroke/nearby-window
         measurement rather than a close double-edge pair.
         """
         if self._line_engine is None:
@@ -1643,14 +1651,16 @@ class MeasurementPipeline:
             stroke_feat,
             reference_feat.geometry,
         )
-        if len(candidates) < 2:
-            return None
         valid = [candidate for candidate in candidates if candidate.is_valid()]
-        if len(valid) < 2:
+        if not valid:
             return None
         valid.sort(key=lambda candidate: self._line_distance_between_measured(
             candidate, reference,
         ))
+        if self._line_pair_bias_mode == "nearest":
+            return valid[0], reference
+        if len(valid) < 2:
+            return None
         stroke = self._center_between_line_fits(stroke_feat, valid[0], valid[-1])
         return (stroke, reference) if stroke is not None else None
 
@@ -1685,7 +1695,7 @@ class MeasurementPipeline:
                 scan_width=50.0,
                 min_gradient=15.0,
                 preferred_side_point=side_point,
-                max_scan_width=80.0,
+                max_scan_width=20.0,
                 prefer_extreme_side=False,
                 lock_direction=True,
             )
