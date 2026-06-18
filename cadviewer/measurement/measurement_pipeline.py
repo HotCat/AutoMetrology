@@ -208,6 +208,9 @@ class MeasurementPipeline:
             return None, None
         if feat1.feature_type != FeatureType.LINE or feat2.feature_type != FeatureType.LINE:
             return self.measure_feature(cad_feature_id_1), self.measure_feature(cad_feature_id_2)
+        debiased = self._measure_line_pair_debiased(feat1, feat2)
+        if debiased is not None:
+            return debiased
         return (
             self._measure_line(feat1, paired_geometry=feat2.geometry, cache=False),
             self._measure_line(feat2, paired_geometry=feat1.geometry, cache=False),
@@ -1585,6 +1588,241 @@ class MeasurementPipeline:
         }
 
         return mf
+
+    def _measure_line_pair_debiased(
+        self,
+        feat1: CADFeature,
+        feat2: CADFeature,
+    ) -> Optional[tuple[Optional[MeasuredFeature], Optional[MeasuredFeature]]]:
+        """Resolve moderate-gap stroke/window pairs with stroke center fitting.
+
+        Printed stroke lines have two visible gradient edges. For window-to-
+        stroke measurements the window side should keep its normal closest-
+        edge fit, while the stroke CAD line is best represented by the center
+        between its two visible gradient edges. Trying to force both lines
+        inward can pull the window fit onto unrelated bright-window structure.
+        This helper is limited to moderate-gap, parallel pairs where one line
+        is clearly longer than the other, matching a stroke/nearby-window
+        measurement rather than a close double-edge pair.
+        """
+        if self._line_engine is None:
+            return None
+        cad_gap = self._parallel_line_gap_mm(feat1.geometry, feat2.geometry)
+        if cad_gap is None or cad_gap <= 5.0 or cad_gap > 20.0:
+            return None
+        if not self._line_geometries_parallel(feat1.geometry, feat2.geometry):
+            return None
+
+        len1 = self._line_length_mm(feat1.geometry)
+        len2 = self._line_length_mm(feat2.geometry)
+        if len1 is None or len2 is None:
+            return None
+        if len1 >= len2 * 1.08:
+            result = self._try_debias_stroke_against_reference(feat1, feat2)
+            if result is None:
+                return None
+            stroke, reference = result
+            return stroke, reference
+        if len2 >= len1 * 1.08:
+            result = self._try_debias_stroke_against_reference(feat2, feat1)
+            if result is None:
+                return None
+            stroke, reference = result
+            return reference, stroke
+        return None
+
+    def _try_debias_stroke_against_reference(
+        self,
+        stroke_feat: CADFeature,
+        reference_feat: CADFeature,
+    ) -> Optional[tuple[MeasuredFeature, MeasuredFeature]]:
+        reference = self._measure_line(reference_feat, cache=False)
+        if reference is None or not reference.is_valid():
+            return None
+        candidates = self._fit_line_side_candidates(
+            stroke_feat,
+            reference_feat.geometry,
+        )
+        if len(candidates) < 2:
+            return None
+        valid = [candidate for candidate in candidates if candidate.is_valid()]
+        if len(valid) < 2:
+            return None
+        valid.sort(key=lambda candidate: self._line_distance_between_measured(
+            candidate, reference,
+        ))
+        stroke = self._center_between_line_fits(stroke_feat, valid[0], valid[-1])
+        return (stroke, reference) if stroke is not None else None
+
+    def _fit_line_side_candidates(
+        self,
+        feat: CADFeature,
+        reference_geometry: dict,
+    ) -> list[MeasuredFeature]:
+        roi_result = self._roi_predictor.predict_line_roi(feat.geometry, padding=50)
+        reference_roi = self._roi_predictor.predict_line_roi(reference_geometry, padding=50)
+        if roi_result is None or reference_roi is None:
+            return []
+        roi, pixel_p1, pixel_p2 = roi_result
+        _, ref_p1, ref_p2 = reference_roi
+        own_center = (pixel_p1 + pixel_p2) / 2.0
+        reference_center = (ref_p1 + ref_p2) / 2.0
+        far_side = own_center - (reference_center - own_center)
+
+        candidates: list[MeasuredFeature] = []
+        seen_offsets: list[float] = []
+        line_vec = pixel_p2 - pixel_p1
+        line_len = float(np.linalg.norm(line_vec))
+        if line_len <= 1e-6:
+            return []
+        line_dir = line_vec / line_len
+        line_normal = np.array([-line_dir[1], line_dir[0]])
+
+        for side_point in (reference_center, far_side):
+            result = self._line_engine.fit(
+                pixel_p1,
+                pixel_p2,
+                scan_width=50.0,
+                min_gradient=15.0,
+                preferred_side_point=side_point,
+                max_scan_width=80.0,
+                prefer_extreme_side=False,
+                lock_direction=True,
+            )
+            if result is None:
+                continue
+            offset = float((np.mean(result.edge_points, axis=0) - own_center) @ line_normal)
+            if any(abs(offset - prev) < 0.75 for prev in seen_offsets):
+                continue
+            seen_offsets.append(offset)
+            mf = self._measured_line_from_result(feat, roi, pixel_p1, pixel_p2, result)
+            if mf is not None:
+                candidates.append(mf)
+        return candidates
+
+    def _center_between_line_fits(
+        self,
+        feat: CADFeature,
+        side_a: MeasuredFeature,
+        side_b: MeasuredFeature,
+    ) -> Optional[MeasuredFeature]:
+        gpa = side_a.fitted_geometry
+        gpb = side_b.fitted_geometry
+        gwa = side_a.fitted_geometry_world
+        gwb = side_b.fitted_geometry_world
+        fitted_geom = {
+            "x1": float((gpa["x1"] + gpb["x1"]) * 0.5),
+            "y1": float((gpa["y1"] + gpb["y1"]) * 0.5),
+            "x2": float((gpa["x2"] + gpb["x2"]) * 0.5),
+            "y2": float((gpa["y2"] + gpb["y2"]) * 0.5),
+        }
+        fitted_geom_world = {
+            "x1": float((gwa["x1"] + gwb["x1"]) * 0.5),
+            "y1": float((gwa["y1"] + gwb["y1"]) * 0.5),
+            "x2": float((gwa["x2"] + gwb["x2"]) * 0.5),
+            "y2": float((gwa["y2"] + gwb["y2"]) * 0.5),
+        }
+        return MeasuredFeature(
+            feature_id=str(uuid.uuid4()),
+            cad_feature_id=feat.feature_id,
+            feature_type=FeatureType.LINE,
+            fitted_geometry=fitted_geom,
+            fitted_geometry_world=fitted_geom_world,
+            edge_points=np.vstack([side_a.edge_points, side_b.edge_points]),
+            roi_bbox=side_a.roi_bbox,
+            residual_error=float(max(side_a.residual_error, side_b.residual_error)),
+            confidence=float(min(side_a.confidence, side_b.confidence)),
+            detection_method="perpendicular_scanline_stroke_center",
+            source_type="FITTED",
+        )
+
+    def _measured_line_from_result(
+        self,
+        feat: CADFeature,
+        roi: ROIRegion,
+        pixel_p1: np.ndarray,
+        pixel_p2: np.ndarray,
+        result: LineFitResult,
+    ) -> Optional[MeasuredFeature]:
+        image_grad_mean = float(np.mean(self._gradient)) if self._gradient is not None else 0.0
+        if result.gradient_strength < max(45.0, image_grad_mean * 3.0):
+            return None
+        pixel_pts = np.array([result.p1, result.p2])
+        world_pts = self._pixel_points_to_world(pixel_pts)
+        fitted_geom = {
+            "x1": float(result.p1[0]),
+            "y1": float(result.p1[1]),
+            "x2": float(result.p2[0]),
+            "y2": float(result.p2[1]),
+        }
+        fitted_geom_world = {
+            "x1": float(world_pts[0, 0]),
+            "y1": float(world_pts[0, 1]),
+            "x2": float(world_pts[1, 0]),
+            "y2": float(world_pts[1, 1]),
+        }
+        return MeasuredFeature(
+            feature_id=str(uuid.uuid4()),
+            cad_feature_id=feat.feature_id,
+            feature_type=FeatureType.LINE,
+            fitted_geometry=fitted_geom,
+            fitted_geometry_world=fitted_geom_world,
+            edge_points=result.edge_points,
+            roi_bbox=(roi.xmin, roi.ymin, roi.xmax, roi.ymax),
+            residual_error=result.residual,
+            confidence=result.confidence,
+            detection_method="perpendicular_scanline_side_candidate",
+            source_type="FITTED",
+        )
+
+    @staticmethod
+    def _line_geometries_parallel(geom: dict, paired_geometry: dict) -> bool:
+        try:
+            v1 = np.array([
+                float(geom["x2"]) - float(geom["x1"]),
+                float(geom["y2"]) - float(geom["y1"]),
+            ], dtype=np.float64)
+            v2 = np.array([
+                float(paired_geometry["x2"]) - float(paired_geometry["x1"]),
+                float(paired_geometry["y2"]) - float(paired_geometry["y1"]),
+            ], dtype=np.float64)
+        except Exception:
+            return False
+        n1 = float(np.linalg.norm(v1))
+        n2 = float(np.linalg.norm(v2))
+        if n1 <= 1e-12 or n2 <= 1e-12:
+            return False
+        return abs(float(np.dot(v1 / n1, v2 / n2))) > 0.95
+
+    @staticmethod
+    def _line_distance_between_measured(
+        mf1: MeasuredFeature,
+        mf2: MeasuredFeature,
+    ) -> float:
+        g1 = mf1.fitted_geometry_world
+        g2 = mf2.fitted_geometry_world
+        x1, y1 = g1["x1"], g1["y1"]
+        x2, y2 = g1["x2"], g1["y2"]
+        dx, dy = x2 - x1, y2 - y1
+        length = float(np.hypot(dx, dy))
+        if length < 1e-12:
+            return 0.0
+        nx, ny = -dy / length, dx / length
+        lx1, ly1 = g2["x1"], g2["y1"]
+        lx2, ly2 = g2["x2"], g2["y2"]
+        d1 = abs((lx1 - x1) * nx + (ly1 - y1) * ny)
+        d2 = abs((lx2 - x1) * nx + (ly2 - y1) * ny)
+        return float((d1 + d2) / 2.0)
+
+    @staticmethod
+    def _line_length_mm(geom: dict) -> Optional[float]:
+        try:
+            dx = float(geom["x2"]) - float(geom["x1"])
+            dy = float(geom["y2"]) - float(geom["y1"])
+        except Exception:
+            return None
+        length = float(np.hypot(dx, dy))
+        return length if length > 1e-12 else None
 
     @staticmethod
     def _parallel_line_gap_mm(
