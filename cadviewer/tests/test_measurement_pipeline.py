@@ -63,6 +63,7 @@ class MeasurementPipelineTest(unittest.TestCase):
         self.assertAlmostEqual(centered.fitted_geometry_world["y1"], 12.0)
         self.assertAlmostEqual(centered.fitted_geometry_world["y2"], 12.0)
         self.assertEqual(len(centered.edge_points), 4)
+        self.assertIn("cad-line", pipeline._debug_data)
 
     def test_line_pair_bias_mode_defaults_to_center(self) -> None:
         pipeline = MeasurementPipeline(

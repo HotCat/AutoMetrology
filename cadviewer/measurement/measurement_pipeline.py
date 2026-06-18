@@ -1732,19 +1732,28 @@ class MeasurementPipeline:
             "x2": float((gwa["x2"] + gwb["x2"]) * 0.5),
             "y2": float((gwa["y2"] + gwb["y2"]) * 0.5),
         }
-        return MeasuredFeature(
+        edge_points = np.vstack([side_a.edge_points, side_b.edge_points])
+        mf = MeasuredFeature(
             feature_id=str(uuid.uuid4()),
             cad_feature_id=feat.feature_id,
             feature_type=FeatureType.LINE,
             fitted_geometry=fitted_geom,
             fitted_geometry_world=fitted_geom_world,
-            edge_points=np.vstack([side_a.edge_points, side_b.edge_points]),
+            edge_points=edge_points,
             roi_bbox=side_a.roi_bbox,
             residual_error=float(max(side_a.residual_error, side_b.residual_error)),
             confidence=float(min(side_a.confidence, side_b.confidence)),
             detection_method="perpendicular_scanline_stroke_center",
             source_type="FITTED",
         )
+        self._store_line_debug(
+            feat,
+            mf,
+            predicted_p1=np.array([fitted_geom["x1"], fitted_geom["y1"]]),
+            predicted_p2=np.array([fitted_geom["x2"], fitted_geom["y2"]]),
+            pair_side_fit=True,
+        )
+        return mf
 
     def _measured_line_from_result(
         self,
@@ -1771,7 +1780,7 @@ class MeasurementPipeline:
             "x2": float(world_pts[1, 0]),
             "y2": float(world_pts[1, 1]),
         }
-        return MeasuredFeature(
+        mf = MeasuredFeature(
             feature_id=str(uuid.uuid4()),
             cad_feature_id=feat.feature_id,
             feature_type=FeatureType.LINE,
@@ -1784,6 +1793,38 @@ class MeasurementPipeline:
             detection_method="perpendicular_scanline_side_candidate",
             source_type="FITTED",
         )
+        self._store_line_debug(
+            feat,
+            mf,
+            predicted_p1=pixel_p1,
+            predicted_p2=pixel_p2,
+            pair_side_fit=True,
+        )
+        return mf
+
+    def _store_line_debug(
+        self,
+        feat: CADFeature,
+        mf: MeasuredFeature,
+        predicted_p1: np.ndarray,
+        predicted_p2: np.ndarray,
+        pair_side_fit: bool,
+    ) -> None:
+        if not hasattr(self, "_debug_data"):
+            self._debug_data = {}
+        geom = mf.fitted_geometry
+        self._debug_data[feat.feature_id] = {
+            "type": "line",
+            "roi": mf.roi_bbox,
+            "predicted_p1": np.asarray(predicted_p1, dtype=np.float64),
+            "predicted_p2": np.asarray(predicted_p2, dtype=np.float64),
+            "edge_points": mf.edge_points,
+            "fitted_p1": np.array([geom["x1"], geom["y1"]], dtype=np.float64),
+            "fitted_p2": np.array([geom["x2"], geom["y2"]], dtype=np.float64),
+            "residual": mf.residual_error,
+            "confidence": mf.confidence,
+            "pair_side_fit": pair_side_fit,
+        }
 
     @staticmethod
     def _line_geometries_parallel(geom: dict, paired_geometry: dict) -> bool:

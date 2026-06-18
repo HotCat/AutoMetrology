@@ -120,6 +120,7 @@ class FeatureTreePanel(QWidget):
 
     def populate(self, repo: FeatureRepository) -> None:
         """Build tree from repository."""
+        self._search.clear()
         self._tree.clear()
         self._feature_map.clear()
         self._type_nodes.clear()
@@ -142,7 +143,7 @@ class FeatureTreePanel(QWidget):
                 continue
             label = f"{TYPE_LABELS[ftype]} ({count})"
             type_node = QTreeWidgetItem(geom_root, [label])
-            type_node.setExpanded(False)
+            type_node.setExpanded(True)
             color = QColor(TYPE_COLORS.get(ftype, "#FFFFFF"))
             type_node.setForeground(0, QBrush(color))
             font = type_node.font(0)
