@@ -19,7 +19,7 @@ from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QDoubleSpinBox, QPushButton,
     QFileDialog, QGroupBox, QDialogButtonBox, QRadioButton,
-    QButtonGroup,
+    QButtonGroup, QCheckBox,
 )
 
 try:
@@ -148,6 +148,13 @@ class ImageLoadDialog(QDialog):
         src_layout.addLayout(self._cam_row)
         self._cam_row_widget = self._cam_row.itemAt(0).widget().parent()
 
+        self._skip_calibration = QCheckBox("Ignore saved lens calibration for this image")
+        self._skip_calibration.setToolTip(
+            "Load or capture this image without applying the saved camera/lens calibration"
+        )
+        self._skip_calibration.toggled.connect(self._on_skip_calibration_changed)
+        src_layout.addWidget(self._skip_calibration)
+
         layout.addWidget(src_group)
 
         # ── Preview ───────────────────────────────────────────────────
@@ -210,11 +217,19 @@ class ImageLoadDialog(QDialog):
         # Ensure BGR
         if frame.ndim == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)
-        # Apply lens undistortion
-        corrected, applied = _undistort(frame, self._config)
+        # Apply lens undistortion unless this image is from an uncalibrated test camera.
+        if self.skip_calibration():
+            corrected, applied = frame, False
+        else:
+            corrected, applied = _undistort(frame, self._config)
         self._captured_frame = corrected
         self._captured_calibration_applied = applied
         self._preview.setPixmap(_frame_to_pixmap(corrected, 200))
+
+    def _on_skip_calibration_changed(self) -> None:
+        """Rebuild captured camera preview if the temporary calibration policy changes."""
+        if self._radio_cam.isChecked() and self._captured_frame is not None:
+            self._capture_frame()
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -238,6 +253,9 @@ class ImageLoadDialog(QDialog):
 
     def calibration_applied(self) -> bool:
         return bool(self._captured_calibration_applied)
+
+    def skip_calibration(self) -> bool:
+        return bool(self._skip_calibration.isChecked())
 
     def closeEvent(self, event) -> None:
         if self._camera is not None:

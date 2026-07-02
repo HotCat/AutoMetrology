@@ -62,6 +62,7 @@ class RegistrationPanel(QWidget):
         self._window_edge_ids: list[str] = []
         self._window_detection_mode = "auto"
         self._image_calibration_applied = False
+        self._image_calibration_disabled = False
         self._auto_source_image_path = ""
         self._last_auto_registration = {}
         self._last_measurement_pixel_to_world = None
@@ -1117,6 +1118,7 @@ class RegistrationPanel(QWidget):
         self._last_display_pixel_to_world = None
         self._last_auto_registration = {}
         self._auto_source_image_path = self._canvas.get_image_layer().path
+        self._image_calibration_disabled = False
         self._image_path_label.setText("<camera capture undistorted>" if applied else "<camera capture>")
         # Keep pixel_size_mm from config (don't reset to default)
         self._btn_run_coarse.setEnabled(True)
@@ -1317,6 +1319,7 @@ class RegistrationPanel(QWidget):
         if dialog.exec() == ImageLoadDialog.Accepted:
             path, pixel_size = dialog.get_values()
             captured = dialog.get_captured_frame()
+            self._image_calibration_disabled = dialog.skip_calibration()
             if hasattr(self, '_canvas'):
                 if captured is not None:
                     self._canvas.get_image_layer().load_from_array(captured)
@@ -1324,13 +1327,21 @@ class RegistrationPanel(QWidget):
                     self._auto_source_image_path = self._canvas.get_image_layer().path
                     self._image_path_label.setText(
                         "<camera capture undistorted>"
-                        if self._image_calibration_applied else "<camera capture>"
+                        if self._image_calibration_applied
+                        else (
+                            "<camera capture raw>"
+                            if self._image_calibration_disabled
+                            else "<camera capture>"
+                        )
                     )
                 elif path:
                     self._canvas.get_image_layer().load_image(path)
                     self._image_calibration_applied = False
                     self._auto_source_image_path = path
-                    self._image_path_label.setText(path.split('/')[-1])
+                    label = path.split('/')[-1]
+                    if self._image_calibration_disabled:
+                        label = f"{label} (raw/no calibration)"
+                    self._image_path_label.setText(label)
                 else:
                     return
                 pixel_size = float(pixel_size)
@@ -1439,7 +1450,7 @@ class RegistrationPanel(QWidget):
         image = layer.image
         if image is None:
             raise ValueError("Load a camera image first")
-        if not self._image_calibration_applied:
+        if not self._image_calibration_applied and not self._image_calibration_disabled:
             from ..registration.auto_correspondence import undistort_if_calibrated
             corrected, applied = undistort_if_calibrated(image, self._config)
             if applied:
@@ -1588,6 +1599,7 @@ class RegistrationPanel(QWidget):
             "image_path": image_path,
             "source_image_path": self._auto_source_image_path,
             "calibration_applied": bool(self._image_calibration_applied),
+            "calibration_disabled": bool(self._image_calibration_disabled),
             "cad_fiducials": self._auto_cad_points(f1, f2),
             "image_rois": [list(roi1), list(roi2)],
             "pose_template_path": pose_path,
