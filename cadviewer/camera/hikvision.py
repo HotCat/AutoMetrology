@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import threading
 import time
 from ctypes import POINTER, byref, c_bool, c_ubyte, cast, memset, sizeof
 from typing import Optional
@@ -17,6 +18,11 @@ import numpy as np
 from PySide6.QtCore import QThread, Signal
 
 from .base import CameraSettingRanges, CameraSettings, CameraSignalEmitter
+
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional runtime dependency
+    cv2 = None
 
 
 MVS_ROOT = os.environ.get("HIKVISION_MVS_ROOT", "/opt/MVS")
@@ -32,6 +38,7 @@ try:
         MV_ACCESS_Exclusive,
         MV_CC_DEVICE_INFO,
         MV_CC_DEVICE_INFO_LIST,
+        MV_FRAME_OUT,
         MV_FRAME_OUT_INFO_EX,
         MV_GENTL_CAMERALINK_DEVICE,
         MV_GENTL_CXP_DEVICE,
@@ -112,7 +119,7 @@ def _device_name_and_sn(info: MV_CC_DEVICE_INFO) -> tuple[str, str]:
 class _HikvisionLiveViewThread(QThread):
     frame_ready = Signal(np.ndarray)
 
-    def __init__(self, camera: "HikvisionCamera", max_fps: float = 5.0):
+    def __init__(self, camera: "HikvisionCamera", max_fps: float = 18.0):
         super().__init__()
         self._camera = camera
         self._min_interval_s = 1.0 / max(max_fps, 0.1)
@@ -127,8 +134,8 @@ class _HikvisionLiveViewThread(QThread):
                 self.msleep(max(1, int((next_emit_at - now) * 1000)))
                 continue
             try:
-                frame = self._camera._grab_frame(timeout_ms=200)
-            except RuntimeError as exc:
+                frame = self._camera._grab_preview_frame(timeout_ms=200)
+            except Exception as exc:
                 if self._running:
                     self._camera.signals.error.emit(f"Live view error: {exc}")
                 continue
@@ -157,6 +164,8 @@ class HikvisionCamera:
         self._grabbing = False
         self._bgr_buffer = None
         self._bgr_buffer_size = 0
+        self._grab_lock = threading.RLock()
+        self._preview_max_side = 1600
 
     @property
     def signals(self) -> CameraSignalEmitter:
@@ -289,6 +298,14 @@ class HikvisionCamera:
         except RuntimeError as exc:
             self._signals.error.emit(str(exc))
 
+    def capture_frame(self, timeout_ms: int = 1000) -> Optional[np.ndarray]:
+        """Return a fresh full-resolution frame for measurement/capture."""
+        if self._cam is None:
+            return None
+        if not self._grabbing:
+            self.set_live_mode()
+        return self._grab_frame(timeout_ms=timeout_ms)
+
     def get_setting_ranges(self) -> CameraSettingRanges:
         return CameraSettingRanges(
             exposure_min_us=int(self._get_float_min("ExposureTime", 100)),
@@ -334,28 +351,71 @@ class HikvisionCamera:
         if self._cam is None or not self._grabbing:
             return None
 
-        width = self._width or self._get_int("Width", 0)
-        height = self._height or self._get_int("Height", 0)
-        if width <= 0 or height <= 0:
-            raise RuntimeError("Camera width/height unavailable")
+        with self._grab_lock:
+            width = self._width or self._get_int("Width", 0)
+            height = self._height or self._get_int("Height", 0)
+            if width <= 0 or height <= 0:
+                raise RuntimeError("Camera width/height unavailable")
 
-        output = self._ensure_bgr_buffer(int(width * height * 3))
-        frame_info = MV_FRAME_OUT_INFO_EX()
-        memset(byref(frame_info), 0, sizeof(frame_info))
-        ret = self._cam.MV_CC_GetImageForBGR(
-            output,
-            self._bgr_buffer_size,
-            frame_info,
-            timeout_ms,
-        )
-        if ret != MV_OK:
+            output = self._ensure_bgr_buffer(int(width * height * 3))
+            frame_info = MV_FRAME_OUT_INFO_EX()
+            memset(byref(frame_info), 0, sizeof(frame_info))
+            ret = self._cam.MV_CC_GetImageForBGR(
+                output,
+                self._bgr_buffer_size,
+                frame_info,
+                timeout_ms,
+            )
+            if ret != MV_OK:
+                return None
+
+            frame_width = int(frame_info.nWidth) or width
+            frame_height = int(frame_info.nHeight) or height
+            byte_count = frame_width * frame_height * 3
+            frame = np.frombuffer(output, dtype=np.uint8, count=byte_count)
+            return frame.reshape((frame_height, frame_width, 3)).copy()
+
+    def _grab_preview_frame(self, timeout_ms: int = 200) -> Optional[np.ndarray]:
+        if self._cam is None or not self._grabbing:
             return None
 
-        frame_width = int(frame_info.nWidth) or width
-        frame_height = int(frame_info.nHeight) or height
-        byte_count = frame_width * frame_height * 3
-        frame = np.frombuffer(output, dtype=np.uint8, count=byte_count)
-        return frame.reshape((frame_height, frame_width, 3)).copy()
+        with self._grab_lock:
+            frame_out = MV_FRAME_OUT()
+            memset(byref(frame_out), 0, sizeof(frame_out))
+            ret = self._cam.MV_CC_GetImageBuffer(frame_out, timeout_ms)
+            if ret != MV_OK:
+                return None
+            try:
+                info = frame_out.stFrameInfo
+                width = int(info.nWidth)
+                height = int(info.nHeight)
+                frame_len = int(info.nFrameLen)
+                if width > 0 and height > 0 and frame_len == width * height:
+                    raw_ptr = cast(frame_out.pBufAddr, POINTER(c_ubyte))
+                    raw = np.ctypeslib.as_array(raw_ptr, shape=(frame_len,))
+                    raw = raw.reshape((height, width))
+                    return self._preview_frame(raw)
+            finally:
+                self._cam.MV_CC_FreeImageBuffer(frame_out)
+
+        frame = self._grab_frame(timeout_ms=timeout_ms)
+        if frame is None:
+            return None
+        return self._preview_frame(frame)
+
+    def _preview_frame(self, frame: np.ndarray) -> np.ndarray:
+        h, w = frame.shape[:2]
+        max_side = max(h, w)
+        if max_side <= self._preview_max_side:
+            return frame
+        scale = self._preview_max_side / max_side
+        out_w = max(1, int(w * scale))
+        out_h = max(1, int(h * scale))
+        if cv2 is not None:
+            return cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
+        y_idx = np.linspace(0, h - 1, out_h).astype(np.intp)
+        x_idx = np.linspace(0, w - 1, out_w).astype(np.intp)
+        return frame[np.ix_(y_idx, x_idx)].copy()
 
     def _start_worker(self) -> None:
         self._live_thread = _HikvisionLiveViewThread(self)

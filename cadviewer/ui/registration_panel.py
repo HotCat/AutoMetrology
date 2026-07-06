@@ -1080,7 +1080,18 @@ class RegistrationPanel(QWidget):
             self._reg_status.setText(tr("Canvas is not available"))
             return False
 
-        if wait_for_fresh_frame:
+        frame = None
+        capture_frame = getattr(self._camera, "capture_frame", None)
+        if callable(capture_frame):
+            try:
+                frame = capture_frame(timeout_ms=1500)
+            except TypeError:
+                frame = capture_frame()
+            except Exception as e:
+                self._camera_status.setText(f"Capture error: {e}")
+                frame = None
+
+        if frame is None and wait_for_fresh_frame:
             start_counter = int(getattr(self._camera_preview, "frame_counter", 0))
             import time
             deadline = time.monotonic() + 0.75
@@ -1098,7 +1109,8 @@ class RegistrationPanel(QWidget):
                 self._reg_status.setText(tr("No fresh frame to capture"))
                 return False
 
-        frame = self._camera_preview.get_latest_frame()
+        if frame is None:
+            frame = self._camera_preview.get_latest_frame()
         if frame is None:
             self._camera_status.setText(tr("No frame to capture"))
             self._reg_status.setText(tr("No frame to capture"))
