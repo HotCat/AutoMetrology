@@ -13,6 +13,11 @@ from PySide6.QtCore import Qt, QSize
 from PySide6.QtGui import QImage, QPixmap
 from PySide6.QtWidgets import QLabel, QWidget, QVBoxLayout
 
+try:
+    import cv2
+except ImportError:  # pragma: no cover - optional runtime dependency
+    cv2 = None
+
 
 class CameraPreviewWidget(QWidget):
     """Embeddable camera preview display."""
@@ -51,6 +56,7 @@ class CameraPreviewWidget(QWidget):
         if frame is None:
             return
 
+        frame = self._frame_for_display(frame)
         h, w = frame.shape[:2]
         if len(frame.shape) == 2:
             # Grayscale
@@ -95,3 +101,22 @@ class CameraPreviewWidget(QWidget):
         super().resizeEvent(event)
         if self._latest_frame is not None:
             self._render_frame(self._latest_frame)
+
+    def _frame_for_display(self, frame: np.ndarray) -> np.ndarray:
+        """Downsample large frames before UI-thread color conversion."""
+        label_size = self._label.size()
+        max_w = max(1, int(label_size.width()))
+        max_h = max(1, int(label_size.height()))
+        h, w = frame.shape[:2]
+        scale = min(max_w / max(w, 1), max_h / max(h, 1), 1.0)
+        if scale >= 1.0:
+            return frame
+
+        out_w = max(1, int(w * scale))
+        out_h = max(1, int(h * scale))
+        if cv2 is not None:
+            return cv2.resize(frame, (out_w, out_h), interpolation=cv2.INTER_AREA)
+
+        y_idx = np.linspace(0, h - 1, out_h).astype(np.intp)
+        x_idx = np.linspace(0, w - 1, out_w).astype(np.intp)
+        return frame[np.ix_(y_idx, x_idx)]

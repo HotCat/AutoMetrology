@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import os
 import sys
+import time
 from ctypes import POINTER, byref, c_bool, c_ubyte, cast, memset, sizeof
 from typing import Optional
 
@@ -42,6 +43,8 @@ try:
         MV_TRIGGER_MODE_ON,
         MV_TRIGGER_SOURCE_SOFTWARE,
         MV_USB_DEVICE,
+        MV_GrabStrategy_LatestImagesOnly,
+        MV_GrabStrategy_OneByOne,
         MVCC_FLOATVALUE,
         MVCC_INTVALUE_EX,
         MvCamera,
@@ -109,14 +112,20 @@ def _device_name_and_sn(info: MV_CC_DEVICE_INFO) -> tuple[str, str]:
 class _HikvisionLiveViewThread(QThread):
     frame_ready = Signal(np.ndarray)
 
-    def __init__(self, camera: "HikvisionCamera"):
+    def __init__(self, camera: "HikvisionCamera", max_fps: float = 5.0):
         super().__init__()
         self._camera = camera
+        self._min_interval_s = 1.0 / max(max_fps, 0.1)
         self._running = False
 
     def run(self) -> None:
         self._running = True
+        next_emit_at = 0.0
         while self._running and not self.isInterruptionRequested():
+            now = time.monotonic()
+            if now < next_emit_at:
+                self.msleep(max(1, int((next_emit_at - now) * 1000)))
+                continue
             try:
                 frame = self._camera._grab_frame(timeout_ms=200)
             except RuntimeError as exc:
@@ -125,6 +134,7 @@ class _HikvisionLiveViewThread(QThread):
                 continue
             if frame is not None:
                 self.frame_ready.emit(frame)
+                next_emit_at = time.monotonic() + self._min_interval_s
 
     def stop(self) -> None:
         self._running = False
@@ -145,6 +155,8 @@ class HikvisionCamera:
         self._height = 0
         self._mode = "closed"
         self._grabbing = False
+        self._bgr_buffer = None
+        self._bgr_buffer_size = 0
 
     @property
     def signals(self) -> CameraSignalEmitter:
@@ -242,6 +254,7 @@ class HikvisionCamera:
         if self._grabbing:
             self._try_stop_grabbing()
         self._try_set_enum("TriggerMode", MV_TRIGGER_MODE_OFF)
+        self._try_set_grab_strategy(MV_GrabStrategy_LatestImagesOnly)
         _check(self._cam.MV_CC_StartGrabbing(), "start live grabbing")
         self._grabbing = True
         self._start_worker()
@@ -255,6 +268,7 @@ class HikvisionCamera:
             self._try_stop_grabbing()
         self._try_set_enum("TriggerMode", MV_TRIGGER_MODE_ON)
         self._try_set_enum("TriggerSource", MV_TRIGGER_SOURCE_SOFTWARE)
+        self._try_set_grab_strategy(MV_GrabStrategy_OneByOne)
         _check(self._cam.MV_CC_StartGrabbing(), "start trigger grabbing")
         self._grabbing = True
         self._try_clear_buffer()
@@ -325,11 +339,15 @@ class HikvisionCamera:
         if width <= 0 or height <= 0:
             raise RuntimeError("Camera width/height unavailable")
 
-        buffer_size = int(width * height * 3)
-        output = (c_ubyte * buffer_size)()
+        output = self._ensure_bgr_buffer(int(width * height * 3))
         frame_info = MV_FRAME_OUT_INFO_EX()
         memset(byref(frame_info), 0, sizeof(frame_info))
-        ret = self._cam.MV_CC_GetImageForBGR(output, buffer_size, frame_info, timeout_ms)
+        ret = self._cam.MV_CC_GetImageForBGR(
+            output,
+            self._bgr_buffer_size,
+            frame_info,
+            timeout_ms,
+        )
         if ret != MV_OK:
             return None
 
@@ -365,6 +383,20 @@ class HikvisionCamera:
             self._cam.MV_CC_ClearImageBuffer()
         except Exception:
             pass
+
+    def _ensure_bgr_buffer(self, size: int):
+        if self._bgr_buffer is None or self._bgr_buffer_size < size:
+            self._bgr_buffer = (c_ubyte * size)()
+            self._bgr_buffer_size = size
+        return self._bgr_buffer
+
+    def _try_set_grab_strategy(self, strategy: int) -> bool:
+        if self._cam is None:
+            return False
+        try:
+            return self._cam.MV_CC_SetGrabStrategy(int(strategy)) == MV_OK
+        except Exception:
+            return False
 
     def _try_set_int(self, key: str, value: int) -> bool:
         if self._cam is None:
