@@ -203,10 +203,20 @@ class ImageLoadDialog(QDialog):
             self._cam_preview.setPixmap(_frame_to_pixmap(frame, 180))
 
     def _capture_frame(self) -> None:
-        """Capture latest camera frame, apply undistortion."""
-        if self._latest_cam_frame is None:
+        """Capture a fresh camera frame, apply undistortion."""
+        frame = None
+        capture_frame = getattr(self._camera, "capture_frame", None)
+        if callable(capture_frame):
+            try:
+                frame = capture_frame(timeout_ms=1500)
+            except TypeError:
+                frame = capture_frame()
+            except Exception:
+                frame = None
+        if frame is None and self._latest_cam_frame is not None:
+            frame = self._latest_cam_frame.copy()
+        if frame is None:
             return
-        frame = self._latest_cam_frame.copy()
         # Ensure BGR
         if frame.ndim == 2:
             frame = cv2.cvtColor(frame, cv2.COLOR_GRAY2BGR)

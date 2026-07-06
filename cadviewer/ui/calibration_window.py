@@ -147,6 +147,7 @@ class _PixelSizeTab(QWidget):
         self._last_calibration_image: Optional[np.ndarray] = None
         self._last_corners: Optional[np.ndarray] = None
         self._last_board_center: Optional[np.ndarray] = None
+        self._last_calibration_undistorted: bool = False
 
         layout = QVBoxLayout(self)
 
@@ -247,35 +248,35 @@ class _PixelSizeTab(QWidget):
             self._cam_preview.setPixmap(_numpy_to_pixmap(frame, 180))
 
     def _capture_frame(self) -> None:
-        """Capture latest camera frame, apply undistortion."""
-        if self._latest_cam_frame is None:
+        """Capture a fresh full-resolution camera frame, apply undistortion."""
+        frame = None
+        capture_frame = getattr(self._win._camera, "capture_frame", None)
+        if callable(capture_frame):
+            try:
+                frame = capture_frame(timeout_ms=1500)
+            except TypeError:
+                frame = capture_frame()
+            except Exception:
+                frame = None
+        if frame is None and self._latest_cam_frame is not None:
+            frame = self._latest_cam_frame.copy()
+        if frame is None:
             self._result.setText("No frame available.")
             self._result.setStyleSheet("color: #ef5350;")
             return
-        frame = self._latest_cam_frame.copy()
         if frame.ndim == 2 or (frame.ndim == 3 and frame.shape[2] == 1):
             frame = cv2.cvtColor(frame if frame.ndim == 2 else frame[:, :, 0],
                                  cv2.COLOR_GRAY2BGR)
-        corrected = self._undistort(frame)
+        corrected, applied = self._undistort(frame)
+        self._last_calibration_undistorted = bool(applied)
         self._captured_frame = corrected
         self._preview.setPixmap(_numpy_to_pixmap(corrected, 400))
 
-    def _undistort(self, frame: np.ndarray) -> np.ndarray:
+    def _undistort(self, frame: np.ndarray) -> tuple[np.ndarray, bool]:
         """Apply lens undistortion if calibration data exists."""
         from ..registration.auto_correspondence import undistort_if_calibrated
 
-        corrected, _ = undistort_if_calibrated(frame, self._win._config)
-        return corrected
-
-    def _calibration_image_size(self) -> tuple[int, int] | None:
-        for entry in getattr(self, "_collected", []):
-            image = getattr(entry, "image", None)
-            if image is None:
-                continue
-            h, w = image.shape[:2]
-            if w > 0 and h > 0:
-                return int(w), int(h)
-        return None
+        return undistort_if_calibrated(frame, self._win._config)
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -289,6 +290,7 @@ class _PixelSizeTab(QWidget):
             self._last_calibration_image = None
             self._last_corners = None
             self._last_board_center = None
+            self._last_calibration_undistorted = False
             self._btn_pose.setEnabled(False)
             img = cv2.imread(path)
             if img is not None:
@@ -303,6 +305,7 @@ class _PixelSizeTab(QWidget):
         # Get image: either from file or from captured frame
         if self._radio_cam.isChecked() and self._captured_frame is not None:
             img = self._captured_frame
+            input_undistorted = bool(self._last_calibration_undistorted)
         else:
             path = self._path_edit.text().strip()
             if not path or not Path(path).exists():
@@ -314,6 +317,7 @@ class _PixelSizeTab(QWidget):
                 self._result.setText("Cannot read image file.")
                 self._result.setStyleSheet("color: #ef5350;")
                 return
+            input_undistorted = False
 
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
@@ -359,6 +363,7 @@ class _PixelSizeTab(QWidget):
         self._last_calibration_image = img.copy()
         self._last_corners = corners.copy()
         self._last_board_center = np.mean(pts, axis=0)
+        self._last_calibration_undistorted = input_undistorted
         self._btn_pose.setEnabled(True)
         self._win._config.pixel_size_mm = pixel_size
         self._win._config.save()
@@ -394,6 +399,18 @@ class _PixelSizeTab(QWidget):
             )
             self._result.setStyleSheet("color: #ef5350;")
             return
+        from ..registration.auto_correspondence import _scaled_camera_matrix_for_image
+
+        camera_matrix = _scaled_camera_matrix_for_image(
+            camera_matrix,
+            lc,
+            self._last_calibration_image.shape,
+        )
+        pose_dist_coeffs = (
+            np.zeros_like(dist_coeffs)
+            if self._last_calibration_undistorted
+            else dist_coeffs
+        )
 
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
@@ -406,7 +423,7 @@ class _PixelSizeTab(QWidget):
         image_points = self._last_corners.reshape(-1, 2).astype(np.float32)
 
         ok, rvec, tvec = cv2.solvePnP(
-            objp, image_points, camera_matrix, dist_coeffs,
+            objp, image_points, camera_matrix, pose_dist_coeffs,
             flags=cv2.SOLVEPNP_ITERATIVE,
         )
         if not ok:
@@ -426,7 +443,7 @@ class _PixelSizeTab(QWidget):
         cv2.drawChessboardCorners(vis, (cols, rows), self._last_corners, True)
         if self._last_board_center is not None:
             self._draw_crosshair(vis, self._last_board_center)
-        self._draw_pose_axes(vis, camera_matrix, dist_coeffs, rvec, tvec, cell_mm)
+        self._draw_pose_axes(vis, camera_matrix, pose_dist_coeffs, rvec, tvec, cell_mm)
         self._preview.setPixmap(_numpy_to_pixmap(vis, 400))
 
         center = self._last_board_center
@@ -654,7 +671,18 @@ class _LensCalTab(QWidget):
     # ── Image collection ─────────────────────────────────────────────
 
     def _capture_frame(self) -> None:
-        frame = self._preview.get_latest_frame()
+        frame = None
+        capture_frame = getattr(self._camera, "capture_frame", None)
+        if callable(capture_frame):
+            try:
+                frame = capture_frame(timeout_ms=1500)
+            except TypeError:
+                frame = capture_frame()
+            except Exception as e:
+                self._status_label.setText(f"Camera capture error: {e}")
+                frame = None
+        if frame is None:
+            frame = self._preview.get_latest_frame()
         if frame is None:
             self._status_label.setText("No frame available to capture.")
             return
