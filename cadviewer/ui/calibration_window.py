@@ -422,6 +422,10 @@ class _PixelSizeTab(QWidget):
         )
         image_points = self._last_corners.reshape(-1, 2).astype(np.float32)
 
+        ortho = self._estimate_orthographic_mount(
+            cols, rows, cell_mm, image_points,
+        )
+
         ok, rvec, tvec = cv2.solvePnP(
             objp, image_points, camera_matrix, pose_dist_coeffs,
             flags=cv2.SOLVEPNP_ITERATIVE,
@@ -454,16 +458,72 @@ class _PixelSizeTab(QWidget):
         self._result.setText(
             "Pixel size and mount pose:\n"
             f"  Pixel size: {self._computed_pixel_size:.6f} mm/px\n"
-            f"  Pitch: {pitch:+.3f} deg\n"
-            f"  Roll:  {roll:+.3f} deg\n"
-            f"  Yaw:   {yaw:+.3f} deg\n"
-            f"  Optical-axis tilt from board normal: {tilt_deg:.3f} deg\n"
-            f"  Camera-to-board translation norm: {distance_mm:.1f} mm\n"
+            f"  Grid affine tilt: {ortho['tilt_deg']:.3f} deg\n"
+            f"  Grid anisotropy: {ortho['anisotropy_pct']:.3f}%\n"
+            f"  Compressed board direction: {ortho['direction_deg']:+.3f} deg\n"
+            f"  Affine RMS residual: {ortho['rms_px']:.4f} px\n"
+            f"  solvePnP pitch: {pitch:+.3f} deg\n"
+            f"  solvePnP roll:  {roll:+.3f} deg\n"
+            f"  solvePnP yaw:   {yaw:+.3f} deg\n"
+            f"  solvePnP optical-axis tilt: {tilt_deg:.3f} deg\n"
+            f"  solvePnP translation norm: {distance_mm:.1f} mm\n"
             f"  {center_text}\n\n"
-            "Crosshair marks the detected chessboard center. Manual center arming is "
-            "not needed for pose estimation because solvePnP uses all ordered corners."
+            "Grid affine tilt is the position-stable estimate for telecentric or "
+            "near-orthographic metrology. solvePnP is shown as a perspective-lens "
+            "diagnostic and may change when the chessboard moves in the FOV."
         )
         self._result.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    @staticmethod
+    def _estimate_orthographic_mount(
+        cols: int,
+        rows: int,
+        cell_mm: float,
+        image_points: np.ndarray,
+    ) -> dict:
+        """Estimate telecentric/orthographic plane tilt from grid anisotropy."""
+        world = (
+            np.mgrid[0:cols, 0:rows]
+            .T.reshape(-1, 2)
+            .astype(np.float64)
+            * float(cell_mm)
+        )
+        image = image_points.reshape(-1, 2).astype(np.float64)
+        design = np.column_stack([world, np.ones(len(world))])
+        ax, *_ = np.linalg.lstsq(design, image[:, 0], rcond=None)
+        ay, *_ = np.linalg.lstsq(design, image[:, 1], rcond=None)
+        affine = np.array([
+            [ax[0], ax[1], ax[2]],
+            [ay[0], ay[1], ay[2]],
+        ], dtype=np.float64)
+
+        predicted = design @ np.vstack([ax, ay]).T
+        residual = image - predicted
+        rms_px = float(np.sqrt(np.mean(np.sum(residual * residual, axis=1))))
+
+        linear = affine[:, :2]
+        _, singular_values, vt = np.linalg.svd(linear)
+        s_max = float(max(singular_values))
+        s_min = float(min(singular_values))
+        ratio = s_min / max(s_max, 1e-12)
+        ratio = float(np.clip(ratio, 0.0, 1.0))
+        tilt_deg = float(np.degrees(np.arccos(ratio)))
+        anisotropy_pct = float((s_max / max(s_min, 1e-12) - 1.0) * 100.0)
+
+        compressed_idx = int(np.argmin(singular_values))
+        direction = vt[compressed_idx]
+        direction_deg = float(np.degrees(np.arctan2(direction[1], direction[0])))
+        if direction_deg > 90.0:
+            direction_deg -= 180.0
+        elif direction_deg < -90.0:
+            direction_deg += 180.0
+
+        return {
+            "tilt_deg": tilt_deg,
+            "anisotropy_pct": anisotropy_pct,
+            "direction_deg": direction_deg,
+            "rms_px": rms_px,
+        }
 
     @staticmethod
     def _rotation_to_pitch_roll_yaw(rotation: np.ndarray) -> tuple[float, float, float]:
