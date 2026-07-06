@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget, QFormLayout, QHBoxLayout, QSlider, QSpinBox, QCheckBox,
 )
 
-from .device import CameraSettings, CameraSettingRanges
+from .base import CameraSettings, CameraSettingRanges
 
 _LOG_SLIDER_MAX = 10000
 

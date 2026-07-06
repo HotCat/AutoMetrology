@@ -1,21 +1,24 @@
 """
-Camera module — optional MindVision industrial camera integration.
+Optional industrial camera integration.
 
-This module vendors the MindVision MVCAM SDK ctypes wrapper and provides
-Qt-aware camera abstraction for live preview and frame capture.
-
-If the SDK (libMVSDK.so) is not installed or import fails, HAS_CAMERA is False
-and all camera classes are None — the application works fine without a camera.
+The UI talks to a small camera API shared by the available SDK backends.  The
+Hikvision/Hikrobot MVS backend is preferred when installed; MindVision remains
+available as a fallback for existing machines.
 """
 
 from __future__ import annotations
 
-# Optional-import gate — SDK may not be installed
+from .base import CameraSettings, CameraSettingRanges
+
 try:
-    from .device import MindVisionCamera, CameraSettings, CameraSettingRanges
-    HAS_CAMERA = True
+    from .device import MindVisionCamera
 except ImportError:
-    HAS_CAMERA = False
     MindVisionCamera = None
-    CameraSettings = None
-    CameraSettingRanges = None
+
+try:
+    from .hikvision import HikvisionCamera
+except ImportError:
+    HikvisionCamera = None
+
+CameraClass = HikvisionCamera or MindVisionCamera
+HAS_CAMERA = CameraClass is not None

@@ -31,12 +31,12 @@ from .image_load_dialog import ImageLoadDialog
 
 # Optional camera import
 try:
-    from ..camera import HAS_CAMERA, MindVisionCamera, CameraSettings
+    from ..camera import HAS_CAMERA, CameraClass, CameraSettings
     from ..camera.preview_widget import CameraPreviewWidget
     from ..camera.live_window import CameraLiveWindow
 except ImportError:
     HAS_CAMERA = False
-    MindVisionCamera = None
+    CameraClass = None
     CameraSettings = None
     CameraPreviewWidget = None
     CameraLiveWindow = None
@@ -76,7 +76,7 @@ class RegistrationPanel(QWidget):
             self._pixel_size_mm = 0.01
 
         # Camera state
-        self._camera: Optional[MindVisionCamera] = None
+        self._camera = None
         self._camera_devices: list = []
         self._camera_open: bool = False
         self._live_window: Optional[CameraLiveWindow] = None
@@ -995,7 +995,7 @@ class RegistrationPanel(QWidget):
             layout.addWidget(cam_group)
 
         # Initialize camera instance
-        self._camera = MindVisionCamera()
+        self._camera = CameraClass()
         self._camera.signals.frame_ready.connect(self._camera_preview.display_frame)
         self._camera.signals.error.connect(self._on_camera_error)
 

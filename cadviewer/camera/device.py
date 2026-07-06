@@ -11,48 +11,14 @@ Wraps the mvsdk SDK behind a Qt-aware interface with:
 from __future__ import annotations
 
 import platform
-from dataclasses import dataclass
 from typing import Optional
 
 import numpy as np
 
 from .driver import mvsdk
+from .base import CameraSettingRanges, CameraSettings, CameraSignalEmitter
 
-from PySide6.QtCore import QObject, Signal, QThread
-
-
-# ── Data types ──────────────────────────────────────────────────────────
-
-@dataclass
-class CameraSettings:
-    exposure_us: int = 30000
-    gamma: int = 100
-    contrast: int = 100
-    analog_gain: int = 16
-    ae_enabled: bool = False
-    reverse_x: bool = False   # horizontal mirror (MIRROR_DIRECTION_HORIZONTAL)
-    reverse_y: bool = False   # vertical mirror (MIRROR_DIRECTION_VERTICAL)
-
-
-@dataclass
-class CameraSettingRanges:
-    exposure_min_us: int = 100
-    exposure_max_us: int = 1000000
-    exposure_step_us: int = 100
-    gamma_min: int = 1
-    gamma_max: int = 500
-    contrast_min: int = 1
-    contrast_max: int = 500
-    analog_gain_min: int = 0
-    analog_gain_max: int = 100
-
-
-# ── Signal emitter (must be QObject to emit) ────────────────────────────
-
-class CameraSignalEmitter(QObject):
-    frame_ready = Signal(np.ndarray)   # live view frame (BGR)
-    grab_done = Signal(np.ndarray)     # software-triggered frame (BGR)
-    error = Signal(str)                # error message
+from PySide6.QtCore import QThread, Signal
 
 
 # ── Live view thread (subclasses QThread for reliable cleanup) ──────────
