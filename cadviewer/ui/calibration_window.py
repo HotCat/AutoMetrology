@@ -455,10 +455,11 @@ class _PixelSizeTab(QWidget):
             f"Board center: ({center[0]:.1f}, {center[1]:.1f}) px"
             if center is not None else "Board center: unavailable"
         )
+        grid_tilt_text = self._format_grid_tilt_result(ortho)
         self._result.setText(
             "Pixel size and mount pose:\n"
             f"  Pixel size: {self._computed_pixel_size:.6f} mm/px\n"
-            f"  Grid affine tilt: {ortho['tilt_deg']:.3f} deg\n"
+            f"  Grid affine tilt: {grid_tilt_text}\n"
             f"  Grid anisotropy: {ortho['anisotropy_pct']:.3f}%\n"
             f"  Compressed board direction: {ortho['direction_deg']:+.3f} deg\n"
             f"  Affine RMS residual: {ortho['rms_px']:.4f} px\n"
@@ -469,10 +470,29 @@ class _PixelSizeTab(QWidget):
             f"  solvePnP translation norm: {distance_mm:.1f} mm\n"
             f"  {center_text}\n\n"
             "Grid affine tilt is the position-stable estimate for telecentric or "
-            "near-orthographic metrology. solvePnP is shown as a perspective-lens "
+            "near-orthographic metrology only when grid anisotropy is above the "
+            "calibration noise floor. solvePnP is shown as a perspective-lens "
             "diagnostic and may change when the chessboard moves in the FOV."
         )
         self._result.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    @staticmethod
+    def _format_grid_tilt_result(ortho: dict) -> str:
+        anisotropy_pct = float(ortho.get("anisotropy_pct", 0.0))
+        tilt_deg = float(ortho.get("tilt_deg", 0.0))
+        # Below this level, a single chessboard image cannot separate real
+        # mount tilt from residual lens distortion, board flatness, and corner
+        # localization bias. Reporting degrees here is misleading.
+        reliable_anisotropy_pct = 0.20
+        reliable_tilt_floor = float(np.degrees(np.arccos(
+            1.0 / (1.0 + reliable_anisotropy_pct / 100.0)
+        )))
+        if anisotropy_pct < reliable_anisotropy_pct:
+            return (
+                f"below reliable threshold "
+                f"(<~{reliable_tilt_floor:.2f} deg; single-image estimate suppressed)"
+            )
+        return f"{tilt_deg:.3f} deg"
 
     @staticmethod
     def _estimate_orthographic_mount(
