@@ -43,6 +43,8 @@ class CalibrationResult:
     camera_matrix: Optional[np.ndarray] = None
     dist_coeffs: Optional[np.ndarray] = None
     opencv_rms: float = 0.0
+    calibration_model: str = "standard"
+    calibration_flags: int = 0
     report: Optional[CalibrationReport] = None
     image_count: int = 0
     corner_count: int = 0
@@ -94,6 +96,8 @@ class CalibrationManager:
         rows: int,
         cell_mm: float,
         image_size: tuple[int, int] | None = None,
+        flags: int = 0,
+        model: str = "standard",
     ) -> CalibrationResult:
         """Run the full calibration pipeline.
 
@@ -106,12 +110,14 @@ class CalibrationManager:
             rows: Number of inner corners in Y.
             cell_mm: Grid cell size in mm.
             image_size: (width, height). Auto-detected if None.
+            flags: OpenCV cv2.calibrateCamera flags.
+            model: Human/config-readable calibration model key.
 
         Returns:
             CalibrationResult with all outputs.
         """
         if not HAS_CV2:
-            return CalibrationResult()
+            return CalibrationResult(calibration_model=model, calibration_flags=flags)
 
         # Step 1: Detect corners in all images
         for entry in self._images:
@@ -122,7 +128,11 @@ class CalibrationManager:
 
         good = [e for e in self._images if e.detected]
         if len(good) < 3:
-            return CalibrationResult(image_count=len(good))
+            return CalibrationResult(
+                image_count=len(good),
+                calibration_model=model,
+                calibration_flags=flags,
+            )
 
         # Step 2: OpenCV calibration
         objp = np.zeros((cols * rows, 3), np.float32)
@@ -136,13 +146,25 @@ class CalibrationManager:
             image_size = (w, h)
 
         rms, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
-            object_points, image_points, image_size, None, None,
+            object_points,
+            image_points,
+            image_size,
+            None,
+            None,
+            flags=int(flags),
+            criteria=(
+                cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER,
+                100,
+                1e-6,
+            ),
         )
 
         result = CalibrationResult(
             camera_matrix=mtx,
             dist_coeffs=dist,
             opencv_rms=rms,
+            calibration_model=model,
+            calibration_flags=int(flags),
             image_count=len(good),
             calibrated=True,
         )

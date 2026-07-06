@@ -23,7 +23,7 @@ from PySide6.QtWidgets import (
     QLabel, QLineEdit, QDoubleSpinBox, QPushButton,
     QFileDialog, QGroupBox, QTabWidget, QWidget,
     QSpinBox, QRadioButton, QButtonGroup, QListWidget,
-    QListWidgetItem, QSplitter, QAbstractItemView,
+    QListWidgetItem, QSplitter, QAbstractItemView, QComboBox,
 )
 
 from ..core.config import AppConfig
@@ -41,7 +41,7 @@ except ImportError:
 _DARK_STYLE = """
     QDialog { background-color: #1e1e1e; color: #cccccc; }
     QLabel { color: #cccccc; }
-    QLineEdit, QDoubleSpinBox, QSpinBox {
+    QLineEdit, QDoubleSpinBox, QSpinBox, QComboBox {
         background: #2d2d2d; color: #cccccc;
         border: 1px solid #3d3d3d; border-radius: 3px; padding: 4px;
     }
@@ -622,6 +622,8 @@ class _LensCalTab(QWidget):
         self._dist_coeffs: Optional[np.ndarray] = None
         self._rms_error: float = 0.0
         self._cal_result = None
+        self._calibration_model: str = "standard"
+        self._calibration_flags: int = 0
 
         layout = QVBoxLayout(self)
 
@@ -697,6 +699,21 @@ class _LensCalTab(QWidget):
 
         # ── Calibration action ───────────────────────────────────────
         cal_row = QHBoxLayout()
+        cal_row.addWidget(QLabel("Model:"))
+        self._model_combo = QComboBox()
+        for label, key, _flags in self._calibration_model_options():
+            self._model_combo.addItem(label, key)
+        existing_model = getattr(
+            parent._config.lens_calibration,
+            "calibration_model",
+            "standard",
+        )
+        for i in range(self._model_combo.count()):
+            if self._model_combo.itemData(i) == existing_model:
+                self._model_combo.setCurrentIndex(i)
+                break
+        cal_row.addWidget(self._model_combo)
+
         self._btn_run = QPushButton("Run Calibration")
         self._btn_run.setStyleSheet(
             "QPushButton { background: #264f78; color: white; font-weight: bold; }"
@@ -704,6 +721,9 @@ class _LensCalTab(QWidget):
         )
         self._btn_run.clicked.connect(self._run_calibration)
         cal_row.addWidget(self._btn_run)
+        self._btn_compare = QPushButton("Compare Models")
+        self._btn_compare.clicked.connect(self._compare_models)
+        cal_row.addWidget(self._btn_compare)
         cal_row.addStretch()
         layout.addLayout(cal_row)
 
@@ -853,6 +873,33 @@ class _LensCalTab(QWidget):
 
     # ── Calibration ──────────────────────────────────────────────────
 
+    @staticmethod
+    def _calibration_model_options() -> list[tuple[str, str, int]]:
+        rational = int(getattr(cv2, "CALIB_RATIONAL_MODEL", 0)) if HAS_CV2 else 0
+        thin_prism = int(getattr(cv2, "CALIB_THIN_PRISM_MODEL", 0)) if HAS_CV2 else 0
+        tilted = int(getattr(cv2, "CALIB_TILTED_MODEL", 0)) if HAS_CV2 else 0
+        return [
+            ("Standard", "standard", 0),
+            ("Rational", "rational", rational),
+            (
+                "Rational + Thin Prism",
+                "rational_thin_prism",
+                rational | thin_prism,
+            ),
+            (
+                "Rational + Thin Prism + Tilted",
+                "rational_thin_prism_tilted",
+                rational | thin_prism | tilted,
+            ),
+        ]
+
+    def _selected_calibration_model(self) -> tuple[str, int, str]:
+        key = str(self._model_combo.currentData() or "standard")
+        for label, option_key, flags in self._calibration_model_options():
+            if option_key == key:
+                return key, int(flags), label
+        return "standard", 0, "Standard"
+
     def _run_calibration(self) -> None:
         if not HAS_CV2:
             self._status_label.setText("Error: OpenCV not available.")
@@ -874,12 +921,19 @@ class _LensCalTab(QWidget):
         self._status_label.setStyleSheet("color: #ccc;")
 
         from ..calibration.calibration_manager import CalibrationManager
+        model, flags, model_label = self._selected_calibration_model()
 
         mgr = CalibrationManager()
         for entry in self._collected:
             mgr.add_image(entry.image, entry.source)
 
-        result = mgr.run_calibration(cols, rows, cell_mm)
+        result = mgr.run_calibration(
+            cols,
+            rows,
+            cell_mm,
+            flags=flags,
+            model=model,
+        )
 
         if not result.calibrated:
             self._status_label.setText("Calibration failed.")
@@ -890,6 +944,8 @@ class _LensCalTab(QWidget):
         self._dist_coeffs = result.dist_coeffs
         self._rms_error = result.opencv_rms
         self._cal_result = result
+        self._calibration_model = result.calibration_model
+        self._calibration_flags = result.calibration_flags
 
         # Display results
         mtx = result.camera_matrix
@@ -898,6 +954,8 @@ class _LensCalTab(QWidget):
         cx, cy = mtx[0, 2], mtx[1, 2]
         lines = [
             f"Reprojection error (RMS): {result.opencv_rms:.4f} px",
+            f"Model: {model_label}",
+            f"OpenCV flags: {result.calibration_flags}",
             f"Images used: {result.image_count}",
             f"Corners: {result.corner_count}",
             "",
@@ -905,9 +963,12 @@ class _LensCalTab(QWidget):
             f"  fx = {fx:.2f}   fy = {fy:.2f}",
             f"  cx = {cx:.2f}   cy = {cy:.2f}",
             "",
-            f"Distortion ({len(dist)} coefficients):",
+            f"Distortion ({dist.size} coefficients):",
         ]
-        labels = ["k1", "k2", "p1", "p2", "k3", "k4", "k5", "k6"]
+        labels = [
+            "k1", "k2", "p1", "p2", "k3", "k4", "k5", "k6",
+            "s1", "s2", "s3", "s4", "tauX", "tauY",
+        ]
         for i, v in enumerate(dist.flatten()):
             label = labels[i] if i < len(labels) else f"d{i}"
             lines.append(f"  {label} = {v:.6f}")
@@ -918,8 +979,61 @@ class _LensCalTab(QWidget):
         self._result_text.setText("\n".join(lines))
         self._btn_save.setEnabled(True)
         self._status_label.setText(
-            f"Calibration complete — RMS: {result.opencv_rms:.4f} px ({result.image_count} images)"
+            f"Calibration complete — {model_label}, RMS: {result.opencv_rms:.4f} px "
+            f"({result.image_count} images)"
         )
+        self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    def _compare_models(self) -> None:
+        if not HAS_CV2:
+            self._status_label.setText("Error: OpenCV not available.")
+            return
+
+        good = [e for e in self._collected if e.detected]
+        if len(good) < 3:
+            self._status_label.setText(
+                f"Need at least 3 images with detected corners (have {len(good)})."
+            )
+            self._status_label.setStyleSheet("color: #ef5350;")
+            return
+
+        cols = self._win._cb_col.value()
+        rows = self._win._cb_row.value()
+        cell_mm = self._win._cb_cell.value()
+
+        from ..calibration.calibration_manager import CalibrationManager
+
+        lines = [
+            "Model comparison on current images:",
+            "  Lower RMS is useful, but reject models that need poor FOV coverage "
+            "or produce worse validation on measurement-area captures.",
+            "",
+        ]
+        for label, key, flags in self._calibration_model_options():
+            mgr = CalibrationManager()
+            for entry in self._collected:
+                mgr.add_image(entry.image, entry.source)
+            try:
+                result = mgr.run_calibration(
+                    cols,
+                    rows,
+                    cell_mm,
+                    flags=flags,
+                    model=key,
+                )
+            except Exception as exc:
+                lines.append(f"{label}: failed ({exc})")
+                continue
+            if not result.calibrated or result.dist_coeffs is None:
+                lines.append(f"{label}: failed")
+                continue
+            coeff_count = int(result.dist_coeffs.size)
+            lines.append(
+                f"{label}: RMS {result.opencv_rms:.4f} px, "
+                f"{coeff_count} coeffs, flags {int(flags)}"
+            )
+        self._result_text.setText("\n".join(lines))
+        self._status_label.setText("Model comparison complete.")
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
 
     def _save_to_config(self) -> None:
@@ -938,6 +1052,8 @@ class _LensCalTab(QWidget):
             self._camera_matrix, self._dist_coeffs,
             self._rms_error, good,
             image_size=self._calibration_image_size(),
+            calibration_model=self._calibration_model,
+            calibration_flags=self._calibration_flags,
         )
 
         # Build and save coordinate correction model from detected corners
@@ -1119,7 +1235,7 @@ class CalibrationWindow(QDialog):
             lc = self._config.lens_calibration
             self._lens_tab._status_label.setText(
                 f"Previously calibrated: RMS={lc.reprojection_error:.4f} px "
-                f"({lc.image_count} images)"
+                f"({lc.image_count} images, {lc.calibration_model})"
             )
             self._lens_tab._status_label.setStyleSheet("color: #66bb6a;")
 

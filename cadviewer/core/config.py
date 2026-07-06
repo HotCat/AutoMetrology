@@ -60,6 +60,8 @@ class LensCalibrationConfig:
     camera_matrix: list = field(default_factory=list)
     dist_coeffs: list = field(default_factory=list)
     reprojection_error: float = 0.0
+    calibration_model: str = "standard"
+    calibration_flags: int = 0
     calibrated: bool = False
     image_count: int = 0
     image_size: list = field(default_factory=list)
@@ -97,7 +99,9 @@ class LensCalibrationConfig:
 
     def set_from_results(self, camera_matrix, dist_coeffs, rms_error: float,
                          image_count: int,
-                         image_size: tuple[int, int] | None = None) -> None:
+                         image_size: tuple[int, int] | None = None,
+                         calibration_model: str = "standard",
+                         calibration_flags: int = 0) -> None:
         if HAS_NUMPY:
             self.camera_matrix = camera_matrix.flatten().tolist()
             self.dist_coeffs = dist_coeffs.flatten().tolist()
@@ -105,6 +109,8 @@ class LensCalibrationConfig:
             self.camera_matrix = list(camera_matrix.flatten())
             self.dist_coeffs = list(dist_coeffs.flatten())
         self.reprojection_error = rms_error
+        self.calibration_model = str(calibration_model or "standard")
+        self.calibration_flags = int(calibration_flags or 0)
         self.image_count = image_count
         self.image_size = list(image_size) if image_size is not None else []
         self.calibrated = True
