@@ -262,14 +262,20 @@ class _PixelSizeTab(QWidget):
 
     def _undistort(self, frame: np.ndarray) -> np.ndarray:
         """Apply lens undistortion if calibration data exists."""
-        lc = self._win._config.lens_calibration
-        if not lc.calibrated:
-            return frame
-        mtx = lc.get_camera_matrix()
-        dist = lc.get_dist_coeffs()
-        if mtx is None or dist is None:
-            return frame
-        return cv2.undistort(frame, mtx, dist)
+        from ..registration.auto_correspondence import undistort_if_calibrated
+
+        corrected, _ = undistort_if_calibrated(frame, self._win._config)
+        return corrected
+
+    def _calibration_image_size(self) -> tuple[int, int] | None:
+        for entry in getattr(self, "_collected", []):
+            image = getattr(entry, "image", None)
+            if image is None:
+                continue
+            h, w = image.shape[:2]
+            if w > 0 and h > 0:
+                return int(w), int(h)
+        return None
 
     def _browse(self) -> None:
         path, _ = QFileDialog.getOpenFileName(
@@ -823,6 +829,7 @@ class _LensCalTab(QWidget):
         cfg.lens_calibration.set_from_results(
             self._camera_matrix, self._dist_coeffs,
             self._rms_error, good,
+            image_size=self._calibration_image_size(),
         )
 
         # Build and save coordinate correction model from detected corners
@@ -888,6 +895,16 @@ class _LensCalTab(QWidget):
         cfg.save()
         self._status_label.setText("Calibration saved to configuration.")
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
+
+    def _calibration_image_size(self) -> tuple[int, int] | None:
+        for entry in getattr(self, "_collected", []):
+            image = getattr(entry, "image", None)
+            if image is None:
+                continue
+            h, w = image.shape[:2]
+            if w > 0 and h > 0:
+                return int(w), int(h)
+        return None
 
 
     def _undistorted_corner_sets(

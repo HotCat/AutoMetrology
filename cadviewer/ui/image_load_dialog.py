@@ -28,19 +28,12 @@ try:
 except ImportError:
     HAS_CV2 = False
 
+from ..registration.auto_correspondence import undistort_if_calibrated
+
 
 def _undistort(frame: np.ndarray, config) -> tuple[np.ndarray, bool]:
     """Apply lens undistortion if calibration data is available."""
-    if not HAS_CV2 or config is None:
-        return frame, False
-    lc = config.lens_calibration
-    if not lc.calibrated:
-        return frame, False
-    mtx = lc.get_camera_matrix()
-    dist = lc.get_dist_coeffs()
-    if mtx is None or dist is None:
-        return frame, False
-    return cv2.undistort(frame, mtx, dist), True
+    return undistort_if_calibrated(frame, config)
 
 
 def _frame_to_pixmap(frame: np.ndarray, max_h: int = 200) -> QPixmap:

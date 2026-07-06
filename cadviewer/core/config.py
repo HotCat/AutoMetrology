@@ -62,6 +62,7 @@ class LensCalibrationConfig:
     reprojection_error: float = 0.0
     calibrated: bool = False
     image_count: int = 0
+    image_size: list = field(default_factory=list)
     coordinate_correction: dict = field(default_factory=dict)
     correction_model_type: str = "none"  # "none", "affine", "homography"
     residual_map: dict = field(default_factory=dict)
@@ -76,8 +77,27 @@ class LensCalibrationConfig:
             return np.array(self.dist_coeffs, dtype=np.float64)
         return None
 
+    def get_image_size(self) -> tuple[int, int] | None:
+        """Return calibration image size as (width, height), if known."""
+        candidates = [self.image_size]
+        if isinstance(self.residual_map, dict):
+            candidates.append(self.residual_map.get("image_size"))
+        if isinstance(self.coordinate_correction, dict):
+            metadata = self.coordinate_correction.get("metadata", {})
+            if isinstance(metadata, dict):
+                candidates.append(metadata.get("image_size"))
+
+        for candidate in candidates:
+            if not candidate or len(candidate) < 2:
+                continue
+            width, height = int(candidate[0]), int(candidate[1])
+            if width > 0 and height > 0:
+                return width, height
+        return None
+
     def set_from_results(self, camera_matrix, dist_coeffs, rms_error: float,
-                         image_count: int) -> None:
+                         image_count: int,
+                         image_size: tuple[int, int] | None = None) -> None:
         if HAS_NUMPY:
             self.camera_matrix = camera_matrix.flatten().tolist()
             self.dist_coeffs = dist_coeffs.flatten().tolist()
@@ -86,6 +106,7 @@ class LensCalibrationConfig:
             self.dist_coeffs = list(dist_coeffs.flatten())
         self.reprojection_error = rms_error
         self.image_count = image_count
+        self.image_size = list(image_size) if image_size is not None else []
         self.calibrated = True
 
 

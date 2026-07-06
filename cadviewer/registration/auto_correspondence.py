@@ -59,7 +59,36 @@ def undistort_if_calibrated(image: np.ndarray, config) -> tuple[np.ndarray, bool
     dist = lc.get_dist_coeffs()
     if mtx is None or dist is None:
         return image, False
-    return cv2.undistort(image, mtx, dist), True
+    mtx = _scaled_camera_matrix_for_image(mtx, lc, image.shape)
+    return cv2.undistort(image, mtx, dist, None, mtx), True
+
+
+def _scaled_camera_matrix_for_image(
+    camera_matrix: np.ndarray,
+    lens_calibration,
+    image_shape: tuple[int, ...],
+) -> np.ndarray:
+    """Scale intrinsics when calibration and capture resolutions differ."""
+    get_image_size = getattr(lens_calibration, "get_image_size", None)
+    calib_size = get_image_size() if callable(get_image_size) else None
+    if not calib_size:
+        return camera_matrix
+
+    image_h, image_w = image_shape[:2]
+    calib_w, calib_h = calib_size
+    if image_w <= 0 or image_h <= 0 or calib_w <= 0 or calib_h <= 0:
+        return camera_matrix
+    if image_w == calib_w and image_h == calib_h:
+        return camera_matrix
+
+    sx = float(image_w) / float(calib_w)
+    sy = float(image_h) / float(calib_h)
+    scaled = camera_matrix.copy()
+    scaled[0, 0] *= sx
+    scaled[0, 2] *= sx
+    scaled[1, 1] *= sy
+    scaled[1, 2] *= sy
+    return scaled
 
 
 def detect_circle_in_roi(
