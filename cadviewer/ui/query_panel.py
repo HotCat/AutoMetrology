@@ -35,6 +35,7 @@ class QueryPanel(QWidget):
     result_selected = Signal(object)  # QueryResult | None
     pair_pick_requested = Signal(str)  # "lines" or "circles"
     pair_pick_cancelled = Signal()
+    selected_line_band_requested = Signal(str)  # band mode
     production_run_requested = Signal()
     production_log_requested = Signal()
     live_query_view_requested = Signal()
@@ -201,6 +202,58 @@ class QueryPanel(QWidget):
         pick_layout.addWidget(self._pair_pick_status, stretch=1)
         layout.addLayout(pick_layout)
 
+        override_layout = QHBoxLayout()
+        override_layout.setSpacing(4)
+        self._line_band_table = QTableWidget(0, 2)
+        self._line_band_table.setHorizontalHeaderLabels(["Line ID", "Band"])
+        self._line_band_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.Stretch)
+        self._line_band_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeToContents)
+        self._line_band_table.verticalHeader().setDefaultSectionSize(22)
+        self._line_band_table.setMaximumHeight(92)
+        self._line_band_table.setToolTip(
+            "Optional per-line band overrides. Line ID may be a full ID, "
+            "DXF handle, or unique prefix."
+        )
+        self._line_band_table.setStyleSheet("""
+            QTableWidget {
+                background-color: #1a1a1a; color: #cccccc;
+                border: 1px solid #333; font-size: 11px; gridline-color: #333;
+            }
+            QHeaderView::section {
+                background-color: #2d2d2d; color: #aaa;
+                border: 1px solid #333; padding: 3px;
+            }
+        """)
+        override_layout.addWidget(self._line_band_table, stretch=1)
+
+        override_btns = QVBoxLayout()
+        override_btns.setSpacing(3)
+        self._btn_line_band_selected = QPushButton("Use Selected Line")
+        self._btn_line_band_selected.setToolTip(
+            "Add or update the currently selected CAD line using the selected row band."
+        )
+        self._btn_line_band_selected.clicked.connect(self._request_selected_line_band)
+        self._btn_line_band_add = QPushButton("Add Row")
+        self._btn_line_band_add.clicked.connect(lambda: self.add_line_band_override("", "positive"))
+        self._btn_line_band_remove = QPushButton("Remove")
+        self._btn_line_band_remove.clicked.connect(self._remove_line_band_override)
+        for btn in [
+            self._btn_line_band_selected,
+            self._btn_line_band_add,
+            self._btn_line_band_remove,
+        ]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 3px 8px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #444; }
+            """)
+            override_btns.addWidget(btn)
+        override_btns.addStretch()
+        override_layout.addLayout(override_btns)
+        layout.addLayout(override_layout)
+
         # Results table
         self._table = QTableWidget(0, 6)
         self._table.setAlternatingRowColors(True)
@@ -256,7 +309,9 @@ class QueryPanel(QWidget):
             self._btn_pick_arc, self._btn_cancel_pick, self._pair_pick_status,
             self._tol_percent_label, self._tol_percent,
             self._force_nearest_line_bias, self._line_fit_side_label,
-            self._line_fit_side, self._table, self._summary,
+            self._line_fit_side, self._line_band_table,
+            self._btn_line_band_selected, self._btn_line_band_add,
+            self._btn_line_band_remove, self._table, self._summary,
         ]
 
     def set_production_log_viewer(self, viewer: QWidget) -> None:
@@ -300,6 +355,54 @@ class QueryPanel(QWidget):
 
     def line_fit_side_mode(self) -> str:
         return str(self._line_fit_side.currentData() or "auto")
+
+    def line_fit_side_overrides(self) -> dict[str, str]:
+        overrides: dict[str, str] = {}
+        for row in range(self._line_band_table.rowCount()):
+            item = self._line_band_table.item(row, 0)
+            key = item.text().strip() if item is not None else ""
+            combo = self._line_band_table.cellWidget(row, 1)
+            mode = (
+                str(combo.currentData() or "auto")
+                if isinstance(combo, QComboBox)
+                else "auto"
+            )
+            if key and mode in ("positive", "negative"):
+                overrides[key] = mode
+        return overrides
+
+    def add_line_band_override(self, line_id: str, band: str = "positive") -> None:
+        line_id = str(line_id or "").strip()
+        for row in range(self._line_band_table.rowCount()):
+            item = self._line_band_table.item(row, 0)
+            if item is not None and line_id and item.text().strip() == line_id:
+                self._set_line_band_combo(row, band)
+                self._line_band_table.selectRow(row)
+                return
+        row = self._line_band_table.rowCount()
+        self._line_band_table.insertRow(row)
+        self._line_band_table.setItem(row, 0, QTableWidgetItem(line_id))
+        self._line_band_table.setCellWidget(row, 1, self._make_line_band_combo(band))
+        self._line_band_table.selectRow(row)
+
+    def _make_line_band_combo(self, band: str) -> QComboBox:
+        combo = QComboBox()
+        combo.addItem("+N band", "positive")
+        combo.addItem("-N band", "negative")
+        combo.setStyleSheet("""
+            QComboBox {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 2px; border-radius: 3px; font-size: 10px;
+            }
+        """)
+        if str(band).lower() == "negative":
+            combo.setCurrentIndex(1)
+        return combo
+
+    def _set_line_band_combo(self, row: int, band: str) -> None:
+        combo = self._line_band_table.cellWidget(row, 1)
+        if isinstance(combo, QComboBox):
+            combo.setCurrentIndex(1 if str(band).lower() == "negative" else 0)
 
     def results(self) -> List[QueryResult]:
         return list(self._results)
@@ -364,6 +467,25 @@ class QueryPanel(QWidget):
 
     def set_pair_pick_message(self, message: str) -> None:
         self._pair_pick_status.setText(message)
+
+    def _request_selected_line_band(self) -> None:
+        row = self._line_band_table.currentRow()
+        band = "positive"
+        if row >= 0:
+            combo = self._line_band_table.cellWidget(row, 1)
+            if isinstance(combo, QComboBox):
+                band = str(combo.currentData() or "positive")
+        self.selected_line_band_requested.emit(band)
+
+    def _remove_line_band_override(self) -> None:
+        rows = sorted(
+            {index.row() for index in self._line_band_table.selectedIndexes()},
+            reverse=True,
+        )
+        if not rows and self._line_band_table.currentRow() >= 0:
+            rows = [self._line_band_table.currentRow()]
+        for row in rows:
+            self._line_band_table.removeRow(row)
 
     def set_results(self, results: List[QueryResult]) -> None:
         self._results = results

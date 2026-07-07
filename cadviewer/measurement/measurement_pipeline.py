@@ -79,6 +79,7 @@ class MeasurementPipeline:
         pixel_to_world_transform: Optional[np.ndarray] = None,
         line_pair_bias_mode: str = "center",
         line_fit_side_mode: str = "auto",
+        line_fit_side_overrides: Optional[dict[str, str]] = None,
     ) -> None:
         """
         Args:
@@ -96,6 +97,8 @@ class MeasurementPipeline:
             line_fit_side_mode: printed-line band selection. "auto" preserves
                 CAD/pair-guided behavior; "positive" or "negative" explicitly
                 selects the +normal or -normal grayscale band of each line.
+            line_fit_side_overrides: optional per-line band overrides keyed by
+                full CAD feature ID, DXF handle, or unique feature ID prefix.
         """
         self._repo = repo
         self._image = image
@@ -108,6 +111,9 @@ class MeasurementPipeline:
         side_mode = str(line_fit_side_mode or "auto").lower()
         self._line_fit_side_mode = (
             side_mode if side_mode in ("auto", "positive", "negative") else "auto"
+        )
+        self._line_fit_side_overrides = self._normalize_line_fit_side_overrides(
+            line_fit_side_overrides,
         )
         self._pixel_to_world_transform = None
         if pixel_to_world_transform is not None:
@@ -223,10 +229,13 @@ class MeasurementPipeline:
             return None, None
         if feat1.feature_type != FeatureType.LINE or feat2.feature_type != FeatureType.LINE:
             return self.measure_feature(cad_feature_id_1), self.measure_feature(cad_feature_id_2)
-        if self._line_fit_side_mode != "auto":
+        if (
+            self._line_fit_side_for_feature(feat1) != "auto"
+            or self._line_fit_side_for_feature(feat2) != "auto"
+        ):
             return (
-                self._measure_line(feat1, cache=False),
-                self._measure_line(feat2, cache=False),
+                self._measure_line(feat1, paired_geometry=feat2.geometry, cache=False),
+                self._measure_line(feat2, paired_geometry=feat1.geometry, cache=False),
             )
         debiased = self._measure_line_pair_debiased(feat1, feat2)
         if debiased is not None:
@@ -1478,7 +1487,7 @@ class MeasurementPipeline:
         max_scan_width = None
         prefer_extreme_side = False
         lock_line_direction = False
-        explicit_side_sign = self._line_fit_preferred_side_sign()
+        explicit_side_sign = self._line_fit_preferred_side_sign(feat)
         if paired_geometry is not None and explicit_side_sign is None:
             paired_roi = self._roi_predictor.predict_line_roi(paired_geometry, padding=50)
             if paired_roi is not None:
@@ -1612,15 +1621,49 @@ class MeasurementPipeline:
             "residual": result.residual,
             "confidence": result.confidence,
             "pair_side_fit": paired_geometry is not None,
-            "line_fit_side_mode": getattr(self, "_line_fit_side_mode", "auto"),
+            "line_fit_side_mode": self._line_fit_side_for_feature(feat),
         }
 
         return mf
 
-    def _line_fit_preferred_side_sign(self) -> Optional[int]:
-        if self._line_fit_side_mode == "positive":
+    @staticmethod
+    def _normalize_line_fit_side_overrides(
+        overrides: Optional[dict[str, str]],
+    ) -> dict[str, str]:
+        normalized: dict[str, str] = {}
+        if not isinstance(overrides, dict):
+            return normalized
+        for key, mode in overrides.items():
+            key_text = str(key or "").strip().lower()
+            mode_text = str(mode or "").strip().lower()
+            if key_text and mode_text in ("positive", "negative"):
+                normalized[key_text] = mode_text
+        return normalized
+
+    def _line_fit_side_for_feature(self, feat: CADFeature) -> str:
+        overrides = getattr(self, "_line_fit_side_overrides", {})
+        feature_id = str(getattr(feat, "feature_id", "") or "")
+        handle = str(getattr(feat, "dxf_handle", "") or "")
+        feature_id_l = feature_id.lower()
+        handle_l = handle.lower()
+        for key, mode in overrides.items():
+            if (
+                key == feature_id_l
+                or (handle_l and key == handle_l)
+                or (key and feature_id_l.startswith(key))
+            ):
+                return mode
+        return getattr(self, "_line_fit_side_mode", "auto")
+
+    def _line_fit_preferred_side_sign(self, feat: CADFeature | None = None) -> Optional[int]:
+        mode = (
+            self._line_fit_side_for_feature(feat)
+            if feat is not None
+            else getattr(self, "_line_fit_side_mode", "auto")
+        )
+        if mode == "positive":
             return 1
-        if self._line_fit_side_mode == "negative":
+        if mode == "negative":
             return -1
         return None
 
@@ -1852,7 +1895,7 @@ class MeasurementPipeline:
             "residual": mf.residual_error,
             "confidence": mf.confidence,
             "pair_side_fit": pair_side_fit,
-            "line_fit_side_mode": getattr(self, "_line_fit_side_mode", "auto"),
+            "line_fit_side_mode": self._line_fit_side_for_feature(feat),
         }
 
     @staticmethod

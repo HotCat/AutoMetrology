@@ -5,6 +5,7 @@ import unittest
 import numpy as np
 
 from cadviewer.models.feature import FeatureType
+from cadviewer.models.feature import CADFeature
 from cadviewer.models.measured_feature import MeasuredFeature
 from cadviewer.models.repository import FeatureRepository
 from cadviewer.measurement.line_fitter import LineFittingEngine
@@ -113,6 +114,40 @@ class MeasurementPipelineTest(unittest.TestCase):
 
         self.assertEqual(positive._line_fit_preferred_side_sign(), 1)
         self.assertEqual(negative._line_fit_preferred_side_sign(), -1)
+
+    def test_line_fit_side_overrides_match_id_handle_and_prefix(self) -> None:
+        feature = CADFeature(
+            feature_id="abcdef12-3456-7890-abcd-ef1234567890",
+            feature_type=FeatureType.LINE,
+            geometry={"x1": 0.0, "y1": 0.0, "x2": 10.0, "y2": 0.0},
+            dxf_handle="AB8E:3",
+        )
+
+        by_id = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="auto",
+            line_fit_side_overrides={feature.feature_id: "negative"},
+        )
+        by_handle = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="auto",
+            line_fit_side_overrides={"AB8E:3": "positive"},
+        )
+        by_prefix = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="auto",
+            line_fit_side_overrides={"abcdef12": "negative"},
+        )
+
+        self.assertEqual(by_id._line_fit_side_for_feature(feature), "negative")
+        self.assertEqual(by_handle._line_fit_side_for_feature(feature), "positive")
+        self.assertEqual(by_prefix._line_fit_side_for_feature(feature), "negative")
 
     def test_line_fitter_explicit_side_selects_requested_band(self) -> None:
         gradient = np.zeros((80, 120), dtype=np.float64)

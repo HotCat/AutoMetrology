@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self._last_measurement_affine = None
         self._query_pair_pick_mode: Optional[str] = None
         self._query_pair_pick_ids: list[str] = []
+        self._last_selected_feature_id: Optional[str] = None
 
         # Build UI
         self._setup_ui()
@@ -300,6 +301,9 @@ class MainWindow(QMainWindow):
             self._production_log_viewer.result_selected.connect(self._on_query_result_selected)
         self._query_panel.pair_pick_requested.connect(self._on_query_pair_pick_requested)
         self._query_panel.pair_pick_cancelled.connect(self._on_query_pair_pick_cancelled)
+        self._query_panel.selected_line_band_requested.connect(
+            self._on_selected_line_band_requested
+        )
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -392,6 +396,7 @@ class MainWindow(QMainWindow):
         """Handle feature selection from tree."""
         feature = self._repo.get(feature_id)
         if feature:
+            self._last_selected_feature_id = feature_id
             if self._query_pair_pick_mode is not None:
                 self._handle_query_pair_feature(feature_id)
                 return
@@ -400,6 +405,7 @@ class MainWindow(QMainWindow):
     @Slot()
     def _on_feature_deselected(self) -> None:
         """Handle feature deselection."""
+        self._last_selected_feature_id = None
         self._property_panel.clear()
         self._status_label.setText(tr("Ready"))
 
@@ -407,6 +413,7 @@ class MainWindow(QMainWindow):
     def _on_viewer_click(self, feature_id: str) -> None:
         """Handle feature click in viewer — sync with tree."""
         self._tree_panel.select_feature(feature_id)
+        self._last_selected_feature_id = feature_id
         bus.property_update.emit({"feature_id": feature_id})
         if self._query_pair_pick_mode is not None:
             self._handle_query_pair_feature(feature_id)
@@ -456,6 +463,9 @@ class MainWindow(QMainWindow):
                             else "center"
                         ),
                         line_fit_side_mode=self._query_panel.line_fit_side_mode(),
+                        line_fit_side_overrides=(
+                            self._query_panel.line_fit_side_overrides()
+                        ),
                     )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
@@ -625,6 +635,7 @@ class MainWindow(QMainWindow):
                     else "center"
                 ),
                 line_fit_side_mode=self._query_panel.line_fit_side_mode(),
+                line_fit_side_overrides=self._query_panel.line_fit_side_overrides(),
             )
             query_text = "\n".join(
                 r.instruction.raw_text for r in results if r.instruction is not None
@@ -659,6 +670,23 @@ class MainWindow(QMainWindow):
     def _on_query_pair_pick_cancelled(self) -> None:
         self._cancel_query_pair_pick(update_panel=False)
         self._status_label.setText(tr("Measurement query pair selection cancelled"))
+
+    @Slot(str)
+    def _on_selected_line_band_requested(self, band: str) -> None:
+        feature_id = self._last_selected_feature_id
+        feature = self._repo.get(feature_id) if feature_id else None
+        if feature is None:
+            self._query_panel.set_pair_pick_message("Select a CAD line first")
+            self._status_label.setText("Select a CAD line first")
+            return
+        from ..models.feature import FeatureType
+        if feature.feature_type != FeatureType.LINE:
+            self._query_panel.set_pair_pick_message("Selected feature is not a line")
+            self._status_label.setText("Selected feature is not a line")
+            return
+        token = self._query_token_for_feature(feature)
+        self._query_panel.add_line_band_override(token, band)
+        self._status_label.setText(f"Line band override added: {token}")
 
     def _cancel_query_pair_pick(self, update_panel: bool = True) -> None:
         self._query_pair_pick_mode = None
