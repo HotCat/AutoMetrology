@@ -36,6 +36,7 @@ class QueryPanel(QWidget):
     pair_pick_requested = Signal(str)  # "lines" or "circles"
     pair_pick_cancelled = Signal()
     selected_line_band_requested = Signal(str)  # band mode
+    line_band_row_selected = Signal(str)  # line id/handle/prefix from table
     production_run_requested = Signal()
     production_log_requested = Signal()
     live_query_view_requested = Signal()
@@ -213,6 +214,11 @@ class QueryPanel(QWidget):
         self._line_band_table.setToolTip(
             "Optional per-line band overrides. Line ID may be a full ID, "
             "DXF handle, or unique prefix."
+        )
+        self._line_band_table.setSelectionBehavior(QAbstractItemView.SelectRows)
+        self._line_band_table.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._line_band_table.itemSelectionChanged.connect(
+            self._on_line_band_selection_changed
         )
         self._line_band_table.setStyleSheet("""
             QTableWidget {
@@ -486,6 +492,15 @@ class QueryPanel(QWidget):
             rows = [self._line_band_table.currentRow()]
         for row in rows:
             self._line_band_table.removeRow(row)
+
+    def _on_line_band_selection_changed(self) -> None:
+        row = self._line_band_table.currentRow()
+        if row < 0:
+            return
+        item = self._line_band_table.item(row, 0)
+        line_id = item.text().strip() if item is not None else ""
+        if line_id:
+            self.line_band_row_selected.emit(line_id)
 
     def set_results(self, results: List[QueryResult]) -> None:
         self._results = results

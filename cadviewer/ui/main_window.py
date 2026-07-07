@@ -304,6 +304,9 @@ class MainWindow(QMainWindow):
         self._query_panel.selected_line_band_requested.connect(
             self._on_selected_line_band_requested
         )
+        self._query_panel.line_band_row_selected.connect(
+            self._on_line_band_row_selected
+        )
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -687,6 +690,23 @@ class MainWindow(QMainWindow):
         token = self._query_token_for_feature(feature)
         self._query_panel.add_line_band_override(token, band)
         self._status_label.setText(f"Line band override added: {token}")
+
+    @Slot(str)
+    def _on_line_band_row_selected(self, raw_id: str) -> None:
+        feature_id = self._resolve_query_feature_id(raw_id)
+        feature = self._repo.get(feature_id) if feature_id else None
+        if feature is None:
+            self._status_label.setText(f"Line band override unresolved: {raw_id}")
+            return
+        if feature.feature_type != FeatureType.LINE:
+            self._status_label.setText(f"Line band override is not a line: {raw_id}")
+            return
+        self._last_selected_feature_id = feature_id
+        self._tree_panel.select_feature(feature_id)
+        self._viewer.set_highlighted_features([feature_id])
+        bus.view_fit_feature.emit(feature_id)
+        bus.property_update.emit({"feature_id": feature_id})
+        self._status_label.setText(f"Selected line band override: {feature.display_name}")
 
     def _cancel_query_pair_pick(self, update_panel: bool = True) -> None:
         self._query_pair_pick_mode = None
