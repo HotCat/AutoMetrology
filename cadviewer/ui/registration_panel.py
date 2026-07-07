@@ -1827,13 +1827,17 @@ class RegistrationPanel(QWidget):
                 pixel_size_mm=self._pixel_size_mm,
                 detection_mode=self._window_detection_mode,
             )
-            transform = result.transform
+            display_transform = result.transform
+            measurement_transform = result.affine
             affine = result.affine
             params = affine_solver.extract_params(affine)
             image_path = self._canvas.get_image_layer().path
 
-            self._last_measurement_pixel_to_world = transform
-            self._last_display_pixel_to_world = transform
+            # A projective homography can make the visual window overlay hug
+            # slightly nonparallel thresholded sides, but it is not the physical
+            # model for telecentric metrology. Measurements use the affine fit.
+            self._last_measurement_pixel_to_world = measurement_transform
+            self._last_display_pixel_to_world = display_transform
             self._last_auto_registration = {
                 "source": result.method,
                 "line_handles": dict(result.line_handles),
@@ -1865,10 +1869,10 @@ class RegistrationPanel(QWidget):
                     "scale": float(params["scale_x"]),
                     "scale_y": float(params["scale_y"]),
                 },
-                "measurement_pixel_to_world": transform.tolist(),
-                "display_pixel_to_world": transform.tolist(),
+                "measurement_pixel_to_world": measurement_transform.tolist(),
+                "display_pixel_to_world": display_transform.tolist(),
                 "display_transform_model": result.transform_model,
-                "measurement_transform_model": result.transform_model,
+                "measurement_transform_model": "edge_affine",
                 "calibration_applied": bool(self._image_calibration_applied),
                 "created": datetime.now().isoformat(),
                 "image_path": image_path,
@@ -1877,12 +1881,12 @@ class RegistrationPanel(QWidget):
             self._save_selected_production_profile(silent=True)
             profile_name = self._current_profile_name()
 
-            self._canvas.get_image_layer().set_affine_transform(transform)
-            self._coarse_transform = transform
+            self._canvas.get_image_layer().set_affine_transform(display_transform)
+            self._coarse_transform = display_transform
             self._canvas.update()
             self._btn_run_fine.setEnabled(True)
             bus.registration_completed.emit({
-                "transform": transform,
+                "transform": display_transform,
                 "stage": result.method,
                 "error": 0.0,
             })
@@ -1891,7 +1895,8 @@ class RegistrationPanel(QWidget):
                 "Window registered: "
                 f"L={sides['left']:.1f}, R={sides['right']:.1f}, "
                 f"T={sides['top']:.1f}, B={sides['bottom']:.1f}; "
-                f"conf={result.confidence:.2f}, model={result.transform_model}, "
+                f"conf={result.confidence:.2f}, display={result.transform_model}, "
+                "measurement=edge_affine, "
                 f"profile={profile_name}"
             )
             return True
