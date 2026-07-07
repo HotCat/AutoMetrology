@@ -27,6 +27,10 @@ from PySide6.QtWidgets import (
 )
 
 from ..core.config import AppConfig
+from ..calibration.chessboard_detection import (
+    detect_chessboard_corners,
+    to_gray_uint8,
+)
 from ..camera.preview_widget import CameraPreviewWidget
 
 try:
@@ -78,11 +82,7 @@ _DARK_STYLE = """
 
 
 def _to_gray_image(arr: np.ndarray) -> np.ndarray:
-    if arr.ndim == 2:
-        return arr
-    if arr.ndim == 3 and arr.shape[2] == 1:
-        return arr[:, :, 0]
-    return cv2.cvtColor(arr, cv2.COLOR_BGR2GRAY)
+    return to_gray_uint8(arr)
 
 def _numpy_to_pixmap(arr: np.ndarray, max_size: int = 400) -> QPixmap:
     """Convert numpy array (BGR or grayscale) to QPixmap, scaled to fit max_size."""
@@ -323,16 +323,8 @@ class _PixelSizeTab(QWidget):
         rows = self._win._cb_row.value()
         cell_mm = self._win._cb_cell.value()
 
-        if img.ndim == 2:
-            gray = img
-        elif img.shape[2] == 1:
-            gray = img[:, :, 0]
-        else:
-            gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        found, corners = cv2.findChessboardCorners(
-            gray, (cols, rows),
-            cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
-        )
+        gray = _to_gray_image(img)
+        corners, found, method = detect_chessboard_corners(gray, cols, rows)
 
         if not found:
             self._result.setText(
@@ -340,11 +332,6 @@ class _PixelSizeTab(QWidget):
             )
             self._result.setStyleSheet("color: #ef5350;")
             return
-
-        corners = cv2.cornerSubPix(
-            gray, corners, (11, 11), (-1, -1),
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-        )
 
         pts = corners.reshape(-1, 2)
         h_dists, v_dists = [], []
@@ -376,7 +363,7 @@ class _PixelSizeTab(QWidget):
 
         self._result.setText(
             f"Detected {cols}×{rows} — {avg_px:.2f} px/cell → "
-            f"{pixel_size:.4f} mm/px"
+            f"{pixel_size:.4f} mm/px ({method})"
         )
         self._result.setStyleSheet("color: #66bb6a; font-weight: bold;")
 
@@ -801,7 +788,7 @@ class _LensCalTab(QWidget):
     def _add_image(self, image: np.ndarray, source: str) -> None:
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
-        corners, detected = self._detect_corners(image, cols, rows)
+        corners, detected, method = self._detect_corners(image, cols, rows)
 
         # Ensure BGR format for storage
         if image.ndim == 2:
@@ -820,33 +807,19 @@ class _LensCalTab(QWidget):
         self._image_list.addItem(item)
 
         self._update_count()
+        detail = f" ({method})" if detected else ""
         self._status_label.setText(
-            f"Added: {source} — {'corners found' if detected else 'corners NOT found'}"
+            f"Added: {source} — "
+            f"{'corners found' if detected else 'corners NOT found'}{detail}"
         )
 
     @staticmethod
     def _detect_corners(image: np.ndarray, cols: int, rows: int):
         """Detect chessboard corners. Returns (corners, found)."""
         if not HAS_CV2:
-            return None, False
-        # Handle both BGR and grayscale input
-        if image.ndim == 2:
-            gray = image
-        elif image.shape[2] == 1:
-            gray = image[:, :, 0]
-        else:
-            gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-        found, corners = cv2.findChessboardCorners(
-            gray, (cols, rows),
-            cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
-        )
-        if not found:
-            return None, False
-        corners = cv2.cornerSubPix(
-            gray, corners, (11, 11), (-1, -1),
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-        )
-        return corners, True
+            return None, False, "opencv_unavailable"
+        corners, found, method = detect_chessboard_corners(image, cols, rows)
+        return corners, found, method
 
     def _remove_selected(self) -> None:
         idx = self._image_list.currentRow()
@@ -1140,15 +1113,8 @@ class _LensCalTab(QWidget):
         for entry in entries:
             undistorted = cv2.undistort(entry.image, camera_matrix, dist_coeffs)
             gray = _to_gray_image(undistorted)
-            found, corners = cv2.findChessboardCorners(
-                gray, (cols, rows),
-                cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
-            )
+            corners, found, _method = detect_chessboard_corners(gray, cols, rows)
             if found:
-                corners = cv2.cornerSubPix(
-                    gray, corners, (11, 11), (-1, -1),
-                    (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-                )
                 sets.append(corners.reshape(-1, 2).astype(np.float64))
                 continue
             if entry.corners is None:

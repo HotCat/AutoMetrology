@@ -19,6 +19,7 @@ from typing import Optional
 
 import numpy as np
 
+from .chessboard_detection import detect_chessboard_corners, to_gray_uint8
 from .report import CalibrationReport
 
 try:
@@ -205,17 +206,11 @@ class CalibrationManager:
             )
             gray = self._to_gray(undistorted)
 
-            found, corners_undist = cv2.findChessboardCorners(
-                gray, (cols, rows),
-                cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
+            corners_undist, found, _method = detect_chessboard_corners(
+                gray, cols, rows,
             )
             if not found:
                 continue
-
-            corners_undist = cv2.cornerSubPix(
-                gray, corners_undist, (11, 11), (-1, -1),
-                (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-            )
             detected = corners_undist.reshape(-1, 2)
 
             # Compute ideal grid and residuals
@@ -316,24 +311,11 @@ class CalibrationManager:
 
     @staticmethod
     def _to_gray(image: np.ndarray) -> np.ndarray:
-        if image.ndim == 2:
-            return image
-        if image.ndim == 3 and image.shape[2] == 1:
-            return image[:, :, 0]
-        return cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+        return to_gray_uint8(image)
 
     @staticmethod
     def _detect_corners(
         gray: np.ndarray, cols: int, rows: int,
     ) -> tuple[Optional[np.ndarray], bool]:
-        found, corners = cv2.findChessboardCorners(
-            gray, (cols, rows),
-            cv2.CALIB_CB_ADAPTIVE_THRESH + cv2.CALIB_CB_NORMALIZE_IMAGE,
-        )
-        if not found:
-            return None, False
-        corners = cv2.cornerSubPix(
-            gray, corners, (11, 11), (-1, -1),
-            (cv2.TERM_CRITERIA_EPS + cv2.TERM_CRITERIA_MAX_ITER, 30, 0.001),
-        )
-        return corners, True
+        corners, found, _method = detect_chessboard_corners(gray, cols, rows)
+        return corners, found
