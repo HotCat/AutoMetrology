@@ -455,6 +455,7 @@ class MainWindow(QMainWindow):
                             if self._query_panel.force_nearest_line_bias()
                             else "center"
                         ),
+                        line_fit_side_mode=self._query_panel.line_fit_side_mode(),
                     )
 
         evaluator = QueryEvaluator(self._repo, measurement_pipeline=pipeline)
@@ -623,6 +624,7 @@ class MainWindow(QMainWindow):
                     if self._query_panel.force_nearest_line_bias()
                     else "center"
                 ),
+                line_fit_side_mode=self._query_panel.line_fit_side_mode(),
             )
             query_text = "\n".join(
                 r.instruction.raw_text for r in results if r.instruction is not None

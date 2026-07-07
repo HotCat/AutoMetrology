@@ -55,6 +55,7 @@ class LineFittingEngine:
         max_scan_width: float | None = None,
         prefer_extreme_side: bool = False,
         lock_direction: bool = False,
+        preferred_side_sign: int | None = None,
     ) -> LineFitResult | None:
         """Fit line using iterative perpendicular scanline sampling.
 
@@ -88,6 +89,9 @@ class LineFittingEngine:
             np.array(preferred_side_point, dtype=np.float64)
             if preferred_side_point is not None else None
         )
+        explicit_side_sign = None
+        if preferred_side_sign is not None and preferred_side_sign != 0:
+            explicit_side_sign = 1 if preferred_side_sign > 0 else -1
 
         # Iterative refinement: re-scan perpendicular to fitted line
         best_edge_points = None
@@ -95,12 +99,13 @@ class LineFittingEngine:
             normal = np.array([-direction[1], direction[0]])
             edge_points = self._scanline_sampling(
                 p1, p2, direction, normal, n_scanlines, scan_width, min_gradient,
-                side_point, prefer_extreme_side,
+                side_point, prefer_extreme_side, explicit_side_sign,
             )
             if len(edge_points) < 4:
                 break
             clustered = self._select_offset_cluster(
                 edge_points, p1, direction, side_point, prefer_extreme_side,
+                explicit_side_sign,
             )
             if len(clustered) >= 4:
                 edge_points = clustered
@@ -186,6 +191,7 @@ class LineFittingEngine:
         min_gradient: float,
         preferred_side_point: np.ndarray | None = None,
         prefer_extreme_side: bool = False,
+        preferred_side_sign: int | None = None,
     ) -> np.ndarray:
         """Sample edges along perpendicular scanlines.
 
@@ -221,8 +227,8 @@ class LineFittingEngine:
 
             # Find all local maxima above threshold
             center_idx = n_samples // 2
-            preferred_sign = None
-            if preferred_side_point is not None:
+            preferred_sign = preferred_side_sign
+            if preferred_side_point is not None and preferred_sign is None:
                 side_offset = float((preferred_side_point - base) @ normal)
                 if abs(side_offset) > 1e-6:
                     preferred_sign = 1 if side_offset > 0.0 else -1
@@ -323,6 +329,7 @@ class LineFittingEngine:
         direction: np.ndarray,
         preferred_side_point: np.ndarray | None = None,
         prefer_extreme_side: bool = False,
+        preferred_side_sign: int | None = None,
     ) -> np.ndarray:
         """Keep one coherent line-edge cluster in normal-offset space.
 
@@ -359,8 +366,8 @@ class LineFittingEngine:
         if not clusters:
             return points
 
-        preferred_sign = None
-        if preferred_side_point is not None:
+        preferred_sign = preferred_side_sign
+        if preferred_side_point is not None and preferred_sign is None:
             center = np.mean(points, axis=0)
             side_offset = float((preferred_side_point - center) @ normal)
             if abs(side_offset) > 1e-6:

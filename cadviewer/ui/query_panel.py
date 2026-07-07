@@ -20,7 +20,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton, QLabel,
     QTextEdit, QTableWidget, QTableWidgetItem, QHeaderView,
     QFileDialog, QSplitter, QAbstractItemView, QDoubleSpinBox,
-    QCheckBox,
+    QCheckBox, QComboBox,
 )
 
 from ..models.query import QueryResult
@@ -163,6 +163,25 @@ class QueryPanel(QWidget):
                 width: 12px; height: 12px;
             }
         """)
+        self._line_fit_side_label = QLabel("Line band:")
+        self._line_fit_side_label.setStyleSheet(
+            "color: #aaa; font-size: 10px; padding-left: 6px;"
+        )
+        self._line_fit_side = QComboBox()
+        self._line_fit_side.addItem("Auto", "auto")
+        self._line_fit_side.addItem("+N band", "positive")
+        self._line_fit_side.addItem("-N band", "negative")
+        self._line_fit_side.setToolTip(
+            "Select which grayscale band to fit for printed lines. "
+            "+N/-N use the CAD line normal from start to end; Auto preserves "
+            "the existing CAD/pair-guided behavior."
+        )
+        self._line_fit_side.setStyleSheet("""
+            QComboBox {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 3px; border-radius: 3px; font-size: 11px;
+            }
+        """)
 
         for btn in [self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle, self._btn_pick_arc, self._btn_cancel_pick]:
             btn.setStyleSheet("""
@@ -177,6 +196,8 @@ class QueryPanel(QWidget):
         pick_layout.addWidget(self._tol_percent_label)
         pick_layout.addWidget(self._tol_percent)
         pick_layout.addWidget(self._force_nearest_line_bias)
+        pick_layout.addWidget(self._line_fit_side_label)
+        pick_layout.addWidget(self._line_fit_side)
         pick_layout.addWidget(self._pair_pick_status, stretch=1)
         layout.addLayout(pick_layout)
 
@@ -234,7 +255,8 @@ class QueryPanel(QWidget):
             self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle,
             self._btn_pick_arc, self._btn_cancel_pick, self._pair_pick_status,
             self._tol_percent_label, self._tol_percent,
-            self._force_nearest_line_bias, self._table, self._summary,
+            self._force_nearest_line_bias, self._line_fit_side_label,
+            self._line_fit_side, self._table, self._summary,
         ]
 
     def set_production_log_viewer(self, viewer: QWidget) -> None:
@@ -275,6 +297,9 @@ class QueryPanel(QWidget):
 
     def force_nearest_line_bias(self) -> bool:
         return bool(self._force_nearest_line_bias.isChecked())
+
+    def line_fit_side_mode(self) -> str:
+        return str(self._line_fit_side.currentData() or "auto")
 
     def results(self) -> List[QueryResult]:
         return list(self._results)

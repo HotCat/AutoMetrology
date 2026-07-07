@@ -7,6 +7,7 @@ import numpy as np
 from cadviewer.models.feature import FeatureType
 from cadviewer.models.measured_feature import MeasuredFeature
 from cadviewer.models.repository import FeatureRepository
+from cadviewer.measurement.line_fitter import LineFittingEngine
 from cadviewer.measurement.measurement_pipeline import MeasurementPipeline
 
 
@@ -84,6 +85,64 @@ class MeasurementPipelineTest(unittest.TestCase):
         )
 
         self.assertEqual(pipeline._line_pair_bias_mode, "nearest")
+
+    def test_line_fit_side_mode_defaults_to_auto(self) -> None:
+        pipeline = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="unsupported",
+        )
+
+        self.assertEqual(pipeline._line_fit_side_mode, "auto")
+        self.assertIsNone(pipeline._line_fit_preferred_side_sign())
+
+    def test_line_fit_side_mode_accepts_explicit_bands(self) -> None:
+        positive = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="positive",
+        )
+        negative = MeasurementPipeline(
+            FeatureRepository(),
+            np.zeros((8, 8), dtype=np.uint8),
+            np.eye(3, dtype=np.float64),
+            line_fit_side_mode="negative",
+        )
+
+        self.assertEqual(positive._line_fit_preferred_side_sign(), 1)
+        self.assertEqual(negative._line_fit_preferred_side_sign(), -1)
+
+    def test_line_fitter_explicit_side_selects_requested_band(self) -> None:
+        gradient = np.zeros((80, 120), dtype=np.float64)
+        gradient[35, :] = 2000.0
+        gradient[45, :] = 2000.0
+        engine = LineFittingEngine(gradient)
+        p1 = np.array([10.0, 40.0], dtype=np.float64)
+        p2 = np.array([110.0, 40.0], dtype=np.float64)
+
+        positive = engine.fit(
+            p1, p2,
+            n_scanlines=40,
+            scan_width=12.0,
+            min_gradient=10.0,
+            preferred_side_sign=1,
+            lock_direction=True,
+        )
+        negative = engine.fit(
+            p1, p2,
+            n_scanlines=40,
+            scan_width=12.0,
+            min_gradient=10.0,
+            preferred_side_sign=-1,
+            lock_direction=True,
+        )
+
+        self.assertIsNotNone(positive)
+        self.assertIsNotNone(negative)
+        self.assertGreater(np.mean(positive.edge_points[:, 1]), 43.0)
+        self.assertLess(np.mean(negative.edge_points[:, 1]), 37.0)
 
     @staticmethod
     def _line_measurement(cad_id: str, y: float) -> MeasuredFeature:

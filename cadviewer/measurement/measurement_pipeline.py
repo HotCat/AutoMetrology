@@ -78,6 +78,7 @@ class MeasurementPipeline:
         residual_map: Optional[ResidualDistortionMap] = None,
         pixel_to_world_transform: Optional[np.ndarray] = None,
         line_pair_bias_mode: str = "center",
+        line_fit_side_mode: str = "auto",
     ) -> None:
         """
         Args:
@@ -92,6 +93,9 @@ class MeasurementPipeline:
             line_pair_bias_mode: stroke/window line pair behavior. "center"
                 averages the two visible stroke sides; "nearest" uses the
                 stroke side nearest the paired window edge.
+            line_fit_side_mode: printed-line band selection. "auto" preserves
+                CAD/pair-guided behavior; "positive" or "negative" explicitly
+                selects the +normal or -normal grayscale band of each line.
         """
         self._repo = repo
         self._image = image
@@ -100,6 +104,10 @@ class MeasurementPipeline:
         self._residual_map = residual_map
         self._line_pair_bias_mode = (
             "nearest" if str(line_pair_bias_mode).lower() == "nearest" else "center"
+        )
+        side_mode = str(line_fit_side_mode or "auto").lower()
+        self._line_fit_side_mode = (
+            side_mode if side_mode in ("auto", "positive", "negative") else "auto"
         )
         self._pixel_to_world_transform = None
         if pixel_to_world_transform is not None:
@@ -215,6 +223,11 @@ class MeasurementPipeline:
             return None, None
         if feat1.feature_type != FeatureType.LINE or feat2.feature_type != FeatureType.LINE:
             return self.measure_feature(cad_feature_id_1), self.measure_feature(cad_feature_id_2)
+        if self._line_fit_side_mode != "auto":
+            return (
+                self._measure_line(feat1, cache=False),
+                self._measure_line(feat2, cache=False),
+            )
         debiased = self._measure_line_pair_debiased(feat1, feat2)
         if debiased is not None:
             return debiased
@@ -1465,7 +1478,8 @@ class MeasurementPipeline:
         max_scan_width = None
         prefer_extreme_side = False
         lock_line_direction = False
-        if paired_geometry is not None:
+        explicit_side_sign = self._line_fit_preferred_side_sign()
+        if paired_geometry is not None and explicit_side_sign is None:
             paired_roi = self._roi_predictor.predict_line_roi(paired_geometry, padding=50)
             if paired_roi is not None:
                 _, paired_p1, paired_p2 = paired_roi
@@ -1508,6 +1522,7 @@ class MeasurementPipeline:
             max_scan_width=max_scan_width,
             prefer_extreme_side=prefer_extreme_side,
             lock_direction=lock_line_direction,
+            preferred_side_sign=explicit_side_sign,
         )
         if result is None and preferred_side_point is not None:
             result = self._line_engine.fit(
@@ -1518,8 +1533,13 @@ class MeasurementPipeline:
                 max_scan_width=None,
                 prefer_extreme_side=prefer_extreme_side,
                 lock_direction=True,
+                preferred_side_sign=explicit_side_sign,
             )
-        if result is None and preferred_side_point is not None:
+        if (
+            result is None
+            and preferred_side_point is not None
+            and explicit_side_sign is None
+        ):
             result = self._line_engine.fit(
                 pixel_p1, pixel_p2,
                 scan_width=50.0,
@@ -1592,9 +1612,17 @@ class MeasurementPipeline:
             "residual": result.residual,
             "confidence": result.confidence,
             "pair_side_fit": paired_geometry is not None,
+            "line_fit_side_mode": getattr(self, "_line_fit_side_mode", "auto"),
         }
 
         return mf
+
+    def _line_fit_preferred_side_sign(self) -> Optional[int]:
+        if self._line_fit_side_mode == "positive":
+            return 1
+        if self._line_fit_side_mode == "negative":
+            return -1
+        return None
 
     def _measure_line_pair_debiased(
         self,
@@ -1824,6 +1852,7 @@ class MeasurementPipeline:
             "residual": mf.residual_error,
             "confidence": mf.confidence,
             "pair_side_fit": pair_side_fit,
+            "line_fit_side_mode": getattr(self, "_line_fit_side_mode", "auto"),
         }
 
     @staticmethod
