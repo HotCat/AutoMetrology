@@ -18,7 +18,7 @@ from typing import Optional
 
 import numpy as np
 
-from PySide6.QtCore import Qt, QSize, QUrl
+from PySide6.QtCore import Qt, QSize, QUrl, QObject, QThread, Signal
 from PySide6.QtGui import (
     QPixmap, QImage, QPainter, QColor, QFont, QIcon, QDesktopServices,
 )
@@ -28,6 +28,7 @@ from PySide6.QtWidgets import (
     QFileDialog, QGroupBox, QTabWidget, QWidget,
     QSpinBox, QRadioButton, QButtonGroup, QListWidget,
     QListWidgetItem, QSplitter, QAbstractItemView, QComboBox,
+    QProgressBar,
 )
 
 from ..core.config import AppConfig
@@ -109,8 +110,8 @@ def _numpy_to_pixmap(arr: np.ndarray, max_size: int = 400) -> QPixmap:
     return QPixmap.fromImage(qimg.copy())
 
 
-def _thumbnail_with_badge(pixmap: QPixmap, ok: bool) -> QPixmap:
-    """Draw a green-check or red-X badge on the bottom-right of a thumbnail."""
+def _thumbnail_with_badge(pixmap: QPixmap, ok: Optional[bool]) -> QPixmap:
+    """Draw a status badge on the bottom-right of a thumbnail."""
     size = 120
     scaled = pixmap.scaled(size, size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
     result = QPixmap(size, size)
@@ -121,12 +122,15 @@ def _thumbnail_with_badge(pixmap: QPixmap, ok: bool) -> QPixmap:
     painter.drawPixmap(x, y, scaled)
     # Badge
     painter.setFont(QFont("Sans", 16, QFont.Bold))
-    if ok:
+    if ok is True:
         painter.setPen(QColor("#66bb6a"))
         painter.drawText(size - 22, size - 6, "✓")
-    else:
+    elif ok is False:
         painter.setPen(QColor("#ef5350"))
         painter.drawText(size - 22, size - 6, "✗")
+    else:
+        painter.setPen(QColor("#f6c453"))
+        painter.drawText(size - 22, size - 6, "?")
     painter.end()
     return result
 
@@ -140,6 +144,318 @@ class _CollectedImage:
     detected: bool
     source: str
     file_path: str = ""
+    detection_done: bool = False
+
+
+class _CalibrationWorker(QObject):
+    progress = Signal(str, int)
+    finished = Signal(object)
+    error = Signal(str)
+
+    def __init__(
+        self,
+        entries: list[tuple[int, Optional[np.ndarray], str, str]],
+        cols: int,
+        rows: int,
+        cell_mm: float,
+        flags: int,
+        model: str,
+    ) -> None:
+        super().__init__()
+        self._entries = entries
+        self._cols = cols
+        self._rows = rows
+        self._cell_mm = cell_mm
+        self._flags = flags
+        self._model = model
+
+    def run(self) -> None:
+        try:
+            from ..calibration.calibration_manager import CalibrationManager
+
+            loaded: list[tuple[int, np.ndarray]] = []
+            total = max(len(self._entries), 1)
+            for pos, (idx, image, file_path, _source) in enumerate(self._entries, start=1):
+                if image is None and file_path:
+                    image = cv2.imread(file_path, cv2.IMREAD_COLOR)
+                if image is not None:
+                    loaded.append((idx, image))
+                self.progress.emit(
+                    f"Loading calibration images {pos}/{total}",
+                    int(pos * 25 / total),
+                )
+
+            if len(loaded) < 3:
+                self.finished.emit({
+                    "calibrated": False,
+                    "message": f"Need at least 3 calibration images (have {len(loaded)}).",
+                    "loaded": loaded,
+                })
+                return
+
+            mgr = CalibrationManager()
+            for idx, image in loaded:
+                source = next(
+                    (entry[3] for entry in self._entries if entry[0] == idx),
+                    "",
+                )
+                mgr.add_image(image, source)
+
+            self.progress.emit("Detecting chessboard corners and calibrating...", 35)
+            result = mgr.run_calibration(
+                self._cols,
+                self._rows,
+                self._cell_mm,
+                flags=self._flags,
+                model=self._model,
+            )
+            self.progress.emit("Preparing calibration result...", 95)
+            self.finished.emit({
+                "calibrated": bool(result.calibrated),
+                "result": result,
+                "manager_images": getattr(mgr, "_images", []),
+                "loaded": loaded,
+            })
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _CompareModelsWorker(QObject):
+    progress = Signal(str, int)
+    finished = Signal(object)
+    error = Signal(str)
+
+    def __init__(
+        self,
+        entries: list[tuple[int, Optional[np.ndarray], str, str]],
+        cols: int,
+        rows: int,
+        cell_mm: float,
+        options: list[tuple[str, str, int]],
+    ) -> None:
+        super().__init__()
+        self._entries = entries
+        self._cols = cols
+        self._rows = rows
+        self._cell_mm = cell_mm
+        self._options = options
+
+    def run(self) -> None:
+        try:
+            from ..calibration.calibration_manager import CalibrationManager
+
+            loaded: list[tuple[int, np.ndarray]] = []
+            total_entries = max(len(self._entries), 1)
+            for pos, (idx, image, file_path, _source) in enumerate(self._entries, start=1):
+                if image is None and file_path:
+                    image = cv2.imread(file_path, cv2.IMREAD_COLOR)
+                if image is not None:
+                    loaded.append((idx, image))
+                self.progress.emit(
+                    f"Loading calibration images {pos}/{total_entries}",
+                    int(pos * 20 / total_entries),
+                )
+
+            if len(loaded) < 3:
+                self.finished.emit({
+                    "lines": [f"Need at least 3 calibration images (have {len(loaded)})."],
+                    "loaded": loaded,
+                    "manager_images": [],
+                })
+                return
+
+            lines = [
+                "Model comparison on current images:",
+                "  Lower RMS is useful, but reject models that need poor FOV coverage "
+                "or produce worse validation on measurement-area captures.",
+                "",
+            ]
+            best_manager_images = []
+            count = max(len(self._options), 1)
+            for pos, (label, key, flags) in enumerate(self._options, start=1):
+                self.progress.emit(
+                    f"Running {label} ({pos}/{count})",
+                    20 + int(pos * 75 / count),
+                )
+                mgr = CalibrationManager()
+                for idx, image in loaded:
+                    source = next(
+                        (entry[3] for entry in self._entries if entry[0] == idx),
+                        "",
+                    )
+                    mgr.add_image(image, source)
+                try:
+                    result = mgr.run_calibration(
+                        self._cols,
+                        self._rows,
+                        self._cell_mm,
+                        flags=flags,
+                        model=key,
+                    )
+                except Exception as exc:
+                    lines.append(f"{label}: failed ({exc})")
+                    continue
+                if not result.calibrated or result.dist_coeffs is None:
+                    lines.append(f"{label}: failed")
+                    continue
+                best_manager_images = getattr(mgr, "_images", [])
+                coeff_count = int(result.dist_coeffs.size)
+                lines.append(
+                    f"{label}: RMS {result.opencv_rms:.4f} px, "
+                    f"{coeff_count} coeffs, flags {int(flags)}"
+                )
+            self.finished.emit({
+                "lines": lines,
+                "loaded": loaded,
+                "manager_images": best_manager_images,
+            })
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _SaveCalibrationWorker(QObject):
+    progress = Signal(str, int)
+    finished = Signal(object)
+    error = Signal(str)
+
+    def __init__(
+        self,
+        entries: list[tuple[int, np.ndarray, Optional[np.ndarray]]],
+        cols: int,
+        rows: int,
+        cell_mm: float,
+        camera_matrix: np.ndarray,
+        dist_coeffs: np.ndarray,
+    ) -> None:
+        super().__init__()
+        self._entries = entries
+        self._cols = cols
+        self._rows = rows
+        self._cell_mm = cell_mm
+        self._camera_matrix = camera_matrix
+        self._dist_coeffs = dist_coeffs
+
+    def run(self) -> None:
+        try:
+            from ..calibration.calibration_manager import CalibrationManager
+            from ..calibration.coordinate_correction import CoordinateTransformer
+            from ..calibration.residual_map import (
+                ResidualDistortionMap, is_residual_map_safe,
+            )
+
+            undistorted_sets: list[np.ndarray] = []
+            total = max(len(self._entries), 1)
+            image_size = None
+            for pos, (_idx, image, corners) in enumerate(self._entries, start=1):
+                if image_size is None:
+                    image_size = (int(image.shape[1]), int(image.shape[0]))
+                undistorted = cv2.undistort(
+                    image, self._camera_matrix, self._dist_coeffs,
+                )
+                gray = _to_gray_image(undistorted)
+                found_corners, found, _method = detect_chessboard_corners(
+                    gray, self._cols, self._rows,
+                )
+                if found:
+                    undistorted_sets.append(
+                        found_corners.reshape(-1, 2).astype(np.float64),
+                    )
+                elif corners is not None:
+                    undistorted_pts = cv2.undistortPoints(
+                        corners.astype(np.float32),
+                        self._camera_matrix,
+                        self._dist_coeffs,
+                        P=self._camera_matrix,
+                    )
+                    undistorted_sets.append(
+                        undistorted_pts.reshape(-1, 2).astype(np.float64),
+                    )
+                self.progress.emit(
+                    f"Building correction samples {pos}/{total}",
+                    int(pos * 55 / total),
+                )
+
+            residual_map_dict = {}
+            coordinate_correction = {}
+            correction_model_type = "none"
+            if undistorted_sets and image_size is not None:
+                samples = []
+                corrections = []
+                for pos, corners in enumerate(undistorted_sets, start=1):
+                    ideal = CalibrationManager._compute_projective_ideal_grid(
+                        corners, self._cols, self._rows,
+                    )
+                    if ideal is None:
+                        continue
+                    samples.append(corners)
+                    corrections.append(ideal - corners)
+                    self.progress.emit(
+                        f"Fitting residual samples {pos}/{len(undistorted_sets)}",
+                        55 + int(pos * 20 / max(len(undistorted_sets), 1)),
+                    )
+
+                residual_map = None
+                if samples:
+                    candidate_map = ResidualDistortionMap()
+                    candidate_map.build(
+                        np.vstack(samples),
+                        np.vstack(corrections),
+                        image_size=image_size,
+                        smoothing=0.01,
+                    )
+                    if is_residual_map_safe(candidate_map):
+                        residual_map = candidate_map
+                        residual_map_dict = residual_map.to_dict()
+
+                self.progress.emit("Building coordinate correction model...", 85)
+                transformer = CoordinateTransformer()
+                first_corners = undistorted_sets[0]
+                if residual_map is not None and residual_map.is_built:
+                    first_corners = residual_map.correct(first_corners)
+                success = transformer.build_from_corners(
+                    first_corners,
+                    self._cols,
+                    self._rows,
+                    self._cell_mm,
+                    "homography",
+                    image_size=image_size,
+                    image_count=len(undistorted_sets),
+                )
+                if success:
+                    coordinate_correction = transformer.get_model_dict()
+                    correction_model_type = "homography"
+
+            self.finished.emit({
+                "residual_map": residual_map_dict,
+                "coordinate_correction": coordinate_correction,
+                "correction_model_type": correction_model_type,
+                "image_size": image_size,
+                "undistorted_count": len(undistorted_sets),
+            })
+        except Exception as exc:
+            self.error.emit(str(exc))
+
+
+class _ImageWriteWorker(QObject):
+    finished = Signal(int, bool, str)
+
+    def __init__(self, idx: int, image: np.ndarray, file_path: str) -> None:
+        super().__init__()
+        self._idx = idx
+        self._image = image
+        self._file_path = file_path
+
+    def run(self) -> None:
+        ok = False
+        message = ""
+        try:
+            Path(self._file_path).parent.mkdir(parents=True, exist_ok=True)
+            ok = bool(cv2.imwrite(self._file_path, self._image))
+            if not ok:
+                message = f"Could not write {self._file_path}"
+        except Exception as exc:
+            message = str(exc)
+        self.finished.emit(self._idx, ok, message)
 
 
 # ── Pixel Size Calibration Tab ──────────────────────────────────────────
@@ -620,6 +936,10 @@ class _LensCalTab(QWidget):
         self._cal_result = None
         self._calibration_model: str = "standard"
         self._calibration_flags: int = 0
+        self._worker_thread: Optional[QThread] = None
+        self._worker: Optional[QObject] = None
+        self._image_write_threads: list[QThread] = []
+        self._busy = False
 
         layout = QVBoxLayout(self)
 
@@ -731,6 +1051,11 @@ class _LensCalTab(QWidget):
 
         self._status_label = QLabel("")
         layout.addWidget(self._status_label)
+        self._progress = QProgressBar()
+        self._progress.setRange(0, 100)
+        self._progress.setValue(0)
+        self._progress.setVisible(False)
+        layout.addWidget(self._progress)
 
         # ── Results ──────────────────────────────────────────────────
         res_group = QGroupBox("Results")
@@ -760,7 +1085,7 @@ class _LensCalTab(QWidget):
     def _on_source_changed(self, camera_selected: bool) -> None:
         if camera_selected and self._camera is not None:
             self._camera.signals.frame_ready.connect(self._preview.display_frame)
-            self._btn_capture.setEnabled(True)
+            self._btn_capture.setEnabled(not self._busy)
             self._preview.set_placeholder_text("Waiting for camera...")
         else:
             if self._camera is not None:
@@ -774,6 +1099,8 @@ class _LensCalTab(QWidget):
     # ── Image collection ─────────────────────────────────────────────
 
     def _capture_frame(self) -> None:
+        if self._busy:
+            return
         frame = None
         capture_frame = getattr(self._camera, "capture_frame", None)
         if callable(capture_frame):
@@ -816,13 +1143,14 @@ class _LensCalTab(QWidget):
         persist: bool,
         detect: bool = False,
         detected_hint: bool = False,
+        detection_done: bool = False,
         file_path: str = "",
     ) -> None:
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
         corners = None
         detected = bool(detected_hint)
-        method = "saved" if detected else "pending"
+        method = "saved" if detection_done else "pending"
 
         # Ensure BGR format for storage
         if image is not None and image.ndim == 2:
@@ -836,15 +1164,17 @@ class _LensCalTab(QWidget):
             detected=detected,
             source=source,
             file_path=file_path,
+            detection_done=detection_done,
         )
         self._collected.append(entry)
 
         # Thumbnail
+        badge = detected if entry.detection_done else None
         if image is not None:
             pm = _numpy_to_pixmap(image, 120)
-            icon_pm = _thumbnail_with_badge(pm, detected)
+            icon_pm = _thumbnail_with_badge(pm, badge)
         else:
-            icon_pm = self._placeholder_thumbnail(detected)
+            icon_pm = self._placeholder_thumbnail(badge)
         item = QListWidgetItem(QIcon(icon_pm), "")
         item.setData(Qt.UserRole, len(self._collected) - 1)
         self._image_list.addItem(item)
@@ -856,10 +1186,12 @@ class _LensCalTab(QWidget):
             f"{'corners found' if detected else 'corner detection pending'}{detail}"
         )
         if persist:
-            self._persist_collected_images(write_images=True)
+            self._persist_collected_images(write_images=False)
+            if image is not None:
+                self._write_entry_image_async(len(self._collected) - 1)
 
     @staticmethod
-    def _placeholder_thumbnail(ok: bool) -> QPixmap:
+    def _placeholder_thumbnail(ok: Optional[bool]) -> QPixmap:
         pm = QPixmap(120, 120)
         pm.fill(QColor(30, 30, 30))
         painter = QPainter(pm)
@@ -896,9 +1228,10 @@ class _LensCalTab(QWidget):
 
     def _update_count(self) -> None:
         total = len(self._collected)
+        checked = sum(1 for e in self._collected if e.detection_done)
         good = sum(1 for e in self._collected if e.detected)
         self._count_label.setText(
-            f"Images: {total} | Corners detected: {good}"
+            f"Images: {total} | Checked: {checked} | Corners detected: {good}"
         )
 
     def _entry_image(self, entry: _CollectedImage) -> Optional[np.ndarray]:
@@ -924,8 +1257,97 @@ class _LensCalTab(QWidget):
         for entry, detected in zip(entries, images):
             entry.corners = getattr(detected, "corners", None)
             entry.detected = bool(getattr(detected, "detected", False))
+            entry.detection_done = True
+        self._refresh_image_list_icons()
         self._update_count()
         self._persist_collected_images(write_images=False)
+
+    def _refresh_image_list_icons(self) -> None:
+        for idx, entry in enumerate(self._collected):
+            if idx >= self._image_list.count():
+                break
+            badge = entry.detected if entry.detection_done else None
+            if entry.image is not None:
+                icon_pm = _thumbnail_with_badge(_numpy_to_pixmap(entry.image, 120), badge)
+            else:
+                icon_pm = self._placeholder_thumbnail(badge)
+            self._image_list.item(idx).setIcon(QIcon(icon_pm))
+
+    def _entry_snapshots(self) -> list[tuple[int, Optional[np.ndarray], str, str]]:
+        return [
+            (idx, entry.image, entry.file_path, entry.source)
+            for idx, entry in enumerate(self._collected)
+        ]
+
+    def _good_entry_snapshots(
+        self,
+    ) -> list[tuple[int, np.ndarray, Optional[np.ndarray]]]:
+        snapshots = []
+        for idx, entry in enumerate(self._collected):
+            if not entry.detected:
+                continue
+            image = self._entry_image(entry)
+            if image is not None:
+                snapshots.append((idx, image, entry.corners))
+        return snapshots
+
+    def _set_busy(self, busy: bool) -> None:
+        self._busy = busy
+        can_capture = (
+            not busy
+            and self._camera is not None
+            and self._radio_cam.isChecked()
+        )
+        self._btn_capture.setEnabled(can_capture)
+        self._btn_add_files.setEnabled(not busy)
+        self._btn_clear.setEnabled(not busy)
+        self._btn_reload_saved.setEnabled(not busy)
+        self._btn_remove.setEnabled(not busy)
+        self._btn_run.setEnabled(not busy)
+        self._btn_compare.setEnabled(not busy)
+        self._btn_save.setEnabled(not busy and self._camera_matrix is not None)
+        self._model_combo.setEnabled(not busy)
+        self._progress.setVisible(busy)
+        if not busy:
+            self._progress.setValue(0)
+
+    def _set_progress(self, message: str, value: int) -> None:
+        self._status_label.setText(message)
+        self._status_label.setStyleSheet("color: #ccc;")
+        self._progress.setValue(max(0, min(100, int(value))))
+
+    def _start_worker(self, worker: QObject, status: str) -> bool:
+        if self._busy:
+            self._status_label.setText(
+                "Another calibration task is already running."
+            )
+            self._status_label.setStyleSheet("color: #ef5350;")
+            return False
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.progress.connect(self._set_progress)
+        worker.error.connect(self._worker_failed)
+        worker.finished.connect(thread.quit)
+        worker.error.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(self._clear_worker_refs)
+        self._worker_thread = thread
+        self._worker = worker
+        self._set_busy(True)
+        self._set_progress(status, 0)
+        thread.start()
+        return True
+
+    def _worker_failed(self, message: str) -> None:
+        self._set_busy(False)
+        self._status_label.setText(f"Calibration task failed: {message}")
+        self._status_label.setStyleSheet("color: #ef5350;")
+
+    def _clear_worker_refs(self) -> None:
+        self._worker_thread = None
+        self._worker = None
 
     def _reload_saved_set(self) -> None:
         self._load_persisted_images(silent=False)
@@ -951,11 +1373,7 @@ class _LensCalTab(QWidget):
             "images": [],
         }
         for idx, entry in enumerate(self._collected, start=1):
-            filename = Path(entry.file_path).name if entry.file_path else ""
-            if not filename:
-                stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
-                filename = f"lens_{stamp}_{idx:03d}.png"
-                entry.file_path = str(_LENS_IMAGE_DIR / filename)
+            filename = self._ensure_entry_file_path(entry, idx)
             path = _LENS_IMAGE_DIR / filename
             image = entry.image
             if write_images and image is not None and not path.exists():
@@ -970,12 +1388,57 @@ class _LensCalTab(QWidget):
                 "file": filename,
                 "source": entry.source,
                 "detected": bool(entry.detected),
+                "detection_done": bool(entry.detection_done),
                 "shape": shape,
             })
         _LENS_MANIFEST.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+    @staticmethod
+    def _ensure_entry_file_path(entry: _CollectedImage, idx: int) -> str:
+        filename = Path(entry.file_path).name if entry.file_path else ""
+        if not filename:
+            stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+            filename = f"lens_{stamp}_{idx:03d}.png"
+            entry.file_path = str(_LENS_IMAGE_DIR / filename)
+        return filename
+
+    def _write_entry_image_async(self, idx: int) -> None:
+        if not (0 <= idx < len(self._collected)):
+            return
+        entry = self._collected[idx]
+        if entry.image is None:
+            return
+        self._ensure_entry_file_path(entry, idx + 1)
+        path = Path(entry.file_path)
+        if path.exists():
+            return
+        worker = _ImageWriteWorker(idx, entry.image.copy(), str(path))
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.finished.connect(self._image_write_finished)
+        worker.finished.connect(thread.quit)
+        thread.finished.connect(worker.deleteLater)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda t=thread: self._forget_image_write_thread(t))
+        self._image_write_threads.append(thread)
+        thread.start()
+
+    def _image_write_finished(self, idx: int, ok: bool, message: str) -> None:
+        if ok:
+            self._persist_collected_images(write_images=False)
+            return
+        self._status_label.setText(f"Calibration image save failed: {message}")
+        self._status_label.setStyleSheet("color: #ef5350;")
+
+    def _forget_image_write_thread(self, thread: QThread) -> None:
+        try:
+            self._image_write_threads.remove(thread)
+        except ValueError:
+            pass
 
     def _clear_persisted_images(self) -> None:
         if _LENS_IMAGE_DIR.exists():
@@ -1023,6 +1486,9 @@ class _LensCalTab(QWidget):
                 persist=False,
                 detect=False,
                 detected_hint=bool(item.get("detected", False)),
+                detection_done=bool(
+                    item.get("detection_done", item.get("detected", False)),
+                ),
                 file_path=str(path),
             )
             loaded += 1
@@ -1070,10 +1536,10 @@ class _LensCalTab(QWidget):
             self._status_label.setText("Error: OpenCV not available.")
             return
 
-        entries = self._loaded_entries()
-        if len(entries) < 3:
+        snapshots = self._entry_snapshots()
+        if len(snapshots) < 3:
             self._status_label.setText(
-                f"Need at least 3 calibration images (have {len(entries)})."
+                f"Need at least 3 calibration images (have {len(snapshots)})."
             )
             self._status_label.setStyleSheet("color: #ef5350;")
             return
@@ -1082,31 +1548,49 @@ class _LensCalTab(QWidget):
         rows = self._win._cb_row.value()
         cell_mm = self._win._cb_cell.value()
 
-        self._status_label.setText("Running calibration...")
-        self._status_label.setStyleSheet("color: #ccc;")
-
-        from ..calibration.calibration_manager import CalibrationManager
         model, flags, model_label = self._selected_calibration_model()
-
-        mgr = CalibrationManager()
-        for entry in entries:
-            if entry.image is not None:
-                mgr.add_image(entry.image, entry.source)
-
-        result = mgr.run_calibration(
+        worker = _CalibrationWorker(
+            snapshots,
             cols,
             rows,
             cell_mm,
             flags=flags,
             model=model,
         )
+        worker.finished.connect(
+            lambda payload, label=model_label: self._calibration_finished(payload, label),
+        )
+        self._start_worker(worker, "Starting calibration...")
 
-        if not result.calibrated:
+    def _calibration_finished(self, payload: object, model_label: str) -> None:
+        self._set_busy(False)
+        if not isinstance(payload, dict):
             self._status_label.setText("Calibration failed.")
             self._status_label.setStyleSheet("color: #ef5350;")
             return
 
-        self._refresh_detection_state_from_manager(mgr)
+        for idx, image in payload.get("loaded", []):
+            if 0 <= idx < len(self._collected):
+                self._collected[idx].image = image
+
+        manager_images = payload.get("manager_images", [])
+        loaded_indices = [idx for idx, _image in payload.get("loaded", [])]
+        for idx, detected in zip(loaded_indices, manager_images):
+            if 0 <= idx < len(self._collected):
+                entry = self._collected[idx]
+                entry.corners = getattr(detected, "corners", None)
+                entry.detected = bool(getattr(detected, "detected", False))
+                entry.detection_done = True
+        self._refresh_image_list_icons()
+        self._update_count()
+        self._persist_collected_images(write_images=False)
+
+        result = payload.get("result")
+        if not payload.get("calibrated") or result is None:
+            message = str(payload.get("message") or "Calibration failed.")
+            self._status_label.setText(message)
+            self._status_label.setStyleSheet("color: #ef5350;")
+            return
 
         self._camera_matrix = result.camera_matrix
         self._dist_coeffs = result.dist_coeffs
@@ -1157,10 +1641,10 @@ class _LensCalTab(QWidget):
             self._status_label.setText("Error: OpenCV not available.")
             return
 
-        entries = self._loaded_entries()
-        if len(entries) < 3:
+        snapshots = self._entry_snapshots()
+        if len(snapshots) < 3:
             self._status_label.setText(
-                f"Need at least 3 calibration images (have {len(entries)})."
+                f"Need at least 3 calibration images (have {len(snapshots)})."
             )
             self._status_label.setStyleSheet("color: #ef5350;")
             return
@@ -1169,51 +1653,74 @@ class _LensCalTab(QWidget):
         rows = self._win._cb_row.value()
         cell_mm = self._win._cb_cell.value()
 
-        from ..calibration.calibration_manager import CalibrationManager
+        worker = _CompareModelsWorker(
+            snapshots,
+            cols,
+            rows,
+            cell_mm,
+            self._calibration_model_options(),
+        )
+        worker.finished.connect(self._compare_models_finished)
+        self._start_worker(worker, "Starting model comparison...")
 
-        lines = [
-            "Model comparison on current images:",
-            "  Lower RMS is useful, but reject models that need poor FOV coverage "
-            "or produce worse validation on measurement-area captures.",
-            "",
-        ]
-        for label, key, flags in self._calibration_model_options():
-            mgr = CalibrationManager()
-            for entry in entries:
-                if entry.image is not None:
-                    mgr.add_image(entry.image, entry.source)
-            try:
-                result = mgr.run_calibration(
-                    cols,
-                    rows,
-                    cell_mm,
-                    flags=flags,
-                    model=key,
-                )
-            except Exception as exc:
-                lines.append(f"{label}: failed ({exc})")
-                continue
-            if not result.calibrated or result.dist_coeffs is None:
-                lines.append(f"{label}: failed")
-                continue
-            self._refresh_detection_state_from_manager(mgr)
-            coeff_count = int(result.dist_coeffs.size)
-            lines.append(
-                f"{label}: RMS {result.opencv_rms:.4f} px, "
-                f"{coeff_count} coeffs, flags {int(flags)}"
-            )
+    def _compare_models_finished(self, payload: object) -> None:
+        self._set_busy(False)
+        if not isinstance(payload, dict):
+            self._status_label.setText("Model comparison failed.")
+            self._status_label.setStyleSheet("color: #ef5350;")
+            return
+        for idx, image in payload.get("loaded", []):
+            if 0 <= idx < len(self._collected):
+                self._collected[idx].image = image
+
+        manager_images = payload.get("manager_images", [])
+        loaded_indices = [idx for idx, _image in payload.get("loaded", [])]
+        for idx, detected in zip(loaded_indices, manager_images):
+            if 0 <= idx < len(self._collected):
+                entry = self._collected[idx]
+                entry.corners = getattr(detected, "corners", None)
+                entry.detected = bool(getattr(detected, "detected", False))
+                entry.detection_done = True
+        self._refresh_image_list_icons()
+        self._update_count()
+        self._persist_collected_images(write_images=False)
+
+        lines = payload.get("lines", [])
         self._result_text.setText("\n".join(lines))
         self._status_label.setText("Model comparison complete.")
         self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
 
     def _save_to_config(self) -> None:
+        if self._camera_matrix is None or self._dist_coeffs is None:
+            return
+        good_entries = self._good_entry_snapshots()
+        if not good_entries:
+            self._status_label.setText("No detected calibration images to save.")
+            self._status_label.setStyleSheet("color: #ef5350;")
+            return
+        cols = self._win._cb_col.value()
+        rows = self._win._cb_row.value()
+        cell_mm = self._win._cb_cell.value()
+        worker = _SaveCalibrationWorker(
+            good_entries,
+            cols,
+            rows,
+            cell_mm,
+            self._camera_matrix.copy(),
+            self._dist_coeffs.copy(),
+        )
+        worker.finished.connect(self._save_to_config_finished)
+        self._start_worker(worker, "Preparing calibration save...")
+
+    def _save_to_config_finished(self, payload: object) -> None:
+        self._set_busy(False)
         try:
-            self._save_to_config_impl()
+            self._save_to_config_impl(payload if isinstance(payload, dict) else {})
         except Exception as e:
             self._status_label.setText(f"Calibration save error: {e}")
             self._status_label.setStyleSheet("color: #ef5350;")
 
-    def _save_to_config_impl(self) -> None:
+    def _save_to_config_impl(self, payload: dict) -> None:
         if self._camera_matrix is None:
             return
         cfg = self._win._config
@@ -1226,65 +1733,13 @@ class _LensCalTab(QWidget):
             calibration_flags=self._calibration_flags,
         )
 
-        # Build and save coordinate correction model from detected corners
-        if hasattr(self, "_cal_result") and self._cal_result is not None:
-            cols = self._win._cb_col.value()
-            rows = self._win._cb_row.value()
-            cell_mm = self._win._cb_cell.value()
-
-            # Build correction models in undistorted-pixel space, because
-            # production registration first applies OpenCV undistortion.
-            good_entries = [e for e in self._collected if e.detected]
-            undistorted_sets = self._undistorted_corner_sets(
-                good_entries, cols, rows, self._camera_matrix, self._dist_coeffs,
-            )
-            if undistorted_sets:
-                from ..calibration.coordinate_correction import CoordinateTransformer
-                from ..calibration.residual_map import (
-                    ResidualDistortionMap, is_residual_map_safe,
-                )
-
-                samples = []
-                corrections = []
-                from ..calibration.calibration_manager import CalibrationManager
-                for corners in undistorted_sets:
-                    ideal = CalibrationManager._compute_projective_ideal_grid(
-                        corners, cols, rows,
-                    )
-                    if ideal is None:
-                        continue
-                    samples.append(corners)
-                    corrections.append(ideal - corners)
-
-                residual_map = None
-                if samples:
-                    candidate_map = ResidualDistortionMap()
-                    candidate_map.build(
-                        np.vstack(samples), np.vstack(corrections),
-                        image_size=(good_entries[0].image.shape[1],
-                                    good_entries[0].image.shape[0]),
-                        smoothing=0.01,
-                    )
-                    if is_residual_map_safe(candidate_map):
-                        residual_map = candidate_map
-                        cfg.lens_calibration.residual_map = residual_map.to_dict()
-                    else:
-                        cfg.lens_calibration.residual_map = {}
-
-                transformer = CoordinateTransformer()
-                model_type = "homography"
-                first_corners = undistorted_sets[0]
-                if residual_map is not None and residual_map.is_built:
-                    first_corners = residual_map.correct(first_corners)
-                success = transformer.build_from_corners(
-                    first_corners, cols, rows, cell_mm, model_type,
-                    image_size=(good_entries[0].image.shape[1],
-                                good_entries[0].image.shape[0]),
-                    image_count=len(undistorted_sets),
-                )
-                if success:
-                    cfg.lens_calibration.coordinate_correction = transformer.get_model_dict()
-                    cfg.lens_calibration.correction_model_type = model_type
+        cfg.lens_calibration.residual_map = payload.get("residual_map", {})
+        cfg.lens_calibration.coordinate_correction = payload.get(
+            "coordinate_correction", {},
+        )
+        cfg.lens_calibration.correction_model_type = payload.get(
+            "correction_model_type", "none",
+        )
 
         cfg.save()
         self._status_label.setText("Calibration saved to configuration.")
