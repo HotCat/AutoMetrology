@@ -11,13 +11,17 @@ Shared chessboard parameters (cols, rows, cell size) sit above the tabs.
 from __future__ import annotations
 
 from dataclasses import dataclass
+import json
 from pathlib import Path
+from datetime import datetime
 from typing import Optional
 
 import numpy as np
 
-from PySide6.QtCore import Qt, QSize
-from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QFont, QIcon
+from PySide6.QtCore import Qt, QSize, QUrl
+from PySide6.QtGui import (
+    QPixmap, QImage, QPainter, QColor, QFont, QIcon, QDesktopServices,
+)
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
     QLabel, QLineEdit, QDoubleSpinBox, QPushButton,
@@ -38,6 +42,10 @@ try:
     HAS_CV2 = True
 except ImportError:
     HAS_CV2 = False
+
+
+_LENS_IMAGE_DIR = Path.home() / ".config" / "cadviewer" / "lens_calibration_images"
+_LENS_MANIFEST = _LENS_IMAGE_DIR / "manifest.json"
 
 
 # ── Stylesheet ──────────────────────────────────────────────────────────
@@ -657,6 +665,12 @@ class _LensCalTab(QWidget):
         self._btn_clear = QPushButton("Clear All")
         self._btn_clear.clicked.connect(self._clear_all)
         btn_row.addWidget(self._btn_clear)
+        self._btn_reload_saved = QPushButton("Reload Saved Set")
+        self._btn_reload_saved.clicked.connect(self._reload_saved_set)
+        btn_row.addWidget(self._btn_reload_saved)
+        self._btn_open_folder = QPushButton("Open Folder")
+        self._btn_open_folder.clicked.connect(self._open_saved_folder)
+        btn_row.addWidget(self._btn_open_folder)
         src_layout.addLayout(btn_row)
 
         layout.addWidget(src_group)
@@ -738,6 +752,7 @@ class _LensCalTab(QWidget):
         # Connect source toggle
         self._radio_cam.toggled.connect(self._on_source_changed)
         self._on_source_changed(self._radio_cam.isChecked())
+        self._load_persisted_images(silent=True)
 
     # ── Source toggle ────────────────────────────────────────────────
 
@@ -786,6 +801,9 @@ class _LensCalTab(QWidget):
                 self._add_image(img, Path(p).name)
 
     def _add_image(self, image: np.ndarray, source: str) -> None:
+        self._add_image_entry(image, source, persist=True)
+
+    def _add_image_entry(self, image: np.ndarray, source: str, persist: bool) -> None:
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
         corners, detected, method = self._detect_corners(image, cols, rows)
@@ -812,6 +830,8 @@ class _LensCalTab(QWidget):
             f"Added: {source} — "
             f"{'corners found' if detected else 'corners NOT found'}{detail}"
         )
+        if persist:
+            self._persist_collected_images()
 
     @staticmethod
     def _detect_corners(image: np.ndarray, cols: int, rows: int):
@@ -830,12 +850,14 @@ class _LensCalTab(QWidget):
             for i in range(self._image_list.count()):
                 self._image_list.item(i).setData(Qt.UserRole, i)
             self._update_count()
+            self._persist_collected_images()
 
     def _clear_all(self) -> None:
         self._collected.clear()
         self._image_list.clear()
         self._update_count()
         self._status_label.setText("All images cleared.")
+        self._clear_persisted_images()
 
     def _update_count(self) -> None:
         total = len(self._collected)
@@ -843,6 +865,104 @@ class _LensCalTab(QWidget):
         self._count_label.setText(
             f"Images: {total} | Corners detected: {good}"
         )
+
+    def _reload_saved_set(self) -> None:
+        self._load_persisted_images(silent=False)
+
+    def _open_saved_folder(self) -> None:
+        _LENS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+        url = QUrl.fromLocalFile(str(_LENS_IMAGE_DIR))
+        if not QDesktopServices.openUrl(url):
+            self._status_label.setText(f"Open folder failed: {_LENS_IMAGE_DIR}")
+            self._status_label.setStyleSheet("color: #ef5350;")
+
+    def _persist_collected_images(self) -> None:
+        if not HAS_CV2:
+            return
+        _LENS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
+        for old in _LENS_IMAGE_DIR.glob("lens_*.png"):
+            try:
+                old.unlink()
+            except OSError:
+                pass
+
+        manifest = {
+            "version": 1,
+            "saved_at": datetime.now().isoformat(),
+            "cols": int(self._win._cb_col.value()),
+            "rows": int(self._win._cb_row.value()),
+            "cell_mm": float(self._win._cb_cell.value()),
+            "images": [],
+        }
+        for idx, entry in enumerate(self._collected, start=1):
+            filename = f"lens_{idx:03d}.png"
+            path = _LENS_IMAGE_DIR / filename
+            if not cv2.imwrite(str(path), entry.image):
+                continue
+            h, w = entry.image.shape[:2]
+            manifest["images"].append({
+                "file": filename,
+                "source": entry.source,
+                "detected": bool(entry.detected),
+                "shape": [int(w), int(h)],
+            })
+        _LENS_MANIFEST.write_text(
+            json.dumps(manifest, indent=2, ensure_ascii=False),
+            encoding="utf-8",
+        )
+
+    def _clear_persisted_images(self) -> None:
+        if _LENS_IMAGE_DIR.exists():
+            for path in _LENS_IMAGE_DIR.glob("lens_*.png"):
+                try:
+                    path.unlink()
+                except OSError:
+                    pass
+        if _LENS_MANIFEST.exists():
+            try:
+                _LENS_MANIFEST.unlink()
+            except OSError:
+                pass
+
+    def _load_persisted_images(self, silent: bool) -> None:
+        if not HAS_CV2 or not _LENS_MANIFEST.exists():
+            return
+        try:
+            manifest = json.loads(_LENS_MANIFEST.read_text(encoding="utf-8"))
+            images = manifest.get("images", [])
+            if not isinstance(images, list):
+                return
+        except Exception as exc:
+            if not silent:
+                self._status_label.setText(f"Saved set load error: {exc}")
+                self._status_label.setStyleSheet("color: #ef5350;")
+            return
+
+        self._collected.clear()
+        self._image_list.clear()
+        loaded = 0
+        for item in images:
+            if not isinstance(item, dict):
+                continue
+            filename = str(item.get("file", ""))
+            if not filename:
+                continue
+            path = _LENS_IMAGE_DIR / filename
+            image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+            if image is None:
+                continue
+            source = str(item.get("source") or filename)
+            self._add_image_entry(image, source, persist=False)
+            loaded += 1
+        self._update_count()
+        if loaded and not silent:
+            self._status_label.setText(
+                f"Reloaded {loaded} saved calibration images from {_LENS_IMAGE_DIR}"
+            )
+            self._status_label.setStyleSheet("color: #66bb6a; font-weight: bold;")
+        elif not loaded and not silent:
+            self._status_label.setText("No saved calibration images found.")
+            self._status_label.setStyleSheet("color: #ef5350;")
 
     # ── Calibration ──────────────────────────────────────────────────
 
@@ -1130,6 +1250,7 @@ class _LensCalTab(QWidget):
     # ── Cleanup ──────────────────────────────────────────────────────
 
     def cleanup(self) -> None:
+        self._persist_collected_images()
         if self._camera is not None:
             try:
                 self._camera.signals.frame_ready.disconnect(self._preview.display_frame)
