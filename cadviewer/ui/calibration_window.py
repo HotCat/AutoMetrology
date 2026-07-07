@@ -135,10 +135,11 @@ def _thumbnail_with_badge(pixmap: QPixmap, ok: bool) -> QPixmap:
 
 @dataclass
 class _CollectedImage:
-    image: np.ndarray
+    image: Optional[np.ndarray]
     corners: Optional[np.ndarray]
     detected: bool
     source: str
+    file_path: str = ""
 
 
 # ── Pixel Size Calibration Tab ──────────────────────────────────────────
@@ -801,25 +802,49 @@ class _LensCalTab(QWidget):
                 self._add_image(img, Path(p).name)
 
     def _add_image(self, image: np.ndarray, source: str) -> None:
-        self._add_image_entry(image, source, persist=True)
+        self._add_image_entry(
+            image=image,
+            source=source,
+            persist=True,
+            detect=False,
+        )
 
-    def _add_image_entry(self, image: np.ndarray, source: str, persist: bool) -> None:
+    def _add_image_entry(
+        self,
+        image: Optional[np.ndarray],
+        source: str,
+        persist: bool,
+        detect: bool = False,
+        detected_hint: bool = False,
+        file_path: str = "",
+    ) -> None:
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
-        corners, detected, method = self._detect_corners(image, cols, rows)
+        corners = None
+        detected = bool(detected_hint)
+        method = "saved" if detected else "pending"
 
         # Ensure BGR format for storage
-        if image.ndim == 2:
+        if image is not None and image.ndim == 2:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if detect and image is not None:
+            corners, detected, method = self._detect_corners(image, cols, rows)
 
         entry = _CollectedImage(
-            image=image, corners=corners, detected=detected, source=source,
+            image=image,
+            corners=corners,
+            detected=detected,
+            source=source,
+            file_path=file_path,
         )
         self._collected.append(entry)
 
         # Thumbnail
-        pm = _numpy_to_pixmap(image, 120)
-        icon_pm = _thumbnail_with_badge(pm, detected)
+        if image is not None:
+            pm = _numpy_to_pixmap(image, 120)
+            icon_pm = _thumbnail_with_badge(pm, detected)
+        else:
+            icon_pm = self._placeholder_thumbnail(detected)
         item = QListWidgetItem(QIcon(icon_pm), "")
         item.setData(Qt.UserRole, len(self._collected) - 1)
         self._image_list.addItem(item)
@@ -828,10 +853,20 @@ class _LensCalTab(QWidget):
         detail = f" ({method})" if detected else ""
         self._status_label.setText(
             f"Added: {source} — "
-            f"{'corners found' if detected else 'corners NOT found'}{detail}"
+            f"{'corners found' if detected else 'corner detection pending'}{detail}"
         )
         if persist:
-            self._persist_collected_images()
+            self._persist_collected_images(write_images=True)
+
+    @staticmethod
+    def _placeholder_thumbnail(ok: bool) -> QPixmap:
+        pm = QPixmap(120, 120)
+        pm.fill(QColor(30, 30, 30))
+        painter = QPainter(pm)
+        painter.setPen(QColor("#777"))
+        painter.drawText(pm.rect(), Qt.AlignCenter, "saved")
+        painter.end()
+        return _thumbnail_with_badge(pm, ok)
 
     @staticmethod
     def _detect_corners(image: np.ndarray, cols: int, rows: int):
@@ -850,7 +885,7 @@ class _LensCalTab(QWidget):
             for i in range(self._image_list.count()):
                 self._image_list.item(i).setData(Qt.UserRole, i)
             self._update_count()
-            self._persist_collected_images()
+            self._persist_collected_images(write_images=False)
 
     def _clear_all(self) -> None:
         self._collected.clear()
@@ -866,6 +901,32 @@ class _LensCalTab(QWidget):
             f"Images: {total} | Corners detected: {good}"
         )
 
+    def _entry_image(self, entry: _CollectedImage) -> Optional[np.ndarray]:
+        if entry.image is not None:
+            return entry.image
+        if not entry.file_path:
+            return None
+        image = cv2.imread(entry.file_path, cv2.IMREAD_COLOR)
+        if image is not None:
+            entry.image = image
+        return image
+
+    def _loaded_entries(self) -> list[_CollectedImage]:
+        loaded = []
+        for entry in self._collected:
+            if self._entry_image(entry) is not None:
+                loaded.append(entry)
+        return loaded
+
+    def _refresh_detection_state_from_manager(self, mgr) -> None:
+        images = getattr(mgr, "_images", [])
+        entries = [entry for entry in self._collected if entry.image is not None]
+        for entry, detected in zip(entries, images):
+            entry.corners = getattr(detected, "corners", None)
+            entry.detected = bool(getattr(detected, "detected", False))
+        self._update_count()
+        self._persist_collected_images(write_images=False)
+
     def _reload_saved_set(self) -> None:
         self._load_persisted_images(silent=False)
 
@@ -876,15 +937,10 @@ class _LensCalTab(QWidget):
             self._status_label.setText(f"Open folder failed: {_LENS_IMAGE_DIR}")
             self._status_label.setStyleSheet("color: #ef5350;")
 
-    def _persist_collected_images(self) -> None:
+    def _persist_collected_images(self, write_images: bool = False) -> None:
         if not HAS_CV2:
             return
         _LENS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
-        for old in _LENS_IMAGE_DIR.glob("lens_*.png"):
-            try:
-                old.unlink()
-            except OSError:
-                pass
 
         manifest = {
             "version": 1,
@@ -895,16 +951,26 @@ class _LensCalTab(QWidget):
             "images": [],
         }
         for idx, entry in enumerate(self._collected, start=1):
-            filename = f"lens_{idx:03d}.png"
+            filename = Path(entry.file_path).name if entry.file_path else ""
+            if not filename:
+                stamp = datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+                filename = f"lens_{stamp}_{idx:03d}.png"
+                entry.file_path = str(_LENS_IMAGE_DIR / filename)
             path = _LENS_IMAGE_DIR / filename
-            if not cv2.imwrite(str(path), entry.image):
-                continue
-            h, w = entry.image.shape[:2]
+            image = entry.image
+            if write_images and image is not None and not path.exists():
+                if not cv2.imwrite(str(path), image):
+                    continue
+            if image is not None:
+                h, w = image.shape[:2]
+                shape = [int(w), int(h)]
+            else:
+                shape = []
             manifest["images"].append({
                 "file": filename,
                 "source": entry.source,
                 "detected": bool(entry.detected),
-                "shape": [int(w), int(h)],
+                "shape": shape,
             })
         _LENS_MANIFEST.write_text(
             json.dumps(manifest, indent=2, ensure_ascii=False),
@@ -948,11 +1014,17 @@ class _LensCalTab(QWidget):
             if not filename:
                 continue
             path = _LENS_IMAGE_DIR / filename
-            image = cv2.imread(str(path), cv2.IMREAD_COLOR)
-            if image is None:
+            if not path.exists():
                 continue
             source = str(item.get("source") or filename)
-            self._add_image_entry(image, source, persist=False)
+            self._add_image_entry(
+                image=None,
+                source=source,
+                persist=False,
+                detect=False,
+                detected_hint=bool(item.get("detected", False)),
+                file_path=str(path),
+            )
             loaded += 1
         self._update_count()
         if loaded and not silent:
@@ -998,10 +1070,10 @@ class _LensCalTab(QWidget):
             self._status_label.setText("Error: OpenCV not available.")
             return
 
-        good = [e for e in self._collected if e.detected]
-        if len(good) < 3:
+        entries = self._loaded_entries()
+        if len(entries) < 3:
             self._status_label.setText(
-                f"Need at least 3 images with detected corners (have {len(good)})."
+                f"Need at least 3 calibration images (have {len(entries)})."
             )
             self._status_label.setStyleSheet("color: #ef5350;")
             return
@@ -1017,8 +1089,9 @@ class _LensCalTab(QWidget):
         model, flags, model_label = self._selected_calibration_model()
 
         mgr = CalibrationManager()
-        for entry in self._collected:
-            mgr.add_image(entry.image, entry.source)
+        for entry in entries:
+            if entry.image is not None:
+                mgr.add_image(entry.image, entry.source)
 
         result = mgr.run_calibration(
             cols,
@@ -1032,6 +1105,8 @@ class _LensCalTab(QWidget):
             self._status_label.setText("Calibration failed.")
             self._status_label.setStyleSheet("color: #ef5350;")
             return
+
+        self._refresh_detection_state_from_manager(mgr)
 
         self._camera_matrix = result.camera_matrix
         self._dist_coeffs = result.dist_coeffs
@@ -1082,10 +1157,10 @@ class _LensCalTab(QWidget):
             self._status_label.setText("Error: OpenCV not available.")
             return
 
-        good = [e for e in self._collected if e.detected]
-        if len(good) < 3:
+        entries = self._loaded_entries()
+        if len(entries) < 3:
             self._status_label.setText(
-                f"Need at least 3 images with detected corners (have {len(good)})."
+                f"Need at least 3 calibration images (have {len(entries)})."
             )
             self._status_label.setStyleSheet("color: #ef5350;")
             return
@@ -1104,8 +1179,9 @@ class _LensCalTab(QWidget):
         ]
         for label, key, flags in self._calibration_model_options():
             mgr = CalibrationManager()
-            for entry in self._collected:
-                mgr.add_image(entry.image, entry.source)
+            for entry in entries:
+                if entry.image is not None:
+                    mgr.add_image(entry.image, entry.source)
             try:
                 result = mgr.run_calibration(
                     cols,
@@ -1120,6 +1196,7 @@ class _LensCalTab(QWidget):
             if not result.calibrated or result.dist_coeffs is None:
                 lines.append(f"{label}: failed")
                 continue
+            self._refresh_detection_state_from_manager(mgr)
             coeff_count = int(result.dist_coeffs.size)
             lines.append(
                 f"{label}: RMS {result.opencv_rms:.4f} px, "
