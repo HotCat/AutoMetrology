@@ -939,6 +939,7 @@ class _LensCalTab(QWidget):
         self._worker_thread: Optional[QThread] = None
         self._worker: Optional[QObject] = None
         self._image_write_threads: list[QThread] = []
+        self._image_write_workers: list[QObject] = []
         self._busy = False
 
         layout = QVBoxLayout(self)
@@ -1328,9 +1329,10 @@ class _LensCalTab(QWidget):
         thread.started.connect(worker.run)
         worker.progress.connect(self._set_progress)
         worker.error.connect(self._worker_failed)
+        worker.finished.connect(worker.deleteLater)
+        worker.error.connect(worker.deleteLater)
         worker.finished.connect(thread.quit)
         worker.error.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
         thread.finished.connect(self._clear_worker_refs)
         self._worker_thread = thread
@@ -1420,11 +1422,14 @@ class _LensCalTab(QWidget):
         worker.moveToThread(thread)
         thread.started.connect(worker.run)
         worker.finished.connect(self._image_write_finished)
+        worker.finished.connect(worker.deleteLater)
         worker.finished.connect(thread.quit)
-        thread.finished.connect(worker.deleteLater)
         thread.finished.connect(thread.deleteLater)
-        thread.finished.connect(lambda t=thread: self._forget_image_write_thread(t))
+        thread.finished.connect(
+            lambda t=thread, w=worker: self._forget_image_write_worker(t, w)
+        )
         self._image_write_threads.append(thread)
+        self._image_write_workers.append(worker)
         thread.start()
 
     def _image_write_finished(self, idx: int, ok: bool, message: str) -> None:
@@ -1434,9 +1439,13 @@ class _LensCalTab(QWidget):
         self._status_label.setText(f"Calibration image save failed: {message}")
         self._status_label.setStyleSheet("color: #ef5350;")
 
-    def _forget_image_write_thread(self, thread: QThread) -> None:
+    def _forget_image_write_worker(self, thread: QThread, worker: QObject) -> None:
         try:
             self._image_write_threads.remove(thread)
+        except ValueError:
+            pass
+        try:
+            self._image_write_workers.remove(worker)
         except ValueError:
             pass
 
