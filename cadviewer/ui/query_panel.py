@@ -40,12 +40,14 @@ class QueryPanel(QWidget):
     production_run_requested = Signal()
     production_log_requested = Signal()
     live_query_view_requested = Signal()
+    line_band_overrides_changed = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
         self._results: List[QueryResult] = []
         self._pair_pick_mode: Optional[str] = None
         self._updating_table = False
+        self._updating_line_band_table = False
         self._log_viewer = None
         self._setup_ui()
 
@@ -220,6 +222,9 @@ class QueryPanel(QWidget):
         self._line_band_table.itemSelectionChanged.connect(
             self._on_line_band_selection_changed
         )
+        self._line_band_table.itemChanged.connect(
+            self._on_line_band_item_changed
+        )
         self._line_band_table.setStyleSheet("""
             QTableWidget {
                 background-color: #1a1a1a; color: #cccccc;
@@ -377,6 +382,23 @@ class QueryPanel(QWidget):
                 overrides[key] = mode
         return overrides
 
+    def set_line_fit_side_overrides(self, overrides: dict) -> None:
+        self._updating_line_band_table = True
+        blocker = QSignalBlocker(self._line_band_table)
+        try:
+            self._line_band_table.setRowCount(0)
+            if not isinstance(overrides, dict):
+                return
+            for line_id, band in overrides.items():
+                line_id = str(line_id or "").strip()
+                band = str(band or "").strip().lower()
+                if not line_id or band not in ("positive", "negative"):
+                    continue
+                self.add_line_band_override(line_id, band)
+        finally:
+            del blocker
+            self._updating_line_band_table = False
+
     def add_line_band_override(self, line_id: str, band: str = "positive") -> None:
         line_id = str(line_id or "").strip()
         for row in range(self._line_band_table.rowCount()):
@@ -384,12 +406,14 @@ class QueryPanel(QWidget):
             if item is not None and line_id and item.text().strip() == line_id:
                 self._set_line_band_combo(row, band)
                 self._line_band_table.selectRow(row)
+                self._emit_line_band_overrides_changed()
                 return
         row = self._line_band_table.rowCount()
         self._line_band_table.insertRow(row)
         self._line_band_table.setItem(row, 0, QTableWidgetItem(line_id))
         self._line_band_table.setCellWidget(row, 1, self._make_line_band_combo(band))
         self._line_band_table.selectRow(row)
+        self._emit_line_band_overrides_changed()
 
     def _make_line_band_combo(self, band: str) -> QComboBox:
         combo = QComboBox()
@@ -403,12 +427,17 @@ class QueryPanel(QWidget):
         """)
         if str(band).lower() == "negative":
             combo.setCurrentIndex(1)
+        combo.currentIndexChanged.connect(self._on_line_band_combo_changed)
         return combo
 
     def _set_line_band_combo(self, row: int, band: str) -> None:
         combo = self._line_band_table.cellWidget(row, 1)
         if isinstance(combo, QComboBox):
             combo.setCurrentIndex(1 if str(band).lower() == "negative" else 0)
+
+    def _emit_line_band_overrides_changed(self) -> None:
+        if not self._updating_line_band_table:
+            self.line_band_overrides_changed.emit()
 
     def results(self) -> List[QueryResult]:
         return list(self._results)
@@ -490,8 +519,11 @@ class QueryPanel(QWidget):
         )
         if not rows and self._line_band_table.currentRow() >= 0:
             rows = [self._line_band_table.currentRow()]
+        if not rows:
+            return
         for row in rows:
             self._line_band_table.removeRow(row)
+        self._emit_line_band_overrides_changed()
 
     def _on_line_band_selection_changed(self) -> None:
         row = self._line_band_table.currentRow()
@@ -501,6 +533,12 @@ class QueryPanel(QWidget):
         line_id = item.text().strip() if item is not None else ""
         if line_id:
             self.line_band_row_selected.emit(line_id)
+
+    def _on_line_band_item_changed(self, _item: QTableWidgetItem) -> None:
+        self._emit_line_band_overrides_changed()
+
+    def _on_line_band_combo_changed(self, _index: int) -> None:
+        self._emit_line_band_overrides_changed()
 
     def set_results(self, results: List[QueryResult]) -> None:
         self._results = results

@@ -263,6 +263,9 @@ class MainWindow(QMainWindow):
         # Query window: keep measurements in a wide standalone window so
         # operators can see many Value/Nominal/Deviation/Status rows at once.
         self._query_panel = QueryPanel()
+        self._query_panel.set_line_fit_side_overrides(
+            getattr(self._config, "line_fit_side_overrides", {})
+        )
         self._production_log_viewer = ProductionLogViewer(self._production_log_store)
         self._query_panel.set_production_log_viewer(self._production_log_viewer)
         self._query_window = QDialog(self)
@@ -307,6 +310,9 @@ class MainWindow(QMainWindow):
         self._query_panel.line_band_row_selected.connect(
             self._on_line_band_row_selected
         )
+        self._query_panel.line_band_overrides_changed.connect(
+            self._save_line_band_overrides
+        )
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -335,6 +341,13 @@ class MainWindow(QMainWindow):
         self._config.language = language
         self._config.save()
         self.retranslate_ui()
+
+    @Slot()
+    def _save_line_band_overrides(self) -> None:
+        self._config.line_fit_side_overrides = (
+            self._query_panel.line_fit_side_overrides()
+        )
+        self._config.save()
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -1064,6 +1077,10 @@ class MainWindow(QMainWindow):
                     self._config.camera = cam
             if hasattr(self._reg_panel, 'cleanup'):
                 self._reg_panel.cleanup()
+        if hasattr(self, "_query_panel"):
+            self._config.line_fit_side_overrides = (
+                self._query_panel.line_fit_side_overrides()
+            )
         self._config.save()
         event.accept()
 

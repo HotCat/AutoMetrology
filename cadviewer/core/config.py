@@ -128,6 +128,7 @@ class AppConfig:
     active_production_profile: str = ""
     last_dxf_file: str = ""
     language: str = "en"
+    line_fit_side_overrides: dict = field(default_factory=dict)
 
     @staticmethod
     def load() -> AppConfig:
