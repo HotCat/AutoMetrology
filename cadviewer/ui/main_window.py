@@ -704,7 +704,6 @@ class MainWindow(QMainWindow):
         self._last_selected_feature_id = feature_id
         self._tree_panel.select_feature(feature_id)
         self._viewer.set_highlighted_features([feature_id])
-        bus.view_fit_feature.emit(feature_id)
         bus.property_update.emit({"feature_id": feature_id})
         self._status_label.setText(f"Selected line band override: {feature.display_name}")
 

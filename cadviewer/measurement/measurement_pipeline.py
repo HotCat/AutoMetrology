@@ -1488,6 +1488,15 @@ class MeasurementPipeline:
         prefer_extreme_side = False
         lock_line_direction = False
         explicit_side_sign = self._line_fit_preferred_side_sign(feat)
+        if explicit_side_sign is not None:
+            # Explicit band selection means the user is choosing one side of a
+            # printed stroke. Prefer the outer peak on that side, but keep the
+            # search local so long CAD lines do not expand the scan into
+            # unrelated neighboring geometry.
+            prefer_extreme_side = True
+            lock_line_direction = True
+            max_scan_width = 90.0
+        scan_width = 90.0 if explicit_side_sign is not None else 50.0
         if paired_geometry is not None and explicit_side_sign is None:
             paired_roi = self._roi_predictor.predict_line_roi(paired_geometry, padding=50)
             if paired_roi is not None:
@@ -1525,7 +1534,7 @@ class MeasurementPipeline:
         # Fit — wide search to handle registration errors up to ~5mm
         result: Optional[LineFitResult] = self._line_engine.fit(
             pixel_p1, pixel_p2,
-            scan_width=50.0,
+            scan_width=scan_width,
             min_gradient=15.0,
             preferred_side_point=preferred_side_point,
             max_scan_width=max_scan_width,
@@ -1536,7 +1545,7 @@ class MeasurementPipeline:
         if result is None and preferred_side_point is not None:
             result = self._line_engine.fit(
                 pixel_p1, pixel_p2,
-                scan_width=50.0,
+                scan_width=scan_width,
                 min_gradient=15.0,
                 preferred_side_point=preferred_side_point,
                 max_scan_width=None,
