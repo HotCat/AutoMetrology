@@ -446,7 +446,6 @@ class MainWindow(QMainWindow):
         """Evaluate measurement queries using current image and registration."""
         from ..measurement.evaluator import QueryEvaluator
         from ..measurement.measurement_pipeline import MeasurementPipeline
-        from ..calibration.residual_map import residual_map_from_config
         import numpy as np
         try:
             import cv2
@@ -468,7 +467,10 @@ class MainWindow(QMainWindow):
                     pipeline = MeasurementPipeline(
                         self._repo, image, affine,
                         pixel_size_mm=self._config.pixel_size_mm,
-                        residual_map=residual_map_from_config(self._config),
+                        residual_map=(
+                            self._reg_panel.measurement_residual_map()
+                            if hasattr(self, "_reg_panel") else None
+                        ),
                         pixel_to_world_transform=(
                             self._reg_panel.measurement_pixel_to_world_transform(image_layer.path)
                             if hasattr(self, "_reg_panel") else None
@@ -624,7 +626,6 @@ class MainWindow(QMainWindow):
         try:
             from ..measurement.evaluator import QueryEvaluator
             from ..measurement.measurement_pipeline import MeasurementPipeline
-            from ..calibration.residual_map import residual_map_from_config
             import cv2
             import numpy as np
 
@@ -643,7 +644,10 @@ class MainWindow(QMainWindow):
             pipeline = MeasurementPipeline(
                 self._repo, gray, affine,
                 pixel_size_mm=float(record.get("pixel_size_mm") or self._config.pixel_size_mm),
-                residual_map=residual_map_from_config(self._config),
+                residual_map=(
+                    self._reg_panel.measurement_residual_map()
+                    if hasattr(self, "_reg_panel") else None
+                ),
                 pixel_to_world_transform=measurement_transform,
                 line_pair_bias_mode=(
                     "nearest"

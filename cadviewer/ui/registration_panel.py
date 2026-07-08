@@ -193,6 +193,20 @@ class RegistrationPanel(QWidget):
         self._image_path_label.setStyleSheet("color: #666; font-size: 10px;")
         reg_layout.addWidget(self._image_path_label)
 
+        self._apply_correction_map = QCheckBox("Apply correction map")
+        self._apply_correction_map.setChecked(
+            bool(getattr(self._config, "apply_correction_map", True))
+        )
+        self._apply_correction_map.setToolTip(
+            tr(
+                "Apply saved residual/coordinate correction in measurement. "
+                "Turn off to compare affine-only behavior."
+            )
+        )
+        self._apply_correction_map.setStyleSheet("color: #aaa; font-size: 10px;")
+        self._apply_correction_map.toggled.connect(self._on_apply_correction_map_toggled)
+        reg_layout.addWidget(self._apply_correction_map)
+
         # Registration method dropdown
         method_row = QHBoxLayout()
         method_label = QLabel("Method:")
@@ -793,6 +807,28 @@ class RegistrationPanel(QWidget):
         if hasattr(self, "_canvas"):
             self._apply_saved_display_transform_to_image()
             self._canvas.update()
+
+    def correction_map_enabled(self) -> bool:
+        if hasattr(self, "_apply_correction_map"):
+            return bool(self._apply_correction_map.isChecked())
+        return bool(getattr(self._config, "apply_correction_map", True))
+
+    def measurement_residual_map(self):
+        if not self.correction_map_enabled():
+            return None
+        from ..calibration.residual_map import residual_map_from_config
+        return residual_map_from_config(self._config)
+
+    @Slot(bool)
+    def _on_apply_correction_map_toggled(self, enabled: bool) -> None:
+        if self._config is not None:
+            self._config.apply_correction_map = bool(enabled)
+            self._config.save()
+        self._reg_status.setText(
+            tr("Correction map enabled; rerun registration/evaluate to compare.")
+            if enabled else
+            tr("Correction map disabled; rerun registration/evaluate to compare.")
+        )
 
     def _apply_saved_display_transform_to_image(self) -> None:
         if self._last_display_pixel_to_world is None or not hasattr(self, "_canvas"):
@@ -1508,6 +1544,8 @@ class RegistrationPanel(QWidget):
         """
         cfg = self._config
         lc = getattr(cfg, "lens_calibration", None) if cfg is not None else None
+        if not self.correction_map_enabled():
+            return None
         if lc is None or not getattr(lc, "coordinate_correction", None):
             return None
         model_type = getattr(lc, "correction_model_type", "none")
@@ -1520,8 +1558,7 @@ class RegistrationPanel(QWidget):
             if not transformer.load_model(lc.coordinate_correction, model_type):
                 return None
             image_px = np.array([p["pixel"] for p in img_points], dtype=np.float64)
-            from ..calibration.residual_map import residual_map_from_config
-            residual_map = residual_map_from_config(cfg)
+            residual_map = self.measurement_residual_map()
             if residual_map is not None:
                 image_px = residual_map.correct(image_px)
             image_metric = transformer.transform(image_px)
@@ -1876,6 +1913,7 @@ class RegistrationPanel(QWidget):
                 "display_transform_model": result.transform_model,
                 "measurement_transform_model": "edge_affine",
                 "calibration_applied": bool(self._image_calibration_applied),
+                "correction_map_enabled": self.correction_map_enabled(),
                 "created": datetime.now().isoformat(),
                 "image_path": image_path,
                 "source_image_path": self._auto_source_image_path,

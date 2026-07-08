@@ -129,6 +129,7 @@ class AppConfig:
     last_dxf_file: str = ""
     language: str = "en"
     line_fit_side_overrides: dict = field(default_factory=dict)
+    apply_correction_map: bool = True
 
     @staticmethod
     def load() -> AppConfig:
