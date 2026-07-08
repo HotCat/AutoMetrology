@@ -318,8 +318,6 @@ class MainWindow(QMainWindow):
             self._save_line_band_overrides
         )
         self._query_panel.query_text_changed.connect(self._on_query_text_changed)
-        self._query_panel.query_load_requested.connect(self._load_queries_from_config)
-        self._query_panel.query_save_requested.connect(self._save_queries_to_config)
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -365,18 +363,10 @@ class MainWindow(QMainWindow):
         QTimer.singleShot(500, self._save_queries_to_config)
 
     @Slot()
-    def _load_queries_from_config(self) -> None:
-        self._query_panel.set_query_text(
-            getattr(self._config, "measurement_queries", "")
-        )
-        self._status_label.setText(tr("Measurement queries loaded from config"))
-
-    @Slot()
     def _save_queries_to_config(self) -> None:
         self._saving_query_text = False
         self._config.measurement_queries = self._query_panel.get_query_text()
         self._config.save()
-        self._status_label.setText(tr("Measurement queries saved to config"))
 
     # ── slot handlers ──────────────────────────────────────────────
 

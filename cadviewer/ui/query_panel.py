@@ -41,8 +41,6 @@ class QueryPanel(QWidget):
     live_query_view_requested = Signal()
     line_band_overrides_changed = Signal()
     query_text_changed = Signal(str)
-    query_load_requested = Signal()
-    query_save_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -87,14 +85,9 @@ class QueryPanel(QWidget):
         self._editor.textChanged.connect(self._on_query_text_changed)
         layout.addWidget(self._editor)
 
-        # Query file buttons
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(4)
 
-        self._btn_load = QPushButton("Load Config")
-        self._btn_load.clicked.connect(self._load_query_file)
-        self._btn_save = QPushButton("Save Config")
-        self._btn_save.clicked.connect(self._save_query_file)
         self._btn_production_run = QPushButton("Run Production")
         self._btn_production_run.setToolTip("Capture camera frame, register, and evaluate queries (F5)")
         self._btn_production_run.clicked.connect(self._request_production_run)
@@ -111,8 +104,8 @@ class QueryPanel(QWidget):
         self._btn_queries.hide()
 
         for btn in [
-            self._btn_load, self._btn_save, self._btn_production_run,
-            self._btn_evaluate, self._btn_export, self._btn_logs, self._btn_queries,
+            self._btn_production_run, self._btn_evaluate, self._btn_export,
+            self._btn_logs, self._btn_queries,
         ]:
             btn.setStyleSheet("""
                 QPushButton {
@@ -318,8 +311,8 @@ class QueryPanel(QWidget):
 
         self._query_view_widgets = [
             self._editor,
-            self._btn_load, self._btn_save, self._btn_production_run,
-            self._btn_evaluate, self._btn_export, self._btn_logs,
+            self._btn_production_run, self._btn_evaluate, self._btn_export,
+            self._btn_logs,
             self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle,
             self._btn_pick_arc, self._btn_cancel_pick, self._pair_pick_status,
             self._tol_percent_label, self._tol_percent,
@@ -687,16 +680,6 @@ class QueryPanel(QWidget):
     def _cancel_pair_pick(self) -> None:
         self.set_pair_pick_active(None)
         self.pair_pick_cancelled.emit()
-
-    @Slot()
-    def _load_query_file(self) -> None:
-        self.query_load_requested.emit()
-
-    @Slot()
-    def _save_query_file(self) -> None:
-        if self._results:
-            self._sync_editor_from_results()
-        self.query_save_requested.emit()
 
     @Slot()
     def _on_query_text_changed(self) -> None:
