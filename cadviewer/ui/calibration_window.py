@@ -1398,6 +1398,8 @@ class _LensCalTab(QWidget):
             if write_images and image is not None and not path.exists():
                 if not cv2.imwrite(str(path), image):
                     continue
+            if image is None and path.exists():
+                image = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if image is not None:
                 h, w = image.shape[:2]
                 shape = [int(w), int(h)]
@@ -1506,8 +1508,11 @@ class _LensCalTab(QWidget):
             if not path.exists():
                 continue
             source = str(item.get("source") or filename)
+            image = cv2.imread(str(path), cv2.IMREAD_COLOR)
+            if image is None:
+                continue
             self._add_image_entry(
-                image=None,
+                image=image,
                 source=source,
                 persist=False,
                 detect=False,
