@@ -1,386 +1,279 @@
-# CAD Inspection Tool 用户手册（简体中文）
+# AutoMetrology 用户手册（简体中文）
 
-本文档由实际运行的应用程序自动截图生成。截图保存在 `docs/screenshots/`，并作为本文档描述 UI 状态的依据。当前截图使用中文界面、`xintai.dxf`、`cadrefs_camera_capture.png` 和 `query2.txt` 生成。
+本文档基于 2026-07-08 实际运行的软件界面更新。截图保存在 `docs/screenshots/`。本次更新使用真实 Hikvision 相机实时采集图像、当前配置文件、以及 CAD 文件：
+
+`/home/hotcat/Downloads/cadrefs/cads/弘毅云佳-工位牌-（大号）无挂绳孔V1.1_窗口雕刻测量22222.dxf`
+
+本次实测流程：打开相机 → 采集当前帧 → 暗窗口 Window Register → 运行 Measurement Queries → 保存生产日志。实测像素尺寸为 `0.027696345 mm/px`，镜头校正已应用，Correction Map 开关为关闭状态，窗口注册使用 `AB8E:7 / AB8E:1 / AB8E:3 / AB8E:5` 四条窗口边。
 
 ## 文档索引
 
-- [1. 主窗口](#1-主窗口)
-- [2. 加载 DXF](#2-加载-dxf)
-- [3. CAD 画布浏览](#3-cad-画布浏览)
-- [4. 相机实时预览与参数](#4-相机实时预览与参数)
-- [5. 标定窗口](#5-标定窗口)
-- [6. 自动注册配置](#6-自动注册配置)
-- [7. 测量查询编辑器](#7-测量查询编辑器)
-- [8. 测量叠加与结果选择](#8-测量叠加与结果选择)
-- [9. 生产测量日志查看器](#9-生产测量日志查看器)
-- [10. 错误信息](#10-错误信息)
-- [11. 故障排查示例](#11-故障排查示例)
-- [截图索引](#截图索引)
+1. [主窗口与 DXF 加载](#1-dxf)
+2. [相机采集与实时预览](#2)
+3. [窗口注册](#3)
+4. [测量查询](#4)
+5. [测量叠加与结果复查](#5)
+6. [生产日志](#6)
+7. [标定与校正选项](#7)
+8. [常见问题](#8)
+9. [截图索引](#9)
 
+## 1. 主窗口与 DXF 加载
 
-## 1. 主窗口
-
-### 用途
-主窗口用于集中显示 DXF 特征树、CAD 画布、属性面板、工具栏和状态栏。它是加载图纸、查看特征、打开注册面板和测量窗口的入口。
+主窗口包含菜单栏、工具栏、特征浏览器、CAD 画布、属性面板和状态栏。加载 DXF 后，左侧特征树显示 Lines、Circles、Text 等几何实体，CAD 画布显示图纸。
 
 ![主窗口](screenshots/01_main_window.png)
 
-图：主窗口。
+操作步骤：
 
-### 操作步骤
-1. 启动软件后确认菜单栏、工具栏、左侧特征树、中间 CAD 画布、右侧属性区域和底部状态栏可见。
-2. 使用工具栏的 `Open DXF` 打开图纸，或从菜单 `File` 中选择打开。
-3. 需要测量时，打开 `View` 菜单中的 `Measurement Window`；需要注册时，打开 `Registration Panel`。
+1. 点击 `打开 DXF`。
+2. 选择当前产品 CAD 文件。
+3. 点击 `适配全部`，让 CAD 图形完整进入视野。
+4. 在左侧特征浏览器中展开 Lines，确认窗口边、印刷线、外轮廓线等实体可见。
 
-### 预期结果
-主界面应完整显示，底部状态栏显示当前状态，特征计数区域显示当前加载的特征数量。
-
-### 常见错误
-- 只看见空画布：通常是尚未加载 DXF。
-- 工具窗口不可见：检查 `View` 菜单中的面板开关。
-
-### 故障排查
-如果窗口内容不完整，先放大主窗口；如果仍不可见，关闭后重新启动应用。参见[第 11 节](#11-故障排查示例)。
-
-
-## 2. 加载 DXF
-
-### 用途
-DXF 加载工作流将图纸解析为线、圆、圆弧等可测量 CAD 特征，并填充左侧特征树。
-
-![DXF 加载完成](screenshots/02_dxf_loading.png)
-
-图：DXF 加载完成。
-
-补充局部图：
-
-![DXF 特征树局部](screenshots/02a_feature_tree_crop.png)
-
-图：DXF 特征树局部。
-
-### 操作步骤
-1. 点击工具栏 `Open DXF`。
-2. 选择 `xintai.dxf` 或生产对应的 DXF 文件。
-3. 等待状态栏显示已加载的特征数量。
-4. 在左侧特征树中展开 Lines、Circles、Arcs 等分类。
-
-### 预期结果
-状态栏显示已加载特征，特征树列出分类和条目，CAD 画布显示图形。
-
-### 常见错误
-- 文件未显示：可能选择了 DWG 或损坏 DXF。
-- 特征树为空：DXF 中没有受支持实体，或导入失败。
-
-### 故障排查
-确认文件路径存在，并优先使用 DXF 格式。DWG 需要先配置转换器。
-
-
-## 3. CAD 画布浏览
-
-### 用途
-CAD 画布用于查看图纸、缩放平移、选择特征，并显示图像叠加、注册结果和测量调试结果。
+本次示例加载结果为 190 个特征：165 条线、24 个圆、1 个文字对象。
 
 ![CAD 画布](screenshots/03_cad_canvas.png)
 
-图：CAD 画布。
+注意事项：
 
-### 操作步骤
-1. 加载 DXF 后点击 `Fit All` 适配全部图形。
-2. 使用鼠标滚轮缩放，拖动画布平移。
-3. 点击 CAD 特征，左侧树和右侧属性面板会同步选中。
-4. 测量查询选中结果后，画布会高亮对应 CAD 和图像拟合特征。
+- 查询和注册使用的是 CAD 特征 ID、DXF handle 或唯一前缀。对于由 polyline 打散得到的线，常见 ID 形式为 `AB8E:3`。
+- 如果画布为空，先确认 DXF 路径正确，再点击 `适配全部`。
+- 如果特征树没有叶节点，通常是 DXF 导入失败或筛选框过滤了特征。
 
-### 预期结果
-CAD 线条保持图纸颜色；拟合线、拟合圆和圆弧拟合圆以绿色显示。
+## 2. 相机采集与实时预览
 
-### 常见错误
-- 图纸看不见：先点击 `Fit All`。
-- 高亮位置不对：检查自动注册参数和相机图像是否匹配。
+相机区域位于右侧 Registration 面板中的 `Camera Capture`。本次实测相机为 `Hikvision MV-CS200-10UM`。
 
-### 故障排查
-如果 CAD 与图像错位，重新执行自动注册，并检查 P1/P2 ROI 是否框住基准圆。
+![相机打开后的注册面板](screenshots/04_registration_camera_open.png)
 
+操作步骤：
 
-## 4. 相机实时预览与参数
+1. 打开 `视图` → `Registration Panel`。
+2. 在 `Camera Capture` 中选择相机。
+3. 点击 `打开`，确认预览区域出现实时图像。
+4. 需要对焦时点击 `对焦预览`。
+5. 点击 `采集图像`，当前帧会被送入 CAD 画布作为图像层。
 
-### 用途
-相机实时预览窗口用于对焦、观察采集画面，并调整曝光、Gamma、对比度、模拟增益和镜像参数。
+本次采集到的当前帧如下：
 
-![相机实时预览与参数](screenshots/05_camera_live_preview_parameters.png)
+![实时采集帧](screenshots/05_live_capture_frame.png)
 
-图：相机实时预览与参数。
+采集成功后，状态栏会显示图像已加载，Registration 面板中图像路径显示为相机采集。若已保存镜头标定，采集时会先执行 OpenCV 镜头去畸变，再进入注册和测量。
 
-参数局部图：
+![采集图像后](screenshots/06_frame_captured.png)
 
-![相机参数局部](screenshots/05a_camera_parameters_crop.png)
+注意事项：
 
-图：相机参数局部。
+- 如果 `采集图像` 按钮不可用，先确认相机已经打开。
+- 如果画面过曝或过暗，调整曝光、增益、Gamma 或背光。
+- 生产测量建议使用稳定背光，避免薄膜反光造成边缘灰度带漂移。
 
-### 操作步骤
-1. 在注册面板的相机区域选择设备并点击 `Open`。
-2. 点击 `Focus Preview` 打开实时预览窗口。
-3. 调整 Exposure、Gamma、Contrast、Analog Gain。
-4. 对焦完成后点击 `Capture Frame` 将当前帧送入测量流程。
+## 3. 窗口注册
 
-### 预期结果
-左侧显示实时图像，右侧显示参数控件，底部显示采集按钮和分辨率。
+当前生产流程使用 Window Register。软件根据指定 CAD 窗口边在相机图像中寻找窗口边缘，计算图像到 CAD 的变换。显示可使用 homography 贴合窗口，测量使用 edge affine，避免投影变换影响尺寸测量。
 
-### 常见错误
-- `No camera detected`：系统未识别相机或驱动未加载。
-- 图像过暗或过亮：调整曝光或启用自动曝光。
+![窗口注册完成](screenshots/07_window_registered.png)
 
-### 故障排查
-先刷新设备列表，再检查相机连接、驱动和权限。无相机时可用文件图像进行注册测试。
+本次注册配置：
 
+| 项目 | 值 |
+|---|---|
+| 检测模式 | 暗窗口 |
+| CAD 窗口边 | `LINE[AB8E:7]`, `LINE[AB8E:1]`, `LINE[AB8E:3]`, `LINE[AB8E:5]` |
+| 注册置信度 | `0.9963` |
+| 显示模型 | `edge_homography` |
+| 测量模型 | `edge_affine` |
+| Correction Map | 关闭 |
 
-## 5. 标定窗口
+操作步骤：
 
-### 用途
-标定窗口用于计算像素尺寸 mm/px，并执行镜头畸变标定。标定结果会影响注册和测量精度。
+1. 在 `窗口 CAD 边` 区域选择检测模式：暗窗口、亮窗口或自动。
+2. 输入或选择 4 条窗口 CAD 边。
+3. 点击 `窗口配准`。
+4. 观察 CAD 红线是否与相机图像窗口边重合。
+5. 如果位置正确，再进入 Measurement Queries 点击 `计算` 或 `生产运行`。
 
-![像素尺寸标定页](screenshots/06_calibration_dialog.png)
+注意事项：
 
-图：像素尺寸标定页。
+- 对窗口类产品，窗口边通常由 CNC 或雕刻加工，几何稳定性高，适合作为注册基准。
+- 对网格排列产品，只需要选择当前被相机看到的单个产品窗口边，不需要让程序猜整个阵列。
+- 如果 CAD 与图像出现 180 度翻转，检查四条窗口边是否属于同一个产品窗口，且没有混入相邻产品边。
+- Correction Map 开关只用于比较残差/坐标校正影响。当前实测中关闭该开关后，窗口注册和测量仍正常。
 
-镜头标定页：
+## 4. 测量查询
 
-![镜头标定页](screenshots/06a_lens_calibration_tab.png)
+Measurement Queries 用于编辑测量表达式、运行测量、查看结果。查询文本现在保存在主配置文件中，会自动保存；界面中不再使用单独的查询文件 Load/Save。
 
-图：镜头标定页。
+![测量查询窗口](screenshots/08_measurement_queries.png)
 
-### 操作步骤
-1. 从 `Settings` 菜单打开 `Camera Calibration...`。
-2. 设置棋盘格列数、行数和单格尺寸。
-3. 在 `Pixel Size Calibration` 中选择棋盘图像，点击 `Calibrate Pixel Size`。
-4. 在 `Lens Calibration` 中添加多张棋盘图像，点击 `Run Calibration`。
-5. 标定成功后保存到配置。
+当前配置中的查询为：
 
-### 预期结果
-像素尺寸页显示 mm/px；镜头标定页显示 RMS 误差和保存按钮。
+```text
+lines(AB8E:7, AB8E:3), 0.5706
+lines(AB8E:1, AB8E:5), 0.8018
+lines(AC66:3, AB8E:7), 0.1100
+lines(AB8E:3, AC68:3), 0.1100
+lines(AC68:1, AB8E:1), 0.1970
+lines(AB8E:5, AC68:5), 0.1972
+```
 
-### 常见错误
-- 棋盘角点检测失败：棋盘不清晰、列/行数量设置错误或曝光不合适。
-- 标定误差过大：采样姿态单一或图像数量不足。
+支持的表达式：
 
-### 故障排查
-使用清晰、无遮挡、不同位置和角度的棋盘图像；确认 `Cols` 和 `Rows` 是内角点数量。
+| 表达式 | 用途 |
+|---|---|
+| `lines(ID1, ID2), threshold` | 两条线之间的距离 |
+| `circles(ID1, ID2), threshold` | 两个圆心之间的距离 |
+| `circle(ID), threshold` | 圆半径 |
+| `arcs(ID), threshold` | 圆弧半径 |
 
+本次当前帧实测结果：
 
-## 6. 自动注册配置
+| 查询 | 测量值 | 名义值 | 偏差 | 阈值 | 状态 |
+|---|---:|---:|---:|---:|---|
+| `lines(AB8E:7, AB8E:3)` | 57.0922 | 57.0600 | +0.0322 | 0.5706 | OK |
+| `lines(AB8E:1, AB8E:5)` | 80.1915 | 80.1800 | +0.0115 | 0.8018 | OK |
+| `lines(AC66:3, AB8E:7)` | 10.7413 | 11.0000 | -0.2587 | 0.1100 | NG |
+| `lines(AB8E:3, AC68:3)` | 11.1410 | 11.0000 | +0.1410 | 0.1100 | NG |
+| `lines(AC68:1, AB8E:1)` | 19.6038 | 19.7048 | -0.1010 | 0.1970 | OK |
+| `lines(AB8E:5, AC68:5)` | 19.7155 | 19.7152 | +0.0003 | 0.1972 | OK |
 
-### 用途
-自动注册配置通过两个 CAD 基准圆和图像 ROI 自动求解相机图像到 CAD 的变换。
+![测量结果局部](screenshots/08a_measurement_results_crop.png)
 
-![自动注册配置](screenshots/04_auto_registration_configuration.png)
+查询区常用控件：
 
-图：自动注册配置。
+- `生产运行`：采集相机图像、执行窗口注册、计算查询并保存生产日志。
+- `计算`：使用当前已加载图像和当前注册结果重新计算查询。
+- `导出结果`：将当前结果导出为文本或 CSV。
+- `查看日志`：进入生产日志查看器。
+- `选择直线对`、`选择圆对`、`选择圆`、`选择圆弧`：通过点击 CAD 特征自动生成查询。
+- `强制最近线偏置`：对印刷线/窗口线组合，优先使用靠近窗口边的那一侧印刷灰度带。
+- `线条灰度带`：全局选择 Auto、+N band、-N band。
+- Line ID 表：按单条线覆盖灰度带选择。本次配置中 `AC66:3` 使用 `-N`，`AC68:3 / AC68:5 / AC68:1` 使用 `+N`。
 
-局部放大：
+注意事项：
 
-![自动注册配置局部](screenshots/04a_auto_registration_crop.png)
+- 查询 ID 可以是完整 feature id、DXF handle、或唯一短前缀。
+- 若结果为 `no_measurement[NONE]`，表示图像测量失败，不会回退到 CAD 名义值。
+- 表格中的 `[MEASURED]` 表示结果来自图像拟合，而不是直接使用 CAD。
 
-图：自动注册配置局部。
+## 5. 测量叠加与结果复查
 
-### 操作步骤
-1. 加载 DXF 和相机图像。
-2. 在 `Production Parameters` 中选择生产参数配置。
-3. 设置 CAD P1、CAD P2，可以使用 DXF handle 或已选特征。
-4. 设置 ROI P1、ROI P2，格式为 `x,y,w,h`。
-5. 点击 `Auto Register`。
-6. 注册成功后再运行测量查询。
+点击结果表中的任一行，主画布会高亮对应 CAD 特征，并显示图像拟合得到的测量几何。绿色拟合线/圆应贴合真实图像边缘。
 
-### 预期结果
-状态区显示自动注册成功，图像与 CAD 对齐，画布中基准圆位置一致。
+![测量叠加](screenshots/09_measurement_overlay_canvas.png)
 
-### 常见错误
-- ROI 格式错误：必须是四个整数。
-- ROI 未框住基准圆：自动检测会失败或注册偏移。
-- P1/P2 顺序反了：图像会旋转或平移错误。
+![选中一条测量后的叠加](screenshots/10_selected_measurement_overlay.png)
 
-### 故障排查
-使用 `Pick ROIs...` 重新框选，确认 CAD P1/P2 与图像 P1/P2 一一对应。
+复查方法：
 
+1. 在结果表中点击偏差较大的行。
+2. 观察绿色拟合线是否落在预期灰度带上。
+3. 如果拟合到另一侧印刷带，在 Line ID 表中切换该线的 `+N/-N`。
+4. 如果边缘模糊，优先检查背光、薄膜反光、曝光和焦点。
+5. 如果所有结果整体偏移，优先重新执行窗口注册。
 
-## 7. 测量查询编辑器
+## 6. 生产日志
 
-### 用途
-测量查询编辑器用于编写测量指令、运行评价、查看 Value/Nominal/Deviation/Threshold/Status 表格，并进入生产日志查看器。
+`生产运行` 会将当前 CAD、采集图像、注册参数、标定信息、测量查询和结果写入生产日志。日志按日期组织，并按合格/不合格分类。
 
-![测量查询编辑器](screenshots/07_query_measurement_editor.png)
+![生产日志](screenshots/11_production_log_viewer.png)
 
-图：测量查询编辑器。
+本次日志记录：
 
-结果表局部图：
+- 时间：2026-07-08 16:54:06
+- 结果：合格 4，不合格 2，无测量 0，错误 0
+- 图像：由当前相机帧保存到日志目录
+- 注册：window_line_registration_dark
 
-![测量结果表局部](screenshots/07a_query_results_table_crop.png)
+操作步骤：
 
-图：测量结果表局部。
+1. 在 Measurement Queries 中点击 `查看日志`。
+2. 在日历中选择日期。
+3. 展开合格或不合格分类。
+4. 点击记录，右侧显示该次生产测量的完整结果。
+5. 点击结果行可回放该次记录的图像和测量叠加。
 
-### 操作步骤
-1. 打开 `Measurement Window`。
-2. 点击 `Load` 载入查询文件，或直接输入查询。
-3. 支持 `lines(ID1, ID2)`、`circles(ID1, ID2)`、`circle(ID)`、`arcs(ID)`。
-4. 点击 `Evaluate`。
-5. 点击结果表中的任一行查看对应 CAD 和图像拟合特征。
-6. 点击 `Run Production` 可按生产流程采集、注册、评价并保存日志。
+## 7. 标定与校正选项
 
-### 预期结果
-表格显示 Query、Value、Nominal、Deviation、Threshold、Status。OK/NG 状态用于快速判断是否超差。
+相机标定位于 `设置` → `Camera Calibration...`。当前系统通常需要：
 
-### 常见错误
-- ID 无法解析：查询中的 ID、handle 或前缀写错。
-- `No Measurement`：图像未加载、未注册或边缘拟合失败。
+- Pixel Size Calibration：确定 mm/px。
+- Lens Calibration：保存 OpenCV 镜头畸变参数。
+- Correction Map：可选残差/坐标校正，用于诊断或特殊场景。
 
-### 故障排查
-优先检查 DXF 是否正确加载；然后检查图像、自动注册和 ROI；最后检查查询语法。
+当前经验结论：
 
+- 大覆盖率、高质量棋盘图像对 CAD 线与印刷线平行性贡献最大。
+- 对当前镜头，标准 OpenCV 标定模型已经足够，不必默认启用 rational/thin-prism/tilted 模型。
+- Correction Map 开关用于比较残差校正影响；本次实测关闭后视觉对齐仍正常。
+- Window Register 的测量变换使用 affine，可以避免显示 homography 对尺寸测量产生不必要影响。
 
-## 8. 测量叠加与结果选择
+使用建议：
 
-### 用途
-选择测量结果后，画布会显示对应测量调试叠加。拟合线和拟合圆为绿色，CAD 线条保持原颜色。圆弧查询会显示绿色拟合整圆，便于判断拟合质量。
+1. 使用覆盖 90% 左右视野的棋盘采集多张图像。
+2. 保留不同位置、不同角度、清晰无拖影的图片。
+3. 删除角点检测错误或 reprojection outlier 明显的图片。
+4. 标定后用实际产品线条检查是否仍存在局部弯曲或方向性误差。
+5. 只有在标准模型无法解释残差时，再逐步测试更复杂模型。
 
-![测量叠加显示](screenshots/08_measurement_overlay_canvas.png)
+## 8. 常见问题
 
-图：测量叠加显示。
+### 8.1 相机打不开
 
-### 操作步骤
-1. 在测量结果表中单击一行。
-2. 观察 CAD 画布中高亮的 CAD 特征和图像边缘点。
-3. 对圆弧查询，重点查看绿色拟合圆是否落在目标内弧或外弧上。
-4. 若拟合不正确，回到自动注册和 ROI 设置检查图像对齐。
+处理顺序：
 
-### 预期结果
-被选查询的特征被高亮，绿色拟合几何与图像实际边缘重合。
+1. 确认 Hikvision MVS 能枚举相机。
+2. 在 Registration Panel 点击 `刷新`。
+3. 确认没有其他程序独占相机。
+4. 重新点击 `打开`。
 
-### 常见错误
-- 拟合到外弧：图像边缘对比度或 ROI 限制不足。
-- 绿色拟合圆偏离 CAD：注册参数或像素尺寸可能错误。
+### 8.2 `生产运行` 失败在窗口注册阶段
 
-### 故障排查
-重新执行自动注册；必要时调整相机曝光，确保目标边缘清晰。
+常见原因：
 
+- 未采集图像。
+- 当前 DXF 与窗口边配置不匹配。
+- 窗口边 ID 不属于同一个产品。
+- 检测模式选择错误，例如亮窗口图像却使用暗窗口模式。
 
-## 9. 生产测量日志查看器
+处理方法：
 
-### 用途
-生产日志查看器按日历组织生产测量记录，按 OK/NG 分类，并显示每条记录的查询结果表。日志可用于复查 CAD、相机图像、注册参数和测量结果。
+1. 先手动点击 `采集图像`。
+2. 再点击 `窗口配准`。
+3. 确认 CAD 红线与相机窗口边重合。
+4. 最后再运行 Measurement Queries。
 
-![生产测量日志查看器](screenshots/09_measurement_log_viewer.png)
+### 8.3 印刷线测量偏差大
 
-图：生产测量日志查看器。
+印刷线不是高精度加工基准，可能有收缩、扩张、油墨厚度和灰度带双边问题。处理顺序：
 
-结果表局部图：
+1. 确认窗口注册准确。
+2. 检查 Line ID 表中该线的灰度带选择。
+3. 尝试 `强制最近线偏置`。
+4. 使用背光提高边缘稳定性。
+5. 记录多次重复性，区分系统偏差和随机噪声。
 
-![日志结果表局部](screenshots/09a_log_results_table_crop.png)
+### 8.4 查询不自动保存
 
-图：日志结果表局部。
+Measurement Queries 的文本保存在主配置文件中。正常情况下编辑后会自动保存，关闭程序时也会再次写入。界面不再提供单独的查询文件 Load/Save。
 
-### 操作步骤
-1. 在测量窗口点击 `View Logs`。
-2. 在日历中选择月份和日期。
-3. 在 Daily Records 中展开 OK 或 NG。
-4. 点击具体记录，右侧表格显示该记录的测量结果。
-5. 点击结果行，主画布会加载对应 CAD/图像上下文并高亮相关特征。
-6. 点击 `Measurement Queries` 返回实时查询编辑器。
+### 8.5 结果显示 `no_measurement[NONE]`
 
-### 预期结果
-日历显示记录分布，左侧按 OK/NG 分类，右侧显示与查询编辑器一致的结果表头。
+这表示图像中没有可靠拟合到对应特征。软件不会用 CAD 名义值冒充测量值。需要检查图像、注册、查询 ID、灰度带选择和边缘质量。
 
-### 常见错误
-- 某天没有记录：未执行生产流程或日志数据库路径不同。
-- 记录无法复现：原 CAD 或图像文件被移动。
-
-### 故障排查
-保留生产图像和 CAD 文件；日志记录中包含文件名、仿射矩阵、注册参数和标定参数。
-
-
-## 10. 错误信息
-
-### 用途
-错误信息用于指出查询语法、ID 解析、图像测量或生产流程中的失败原因。
-
-![查询错误信息](screenshots/10_error_messages_query.png)
-
-图：查询错误信息。
-
-错误表局部图：
-
-![错误结果表局部](screenshots/10a_error_table_crop.png)
-
-图：错误结果表局部。
-
-警告对话框示例：
-
-![警告对话框](screenshots/10b_warning_dialog.png)
-
-图：警告对话框。
-
-### 操作步骤
-1. 查看结果表中的 Status 和错误说明。
-2. 若提示 `Cannot resolve ID`，检查查询 ID 是否存在于特征树。
-3. 若提示无测量结果，检查图像和注册状态。
-4. 修改查询后重新点击 `Evaluate`。
-
-### 预期结果
-错误行不会被误判为 OK；用户可以根据错误文本定位问题。
-
-### 常见错误
-- 复制了错误的短 ID。
-- 使用了圆查询函数测量圆弧，或使用了线查询函数测量圆。
-
-### 故障排查
-使用 `Pick Lines Pair`、`Pick Circle`、`Pick Arc` 生成查询，可减少手写 ID 错误。
-
-
-## 11. 故障排查示例
-
-### 用途
-本节展示常见生产问题的界面状态，帮助操作员快速定位问题。
-
-![无相机故障排查示例](screenshots/11_troubleshooting_no_camera.png)
-
-图：无相机故障排查示例。
-
-### 操作步骤
-1. 如果 `Run Production` 失败，先查看底部状态栏。
-2. 如果提示相机未打开，进入注册面板确认 Camera Capture 区域。
-3. 如果没有设备，点击 `Refresh` 并检查硬件连接。
-4. 如果只是做离线验证，可使用 `Load Image...` 载入图像文件。
-5. 图像加载后重新执行自动注册，再运行测量。
-
-### 预期结果
-问题原因应能从状态栏、相机状态或测量结果表中定位。
-
-### 常见错误
-- 未打开相机直接运行生产。
-- 加载了图像但未执行自动注册。
-- 使用了不匹配当前产品的生产参数配置。
-
-### 故障排查
-按顺序检查：相机连接 → 图像是否加载 → 自动注册 P1/P2 → 查询语法 → 测量结果表。
-
-
-## 截图索引
+## 9. 截图索引
 
 | 文件 | 说明 |
 |---|---|
-| [01_main_window.png](screenshots/01_main_window.png) | 主窗口 |
-| [02_dxf_loading.png](screenshots/02_dxf_loading.png) | DXF 加载完成 |
-| [02a_feature_tree_crop.png](screenshots/02a_feature_tree_crop.png) | DXF 特征树局部 |
+| [01_main_window.png](screenshots/01_main_window.png) | 主窗口和 Hongyi DXF |
 | [03_cad_canvas.png](screenshots/03_cad_canvas.png) | CAD 画布 |
-| [04_auto_registration_configuration.png](screenshots/04_auto_registration_configuration.png) | 自动注册配置 |
-| [04a_auto_registration_crop.png](screenshots/04a_auto_registration_crop.png) | 自动注册配置局部 |
-| [05_camera_live_preview_parameters.png](screenshots/05_camera_live_preview_parameters.png) | 相机实时预览与参数 |
-| [05a_camera_parameters_crop.png](screenshots/05a_camera_parameters_crop.png) | 相机参数局部 |
-| [06_calibration_dialog.png](screenshots/06_calibration_dialog.png) | 标定窗口 |
-| [06a_lens_calibration_tab.png](screenshots/06a_lens_calibration_tab.png) | 镜头标定页 |
-| [07_query_measurement_editor.png](screenshots/07_query_measurement_editor.png) | 测量查询编辑器 |
-| [07a_query_results_table_crop.png](screenshots/07a_query_results_table_crop.png) | 测量结果表局部 |
-| [08_measurement_overlay_canvas.png](screenshots/08_measurement_overlay_canvas.png) | 测量叠加显示 |
-| [09_measurement_log_viewer.png](screenshots/09_measurement_log_viewer.png) | 生产测量日志查看器 |
-| [09a_log_results_table_crop.png](screenshots/09a_log_results_table_crop.png) | 日志结果表局部 |
-| [10_error_messages_query.png](screenshots/10_error_messages_query.png) | 查询错误信息 |
-| [10a_error_table_crop.png](screenshots/10a_error_table_crop.png) | 错误结果表局部 |
-| [11_troubleshooting_no_camera.png](screenshots/11_troubleshooting_no_camera.png) | 无相机故障排查示例 |
-| [10b_warning_dialog.png](screenshots/10b_warning_dialog.png) | 警告对话框 |
+| [04_registration_camera_open.png](screenshots/04_registration_camera_open.png) | 相机打开后的注册面板 |
+| [05_live_capture_frame.png](screenshots/05_live_capture_frame.png) | 当前实时采集帧 |
+| [06_frame_captured.png](screenshots/06_frame_captured.png) | 图像采集后 |
+| [07_window_registered.png](screenshots/07_window_registered.png) | Window Register 完成 |
+| [08_measurement_queries.png](screenshots/08_measurement_queries.png) | Measurement Queries 当前结果 |
+| [08a_measurement_results_crop.png](screenshots/08a_measurement_results_crop.png) | 测量结果局部 |
+| [09_measurement_overlay_canvas.png](screenshots/09_measurement_overlay_canvas.png) | 测量叠加 |
+| [10_selected_measurement_overlay.png](screenshots/10_selected_measurement_overlay.png) | 选中测量行后的叠加 |
+| [11_production_log_viewer.png](screenshots/11_production_log_viewer.png) | 生产日志查看器 |
