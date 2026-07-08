@@ -201,13 +201,30 @@ class _CalibrationWorker(QObject):
                 )
                 mgr.add_image(image, source)
 
-            self.progress.emit("Detecting chessboard corners and calibrating...", 35)
+            def calibration_progress(stage: str, pos: int, total: int) -> None:
+                total = max(int(total), 1)
+                pos = max(0, min(int(pos), total))
+                if stage == "Detecting chessboard corners":
+                    value = 25 + int(pos * 35 / total)
+                elif stage == "Solving camera calibration":
+                    value = 65
+                elif stage == "Building calibration report":
+                    value = 70 + int(pos * 22 / total)
+                else:
+                    value = 60
+                if pos > 0:
+                    self.progress.emit(f"{stage} {pos}/{total}", value)
+                else:
+                    self.progress.emit(stage, value)
+
+            self.progress.emit("Starting chessboard detection...", 25)
             result = mgr.run_calibration(
                 self._cols,
                 self._rows,
                 self._cell_mm,
                 flags=self._flags,
                 model=self._model,
+                progress_callback=calibration_progress,
             )
             self.progress.emit("Preparing calibration result...", 95)
             self.finished.emit({

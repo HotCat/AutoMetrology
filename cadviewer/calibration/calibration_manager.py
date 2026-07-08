@@ -15,7 +15,7 @@ AffineCalibrationModel (in coordinate_correction.py), not by TPS.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Optional
+from typing import Callable, Optional
 
 import numpy as np
 
@@ -99,6 +99,7 @@ class CalibrationManager:
         image_size: tuple[int, int] | None = None,
         flags: int = 0,
         model: str = "standard",
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
     ) -> CalibrationResult:
         """Run the full calibration pipeline.
 
@@ -121,11 +122,14 @@ class CalibrationManager:
             return CalibrationResult(calibration_model=model, calibration_flags=flags)
 
         # Step 1: Detect corners in all images
-        for entry in self._images:
+        total_images = max(len(self._images), 1)
+        for pos, entry in enumerate(self._images, start=1):
             gray = self._to_gray(entry.image)
             entry.corners, entry.detected = self._detect_corners(
                 gray, cols, rows,
             )
+            if progress_callback is not None:
+                progress_callback("Detecting chessboard corners", pos, total_images)
 
         good = [e for e in self._images if e.detected]
         if len(good) < 3:
@@ -146,6 +150,8 @@ class CalibrationManager:
             h, w = good[0].image.shape[:2]
             image_size = (w, h)
 
+        if progress_callback is not None:
+            progress_callback("Solving camera calibration", 0, 1)
         rms, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
             object_points,
             image_points,
@@ -172,7 +178,10 @@ class CalibrationManager:
 
         # Step 3: Generate error report
         try:
-            report = self._build_report(good, mtx, dist, cols, rows, cell_mm)
+            report = self._build_report(
+                good, mtx, dist, cols, rows, cell_mm,
+                progress_callback=progress_callback,
+            )
             result.report = report
         except Exception as e:
             print(f"Warning: report generation failed: {e}")
@@ -192,31 +201,32 @@ class CalibrationManager:
         cols: int,
         rows: int,
         cell_mm: float,
+        progress_callback: Optional[Callable[[str, int, int], None]] = None,
     ) -> CalibrationReport:
         """Build calibration error report from calibrated images."""
         all_residuals = []
 
-        for entry in good_images:
-            if entry.corners is None:
-                continue
+        total_images = max(len(good_images), 1)
+        for pos, entry in enumerate(good_images, start=1):
+            if entry.corners is not None:
+                # Undistort and re-detect
+                undistorted = cv2.undistort(
+                    entry.image, camera_matrix, dist_coeffs,
+                )
+                gray = self._to_gray(undistorted)
 
-            # Undistort and re-detect
-            undistorted = cv2.undistort(
-                entry.image, camera_matrix, dist_coeffs,
-            )
-            gray = self._to_gray(undistorted)
+                corners_undist, found, _method = detect_chessboard_corners(
+                    gray, cols, rows,
+                )
+                if found:
+                    detected = corners_undist.reshape(-1, 2)
 
-            corners_undist, found, _method = detect_chessboard_corners(
-                gray, cols, rows,
-            )
-            if not found:
-                continue
-            detected = corners_undist.reshape(-1, 2)
-
-            # Compute ideal grid and residuals
-            ideal = self._compute_ideal_grid(detected, cols, rows)
-            residual = ideal - detected
-            all_residuals.append(residual)
+                    # Compute ideal grid and residuals
+                    ideal = self._compute_ideal_grid(detected, cols, rows)
+                    residual = ideal - detected
+                    all_residuals.append(residual)
+            if progress_callback is not None:
+                progress_callback("Building calibration report", pos, total_images)
 
         if not all_residuals:
             raise ValueError("No corners detected in undistorted images")
