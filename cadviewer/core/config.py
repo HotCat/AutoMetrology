@@ -130,6 +130,7 @@ class AppConfig:
     language: str = "en"
     line_fit_side_overrides: dict = field(default_factory=dict)
     apply_correction_map: bool = True
+    measurement_queries: str = ""
 
     @staticmethod
     def load() -> AppConfig:

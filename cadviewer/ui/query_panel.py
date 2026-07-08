@@ -11,7 +11,6 @@ Provides:
 
 from __future__ import annotations
 
-from pathlib import Path
 from typing import List, Optional
 
 from PySide6.QtCore import Qt, Slot, Signal, QSignalBlocker
@@ -41,6 +40,9 @@ class QueryPanel(QWidget):
     production_log_requested = Signal()
     live_query_view_requested = Signal()
     line_band_overrides_changed = Signal()
+    query_text_changed = Signal(str)
+    query_load_requested = Signal()
+    query_save_requested = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -48,6 +50,7 @@ class QueryPanel(QWidget):
         self._pair_pick_mode: Optional[str] = None
         self._updating_table = False
         self._updating_line_band_table = False
+        self._updating_query_text = False
         self._log_viewer = None
         self._setup_ui()
 
@@ -81,15 +84,16 @@ class QueryPanel(QWidget):
             }
         """)
         self._editor.setMaximumHeight(110)
+        self._editor.textChanged.connect(self._on_query_text_changed)
         layout.addWidget(self._editor)
 
         # Query file buttons
         btn_layout = QHBoxLayout()
         btn_layout.setSpacing(4)
 
-        self._btn_load = QPushButton("Load")
+        self._btn_load = QPushButton("Load Config")
         self._btn_load.clicked.connect(self._load_query_file)
-        self._btn_save = QPushButton("Save")
+        self._btn_save = QPushButton("Save Config")
         self._btn_save.clicked.connect(self._save_query_file)
         self._btn_production_run = QPushButton("Run Production")
         self._btn_production_run.setToolTip("Capture camera frame, register, and evaluate queries (F5)")
@@ -357,6 +361,15 @@ class QueryPanel(QWidget):
 
     def get_query_text(self) -> str:
         return self._editor.toPlainText()
+
+    def set_query_text(self, text: str) -> None:
+        self._updating_query_text = True
+        blocker = QSignalBlocker(self._editor)
+        try:
+            self._editor.setPlainText(str(text or ""))
+        finally:
+            del blocker
+            self._updating_query_text = False
 
     def tolerance_percent(self) -> float:
         return float(self._tol_percent.value())
@@ -677,25 +690,18 @@ class QueryPanel(QWidget):
 
     @Slot()
     def _load_query_file(self) -> None:
-        path, _ = QFileDialog.getOpenFileName(
-            self, "Load Query File", str(Path.cwd()),
-            "Query Files (*.txt *.query);;All Files (*)",
-        )
-        if path:
-            with open(path, 'r') as f:
-                self._editor.setPlainText(f.read())
+        self.query_load_requested.emit()
 
     @Slot()
     def _save_query_file(self) -> None:
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Save Query File", "measurements.txt",
-            "Query Files (*.txt)",
-        )
-        if path:
-            if self._results:
-                self._sync_editor_from_results()
-            with open(path, 'w') as f:
-                f.write(self._editor.toPlainText())
+        if self._results:
+            self._sync_editor_from_results()
+        self.query_save_requested.emit()
+
+    @Slot()
+    def _on_query_text_changed(self) -> None:
+        if not self._updating_query_text:
+            self.query_text_changed.emit(self._editor.toPlainText())
 
     @Slot()
     def _evaluate(self) -> None:

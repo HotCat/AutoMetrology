@@ -76,6 +76,7 @@ class MainWindow(QMainWindow):
         self._last_measurement_affine = None
         self._query_pair_pick_mode: Optional[str] = None
         self._query_pair_pick_ids: list[str] = []
+        self._saving_query_text = False
         self._last_selected_feature_id: Optional[str] = None
 
         # Build UI
@@ -263,6 +264,9 @@ class MainWindow(QMainWindow):
         # Query window: keep measurements in a wide standalone window so
         # operators can see many Value/Nominal/Deviation/Status rows at once.
         self._query_panel = QueryPanel()
+        self._query_panel.set_query_text(
+            getattr(self._config, "measurement_queries", "")
+        )
         self._query_panel.set_line_fit_side_overrides(
             getattr(self._config, "line_fit_side_overrides", {})
         )
@@ -313,6 +317,9 @@ class MainWindow(QMainWindow):
         self._query_panel.line_band_overrides_changed.connect(
             self._save_line_band_overrides
         )
+        self._query_panel.query_text_changed.connect(self._on_query_text_changed)
+        self._query_panel.query_load_requested.connect(self._load_queries_from_config)
+        self._query_panel.query_save_requested.connect(self._save_queries_to_config)
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -348,6 +355,28 @@ class MainWindow(QMainWindow):
             self._query_panel.line_fit_side_overrides()
         )
         self._config.save()
+
+    @Slot(str)
+    def _on_query_text_changed(self, text: str) -> None:
+        self._config.measurement_queries = str(text or "")
+        if self._saving_query_text:
+            return
+        self._saving_query_text = True
+        QTimer.singleShot(500, self._save_queries_to_config)
+
+    @Slot()
+    def _load_queries_from_config(self) -> None:
+        self._query_panel.set_query_text(
+            getattr(self._config, "measurement_queries", "")
+        )
+        self._status_label.setText(tr("Measurement queries loaded from config"))
+
+    @Slot()
+    def _save_queries_to_config(self) -> None:
+        self._saving_query_text = False
+        self._config.measurement_queries = self._query_panel.get_query_text()
+        self._config.save()
+        self._status_label.setText(tr("Measurement queries saved to config"))
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -1085,6 +1114,7 @@ class MainWindow(QMainWindow):
             self._config.line_fit_side_overrides = (
                 self._query_panel.line_fit_side_overrides()
             )
+            self._config.measurement_queries = self._query_panel.get_query_text()
         self._config.save()
         event.accept()
 
