@@ -13,6 +13,8 @@ from PySide6.QtWidgets import (
     QLineEdit, QPushButton, QFileDialog, QDialogButtonBox,
 )
 
+from ..core.i18n import tr
+
 
 class DWGSettingsDialog(QDialog):
     """Dialog for configuring DWG converter backend."""
@@ -120,14 +122,14 @@ class DWGSettingsDialog(QDialog):
 
         if oda_exe:
             self._path_edit.setText(str(oda_exe))
-            self._test_result.setText("ODA detected")
+            self._test_result.setText(tr("ODA detected"))
             self._test_result.setStyleSheet("color: #66cc66;")
         elif dwg2dxf_exe:
             self._path_edit.setText(str(dwg2dxf_exe))
-            self._test_result.setText("dwg2dxf detected")
+            self._test_result.setText(tr("dwg2dxf detected"))
             self._test_result.setStyleSheet("color: #66cc66;")
         else:
-            self._test_result.setText("No converter found")
+            self._test_result.setText(tr("No converter found"))
             self._test_result.setStyleSheet("color: #ff6666;")
 
     def _test_connection(self) -> None:
@@ -140,10 +142,12 @@ class DWGSettingsDialog(QDialog):
             if backend:
                 info = backend.get_installation_info()
                 if info.installed:
-                    self._test_result.setText(f"OK — {backend.backend_name} detected")
+                    self._test_result.setText(
+                        f"{tr('Converter OK')} - {backend.backend_name} {tr('detected')}"
+                    )
                     self._test_result.setStyleSheet("color: #66cc66;")
                     return
-            self._test_result.setText("No converter available")
+            self._test_result.setText(tr("No converter available"))
             self._test_result.setStyleSheet("color: #ff6666;")
             return
 
@@ -152,10 +156,10 @@ class DWGSettingsDialog(QDialog):
         cli = ODACLI(executable_path=Path(path))
         info = cli.get_installation_info()
         if info.installed:
-            self._test_result.setText("OK — executable works")
+            self._test_result.setText(tr("OK — executable works"))
             self._test_result.setStyleSheet("color: #66cc66;")
         else:
-            self._test_result.setText("Failed — not a valid executable")
+            self._test_result.setText(tr("Failed — not a valid executable"))
             self._test_result.setStyleSheet("color: #ff6666;")
 
     def get_converter_path(self) -> str:

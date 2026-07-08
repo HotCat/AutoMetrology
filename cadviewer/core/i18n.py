@@ -22,6 +22,7 @@ from PySide6.QtWidgets import (
     QLineEdit,
     QMainWindow,
     QMenu,
+    QTabWidget,
     QTableWidget,
     QTextEdit,
     QTreeWidget,
@@ -116,6 +117,19 @@ ZH_CN: dict[str, str] = {
     "Picking arc": "正在选择圆弧",
     "Tol %:": "公差 %:",
     "Tolerance percent used when generated queries are added": "生成查询时使用的百分比公差",
+    "Force nearest line bias": "强制最近线偏置",
+    "For stroke/window line pairs, use the stroke edge nearest the window edge": "对于印刷线/窗口线测量对，使用最靠近窗口边的印刷线边缘",
+    "Line band:": "线条灰度带:",
+    "+N band": "+N 灰度带",
+    "-N band": "-N 灰度带",
+    "Select which grayscale band to fit for printed lines. +N/-N use the CAD line normal from start to end; Auto preserves the existing CAD/pair-guided behavior.": "选择印刷线拟合的灰度带。+N/-N 使用 CAD 线从起点到终点方向的法线；自动模式保留现有的 CAD/测量对引导行为。",
+    "Line ID": "线 ID",
+    "Band": "灰度带",
+    "Optional per-line band overrides. Line ID may be a full ID, DXF handle, or unique prefix.": "可选的单线灰度带覆盖。线 ID 可以是完整 ID、DXF 句柄或唯一前缀。",
+    "Use Selected Line": "使用所选线",
+    "Add or update the currently selected CAD line using the selected row band.": "用当前行的灰度带添加或更新所选 CAD 线。",
+    "Add Row": "添加行",
+    "Remove": "删除",
     "No queries evaluated": "尚未计算查询",
     "Query": "查询",
     "Value": "测量值",
@@ -167,6 +181,14 @@ ZH_CN: dict[str, str] = {
     "x,y,w,h": "x,y,w,h",
     "Pick ROIs...": "选择 ROI...",
     "Auto Register": "自动配准",
+    "Window Register": "窗口配准",
+    "Window CAD Edges": "窗口 CAD 边",
+    "Detect:": "检测:",
+    "Dark window": "暗窗口",
+    "Bright backlight": "明亮背光",
+    "Printed grid": "印刷网格",
+    "Select CAD edge, click Add; need 4": "选择 CAD 边后点击添加；需要 4 条",
+    "Add": "添加",
     "Camera Capture": "相机采集",
     "Refresh": "刷新",
     "Open": "打开",
@@ -186,12 +208,24 @@ ZH_CN: dict[str, str] = {
     "Checking converters...": "正在检测转换器...",
     "Browse...": "浏览...",
     "Test Connection": "测试连接",
+    "ODA detected": "已检测到 ODA",
+    "dwg2dxf detected": "已检测到 dwg2dxf",
+    "No converter found": "未找到转换器",
+    "No converter available": "无可用转换器",
+    "Converter OK": "转换器正常",
+    "detected": "已检测到",
+    "OK — executable works": "正常 - 可执行文件可用",
+    "Failed — not a valid executable": "失败 - 不是有效的可执行文件",
+    "DWG converter not found — configure in Settings": "未找到 DWG 转换器 - 请在设置中配置",
+    "ODA File Converter not found — install and configure via Settings menu": "未找到 ODA File Converter - 请安装并在设置菜单中配置",
     "Load Telecentric Image": "加载远心图像",
     "Image Source": "图像来源",
     "Select PNG, BMP, or TIF file...": "选择 PNG、BMP 或 TIF 文件...",
     "Camera preview": "相机预览",
     "Capture": "采集",
     "No image selected": "未选择图像",
+    "Ignore saved lens calibration for this image": "此图像忽略已保存的镜头标定",
+    "Load or capture this image without applying the saved camera/lens calibration": "加载或采集此图像时不应用已保存的相机/镜头标定",
     "Pixel Size": "像素尺寸",
     "Select Fiducial Search ROIs": "选择基准点搜索 ROI",
     "Draw ROI P1": "绘制 ROI P1",
@@ -213,13 +247,58 @@ ZH_CN: dict[str, str] = {
     "Cols:": "列:",
     "Rows:": "行:",
     "Cell:": "单元:",
+    "Photo of printed chessboard pattern...": "印刷棋盘格图像...",
     "Calibrate Pixel Size": "标定像素尺寸",
+    "Compute Mount Angles": "计算安装角度",
+    "Select Chessboard Image": "选择棋盘格图像",
+    "Select a chessboard image first.": "请先选择棋盘格图像。",
+    "Cannot read image file.": "无法读取图像文件。",
+    "No frame available.": "没有可用图像。",
+    "Error: OpenCV not available": "错误：OpenCV 不可用",
+    "Calibrate pixel size first so chessboard corners are available.": "请先标定像素尺寸，以获得棋盘格角点。",
+    "Run and save Lens Calibration first. Mount angles require camera intrinsics.": "请先运行并保存镜头标定。安装角度计算需要相机内参。",
+    "Camera pose estimation failed.": "相机位姿估计失败。",
+    "From Camera": "来自相机",
+    "From Files": "来自文件",
+    "Camera not streaming": "相机未推流",
+    "Waiting for camera...": "等待相机...",
+    "Load images from files": "从文件加载图像",
+    "Add Files...": "添加文件...",
+    "Clear All": "全部清除",
+    "Reload Saved Set": "重新加载已保存图像集",
+    "Open Folder": "打开文件夹",
     "Collected Images": "已采集图像",
+    "Images: 0 | Corners detected: 0": "图像: 0 | 检测到角点: 0",
     "Remove Selected": "删除所选",
+    "Model:": "模型:",
+    "Standard": "标准",
+    "Rational": "有理模型",
+    "Rational + Thin Prism": "有理模型 + 薄棱镜",
+    "Rational + Thin Prism + Tilted": "有理模型 + 薄棱镜 + 倾斜",
     "Run Calibration": "运行标定",
+    "Compare Models": "比较模型",
     "Results": "结果",
     "No calibration results yet.": "暂无标定结果。",
     "Save to Config": "保存到配置",
+    "Pixel Size Calibration": "像素尺寸标定",
+    "Lens Calibration": "镜头标定",
+    "No frame available to capture.": "没有可采集的图像。",
+    "All images cleared.": "已清除所有图像。",
+    "Another calibration task is already running.": "另一个标定任务正在运行。",
+    "No saved calibration images found.": "未找到已保存的标定图像。",
+    "Error: OpenCV not available.": "错误：OpenCV 不可用。",
+    "Calibration failed.": "标定失败。",
+    "Model comparison failed.": "模型比较失败。",
+    "Model comparison complete.": "模型比较完成。",
+    "No detected calibration images to save.": "没有可保存的已检测标定图像。",
+    "Calibration saved to configuration.": "标定已保存到配置。",
+    "Select a CAD line first": "请先选择 CAD 线",
+    "Selected feature is not a line": "所选特征不是线",
+    "Select a CAD line edge first.": "请先选择 CAD 线边。",
+    "Window edge already added.": "窗口边已添加。",
+    "Window edge list already has 4 lines; clear it first.": "窗口边列表已有 4 条线；请先清除。",
+    "Window CAD edges cleared.": "窗口 CAD 边已清除。",
+    "Teach complete. Click 'Save Pose Template' to store.": "示教完成。点击“保存位姿模板”进行保存。",
 }
 
 
@@ -314,6 +393,15 @@ def _translate_combo(combo: QComboBox) -> None:
         combo.setItemText(i, tr(str(key)))
 
 
+def _translate_tabs(tabs: QTabWidget) -> None:
+    keys = tabs.property("i18n_tab_texts")
+    if keys is None:
+        keys = [tabs.tabText(i) for i in range(tabs.count())]
+        tabs.setProperty("i18n_tab_texts", keys)
+    for i, key in enumerate(list(keys)[: tabs.count()]):
+        tabs.setTabText(i, tr(str(key)))
+
+
 def _objects(root: QObject) -> Iterable[QObject]:
     yield root
     yield from root.findChildren(QObject)
@@ -342,3 +430,5 @@ def retranslate_widget_tree(root: QObject) -> None:
             _translate_headers(obj)
         if isinstance(obj, QComboBox):
             _translate_combo(obj)
+        if isinstance(obj, QTabWidget):
+            _translate_tabs(obj)

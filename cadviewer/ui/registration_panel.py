@@ -1244,7 +1244,7 @@ class RegistrationPanel(QWidget):
         feature_id = getattr(self, "_last_highlighted_id", "")
         feature = self._repo.get(feature_id) if feature_id else None
         if feature is None:
-            self._reg_status.setText("Select a CAD line edge first.")
+            self._reg_status.setText(tr("Select a CAD line edge first."))
             return
         if feature.feature_type != FeatureType.LINE:
             self._reg_status.setText(
@@ -1252,10 +1252,12 @@ class RegistrationPanel(QWidget):
             )
             return
         if feature_id in self._window_edge_ids:
-            self._reg_status.setText("Window edge already added.")
+            self._reg_status.setText(tr("Window edge already added."))
             return
         if len(self._window_edge_ids) >= 4:
-            self._reg_status.setText("Window edge list already has 4 lines; clear it first.")
+            self._reg_status.setText(
+                tr("Window edge list already has 4 lines; clear it first.")
+            )
             return
         self._window_edge_ids.append(feature_id)
         self._refresh_window_edges_edit()
@@ -1269,7 +1271,7 @@ class RegistrationPanel(QWidget):
         self._window_edge_ids = []
         self._refresh_window_edges_edit()
         self._save_selected_production_profile(silent=True)
-        self._reg_status.setText("Window CAD edges cleared.")
+        self._reg_status.setText(tr("Window CAD edges cleared."))
 
     def _on_window_detection_mode_changed(self, index: int) -> None:
         if index < 0 or not hasattr(self, "_window_mode_combo"):
@@ -2068,7 +2070,7 @@ class RegistrationPanel(QWidget):
     def _on_teach_completed(self, info: dict) -> None:
         self._btn_save_pose.setEnabled(True)
         self._reg_status.setText(
-            "Teach complete. Click 'Save Pose Template' to store."
+            tr("Teach complete. Click 'Save Pose Template' to store.")
         )
 
     def _update_teach_status(self) -> None:

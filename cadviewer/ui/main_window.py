@@ -692,13 +692,13 @@ class MainWindow(QMainWindow):
         feature_id = self._last_selected_feature_id
         feature = self._repo.get(feature_id) if feature_id else None
         if feature is None:
-            self._query_panel.set_pair_pick_message("Select a CAD line first")
-            self._status_label.setText("Select a CAD line first")
+            self._query_panel.set_pair_pick_message(tr("Select a CAD line first"))
+            self._status_label.setText(tr("Select a CAD line first"))
             return
         from ..models.feature import FeatureType
         if feature.feature_type != FeatureType.LINE:
-            self._query_panel.set_pair_pick_message("Selected feature is not a line")
-            self._status_label.setText("Selected feature is not a line")
+            self._query_panel.set_pair_pick_message(tr("Selected feature is not a line"))
+            self._status_label.setText(tr("Selected feature is not a line"))
             return
         token = self._query_token_for_feature(feature)
         self._query_panel.add_line_band_override(token, band)
@@ -1016,7 +1016,7 @@ class MainWindow(QMainWindow):
                 self._dwg_action.setToolTip("")
             else:
                 self._dwg_action.setToolTip(
-                    "DWG converter not found — configure in Settings"
+                    tr("DWG converter not found — configure in Settings")
                 )
 
     def _show_about(self) -> None:
@@ -1061,7 +1061,7 @@ class MainWindow(QMainWindow):
         if not info.installed:
             self._dwg_action.setEnabled(False)
             self._dwg_action.setToolTip(
-                "ODA File Converter not found — install and configure via Settings menu"
+                tr("ODA File Converter not found — install and configure via Settings menu")
             )
 
     def closeEvent(self, event) -> None:
