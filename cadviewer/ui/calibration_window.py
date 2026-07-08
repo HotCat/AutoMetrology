@@ -176,12 +176,16 @@ class _CalibrationWorker(QObject):
             from ..calibration.calibration_manager import CalibrationManager
 
             loaded: list[tuple[int, np.ndarray]] = []
+            source_labels: dict[int, str] = {}
             total = max(len(self._entries), 1)
             for pos, (idx, image, file_path, _source) in enumerate(self._entries, start=1):
                 if image is None and file_path:
                     image = cv2.imread(file_path, cv2.IMREAD_COLOR)
                 if image is not None:
                     loaded.append((idx, image))
+                    source_labels[idx] = self._source_label(
+                        idx, file_path, _source,
+                    )
                 self.progress.emit(
                     f"Loading calibration images {pos}/{total}",
                     int(pos * 25 / total),
@@ -197,10 +201,7 @@ class _CalibrationWorker(QObject):
 
             mgr = CalibrationManager()
             for idx, image in loaded:
-                source = next(
-                    (entry[3] for entry in self._entries if entry[0] == idx),
-                    "",
-                )
+                source = source_labels.get(idx, "")
                 mgr.add_image(image, source)
 
             def calibration_progress(stage: str, pos: int, total: int) -> None:
@@ -229,14 +230,26 @@ class _CalibrationWorker(QObject):
                 progress_callback=calibration_progress,
             )
             self.progress.emit("Preparing calibration result...", 95)
+            rejected = set(getattr(result, "rejected_sources", []) or [])
             self.finished.emit({
                 "calibrated": bool(result.calibrated),
                 "result": result,
                 "manager_images": getattr(mgr, "_images", []),
                 "loaded": loaded,
+                "rejected_indices": [
+                    idx for idx, _image in loaded
+                    if source_labels.get(idx, "") in rejected
+                ],
             })
         except Exception as exc:
             self.error.emit(str(exc))
+
+    @staticmethod
+    def _source_label(idx: int, file_path: str, source: str) -> str:
+        name = Path(file_path).name if file_path else ""
+        if not name:
+            name = str(source or "image")
+        return f"{idx + 1:03d} {name}"
 
 
 class _CompareModelsWorker(QObject):
@@ -990,6 +1003,7 @@ class _LensCalTab(QWidget):
         self._cal_result = None
         self._calibration_model: str = "standard"
         self._calibration_flags: int = 0
+        self._rejected_calibration_indices: set[int] = set()
         self._worker_thread: Optional[QThread] = None
         self._worker: Optional[QObject] = None
         self._image_write_threads: list[QThread] = []
@@ -1700,6 +1714,7 @@ class _LensCalTab(QWidget):
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
         cell_mm = self._win._cb_cell.value()
+        self._rejected_calibration_indices = set()
 
         model, flags, model_label = self._selected_calibration_model()
         worker = _CalibrationWorker(
@@ -1745,6 +1760,10 @@ class _LensCalTab(QWidget):
             self._status_label.setStyleSheet("color: #ef5350;")
             return
 
+        self._rejected_calibration_indices = set(
+            int(idx) for idx in payload.get("rejected_indices", [])
+        )
+
         self._camera_matrix = result.camera_matrix
         self._dist_coeffs = result.dist_coeffs
         self._rms_error = result.opencv_rms
@@ -1762,6 +1781,7 @@ class _LensCalTab(QWidget):
             f"Model: {model_label}",
             f"OpenCV flags: {result.calibration_flags}",
             f"Images used: {result.image_count}",
+            f"Images rejected: {result.rejected_image_count}",
             f"Corners: {result.corner_count}",
             "",
             f"Camera Matrix:",
@@ -1777,6 +1797,12 @@ class _LensCalTab(QWidget):
         for i, v in enumerate(dist.flatten()):
             label = labels[i] if i < len(labels) else f"d{i}"
             lines.append(f"  {label} = {v:.6f}")
+
+        if result.rejected_sources:
+            lines += ["", "Rejected calibration images:"]
+            lines.extend(f"  {source}" for source in result.rejected_sources[:12])
+            if len(result.rejected_sources) > 12:
+                lines.append(f"  ... {len(result.rejected_sources) - 12} more")
 
         if result.report is not None:
             lines += ["", result.report.summary()]
@@ -1847,6 +1873,11 @@ class _LensCalTab(QWidget):
         if self._camera_matrix is None or self._dist_coeffs is None:
             return
         good_entries = self._good_entry_snapshots()
+        if self._rejected_calibration_indices:
+            good_entries = [
+                item for item in good_entries
+                if int(item[0]) not in self._rejected_calibration_indices
+            ]
         if not good_entries:
             self._status_label.setText("No detected calibration images to save.")
             self._status_label.setStyleSheet("color: #ef5350;")
@@ -1877,7 +1908,13 @@ class _LensCalTab(QWidget):
         if self._camera_matrix is None:
             return
         cfg = self._win._config
-        good = sum(1 for e in self._collected if e.detected)
+        good = (
+            int(getattr(self._cal_result, "image_count", 0) or 0)
+            or sum(
+                1 for idx, e in enumerate(self._collected)
+                if e.detected and idx not in self._rejected_calibration_indices
+            )
+        )
         cfg.lens_calibration.set_from_results(
             self._camera_matrix, self._dist_coeffs,
             self._rms_error, good,

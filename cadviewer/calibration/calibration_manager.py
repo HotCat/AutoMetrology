@@ -50,6 +50,9 @@ class CalibrationResult:
     image_count: int = 0
     corner_count: int = 0
     calibrated: bool = False
+    rejected_image_count: int = 0
+    rejected_sources: list[str] = field(default_factory=list)
+    per_image_errors: list[tuple[str, float]] = field(default_factory=list)
 
 
 class CalibrationManager:
@@ -143,16 +146,77 @@ class CalibrationManager:
         objp = np.zeros((cols * rows, 3), np.float32)
         objp[:, :2] = np.mgrid[0:cols, 0:rows].T.reshape(-1, 2).astype(np.float32) * cell_mm
 
-        object_points = [objp] * len(good)
-        image_points = [e.corners.astype(np.float32) for e in good]
-
         if image_size is None:
             h, w = good[0].image.shape[:2]
             image_size = (w, h)
 
         if progress_callback is not None:
             progress_callback("Solving camera calibration", 0, 1)
-        rms, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+        rms, mtx, dist, rvecs, tvecs = self._calibrate_good_images(
+            good, objp, image_size, flags,
+        )
+        per_image_errors = self._per_image_reprojection_errors(
+            good, objp, mtx, dist, rvecs, tvecs,
+        )
+        filtered_good, rejected = self._filter_reprojection_outliers(
+            good, per_image_errors,
+        )
+        if rejected:
+            if progress_callback is not None:
+                progress_callback("Solving filtered calibration", 0, 1)
+            rms, mtx, dist, rvecs, tvecs = self._calibrate_good_images(
+                filtered_good, objp, image_size, flags,
+            )
+            per_image_errors = self._per_image_reprojection_errors(
+                filtered_good, objp, mtx, dist, rvecs, tvecs,
+            )
+            good_for_result = filtered_good
+        else:
+            good_for_result = good
+
+        result = CalibrationResult(
+            camera_matrix=mtx,
+            dist_coeffs=dist,
+            opencv_rms=rms,
+            calibration_model=model,
+            calibration_flags=int(flags),
+            image_count=len(good_for_result),
+            calibrated=True,
+            rejected_image_count=len(rejected),
+            rejected_sources=[entry.source for entry in rejected],
+            per_image_errors=[
+                (entry.source, float(error))
+                for entry, error in zip(good_for_result, per_image_errors)
+            ],
+        )
+
+        # Step 3: Generate error report
+        try:
+            report = self._build_report(
+                good_for_result, mtx, dist, cols, rows, cell_mm,
+                progress_callback=progress_callback,
+            )
+            result.report = report
+        except Exception as e:
+            print(f"Warning: report generation failed: {e}")
+
+        total_corners = sum(
+            e.corners.shape[0] for e in good_for_result if e.corners is not None
+        )
+        result.corner_count = total_corners
+        self._result = result
+        return result
+
+    @staticmethod
+    def _calibrate_good_images(
+        good_images: list[_CollectedImage],
+        object_template: np.ndarray,
+        image_size: tuple[int, int],
+        flags: int,
+    ):
+        object_points = [object_template] * len(good_images)
+        image_points = [e.corners.astype(np.float32) for e in good_images]
+        return cv2.calibrateCamera(
             object_points,
             image_points,
             image_size,
@@ -166,32 +230,54 @@ class CalibrationManager:
             ),
         )
 
-        result = CalibrationResult(
-            camera_matrix=mtx,
-            dist_coeffs=dist,
-            opencv_rms=rms,
-            calibration_model=model,
-            calibration_flags=int(flags),
-            image_count=len(good),
-            calibrated=True,
-        )
-
-        # Step 3: Generate error report
-        try:
-            report = self._build_report(
-                good, mtx, dist, cols, rows, cell_mm,
-                progress_callback=progress_callback,
+    @staticmethod
+    def _per_image_reprojection_errors(
+        good_images: list[_CollectedImage],
+        object_template: np.ndarray,
+        camera_matrix: np.ndarray,
+        dist_coeffs: np.ndarray,
+        rvecs,
+        tvecs,
+    ) -> list[float]:
+        errors: list[float] = []
+        for entry, rvec, tvec in zip(good_images, rvecs, tvecs):
+            if entry.corners is None:
+                errors.append(float("inf"))
+                continue
+            projected, _ = cv2.projectPoints(
+                object_template, rvec, tvec, camera_matrix, dist_coeffs,
             )
-            result.report = report
-        except Exception as e:
-            print(f"Warning: report generation failed: {e}")
+            delta = entry.corners.reshape(-1, 2) - projected.reshape(-1, 2)
+            errors.append(float(np.sqrt(np.mean(np.sum(delta ** 2, axis=1)))))
+        return errors
 
-        total_corners = sum(
-            e.corners.shape[0] for e in good if e.corners is not None
+    @staticmethod
+    def _filter_reprojection_outliers(
+        good_images: list[_CollectedImage],
+        per_image_errors: list[float],
+    ) -> tuple[list[_CollectedImage], list[_CollectedImage]]:
+        if len(good_images) < 8 or len(good_images) != len(per_image_errors):
+            return good_images, []
+        finite = np.array(
+            [e for e in per_image_errors if np.isfinite(e)], dtype=np.float64,
         )
-        result.corner_count = total_corners
-        self._result = result
-        return result
+        if finite.size < 8:
+            return good_images, []
+        median = float(np.median(finite))
+        mad = float(np.median(np.abs(finite - median)))
+        robust_sigma = 1.4826 * mad
+        threshold = max(0.40, median + max(3.0 * robust_sigma, median * 1.5))
+        keep: list[_CollectedImage] = []
+        rejected: list[_CollectedImage] = []
+        for entry, error in zip(good_images, per_image_errors):
+            if np.isfinite(error) and error <= threshold:
+                keep.append(entry)
+            else:
+                rejected.append(entry)
+        min_keep = max(3, int(np.ceil(len(good_images) * 0.60)))
+        if len(keep) < min_keep:
+            return good_images, []
+        return keep, rejected
 
     def _build_report(
         self,
