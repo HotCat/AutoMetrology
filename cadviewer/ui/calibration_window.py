@@ -145,6 +145,8 @@ class _CollectedImage:
     source: str
     file_path: str = ""
     detection_done: bool = False
+    thumbnail: Optional[np.ndarray] = None
+    image_shape: Optional[tuple[int, int]] = None
 
 
 class _CalibrationWorker(QObject):
@@ -473,6 +475,41 @@ class _ImageWriteWorker(QObject):
         except Exception as exc:
             message = str(exc)
         self.finished.emit(self._idx, ok, message)
+
+
+class _ThumbnailLoadWorker(QObject):
+    thumbnail_ready = Signal(int, int, object, object)
+    finished = Signal(int)
+
+    def __init__(self, generation: int, jobs: list[tuple[int, str]]) -> None:
+        super().__init__()
+        self._generation = int(generation)
+        self._jobs = jobs
+        self._cancelled = False
+
+    def cancel(self) -> None:
+        self._cancelled = True
+
+    def run(self) -> None:
+        for idx, file_path in self._jobs:
+            if self._cancelled:
+                break
+            image = cv2.imread(file_path, cv2.IMREAD_COLOR)
+            if image is None:
+                continue
+            h, w = image.shape[:2]
+            scale = min(120.0 / max(w, 1), 120.0 / max(h, 1), 1.0)
+            thumb = image
+            if scale < 1.0:
+                thumb = cv2.resize(
+                    image,
+                    (max(1, int(w * scale)), max(1, int(h * scale))),
+                    interpolation=cv2.INTER_AREA,
+                )
+            self.thumbnail_ready.emit(
+                self._generation, idx, thumb.copy(), (int(w), int(h)),
+            )
+        self.finished.emit(self._generation)
 
 
 # ── Pixel Size Calibration Tab ──────────────────────────────────────────
@@ -957,6 +994,9 @@ class _LensCalTab(QWidget):
         self._worker: Optional[QObject] = None
         self._image_write_threads: list[QThread] = []
         self._image_write_workers: list[QObject] = []
+        self._thumbnail_thread: Optional[QThread] = None
+        self._thumbnail_worker: Optional[QObject] = None
+        self._thumbnail_load_generation = 0
         self._busy = False
 
         layout = QVBoxLayout(self)
@@ -1163,6 +1203,8 @@ class _LensCalTab(QWidget):
         detected_hint: bool = False,
         detection_done: bool = False,
         file_path: str = "",
+        thumbnail: Optional[np.ndarray] = None,
+        image_shape: Optional[tuple[int, int]] = None,
     ) -> None:
         cols = self._win._cb_col.value()
         rows = self._win._cb_row.value()
@@ -1173,6 +1215,11 @@ class _LensCalTab(QWidget):
         # Ensure BGR format for storage
         if image is not None and image.ndim == 2:
             image = cv2.cvtColor(image, cv2.COLOR_GRAY2BGR)
+        if thumbnail is not None and thumbnail.ndim == 2:
+            thumbnail = cv2.cvtColor(thumbnail, cv2.COLOR_GRAY2BGR)
+        if image is not None:
+            h, w = image.shape[:2]
+            image_shape = (int(w), int(h))
         if detect and image is not None:
             corners, detected, method = self._detect_corners(image, cols, rows)
 
@@ -1183,13 +1230,16 @@ class _LensCalTab(QWidget):
             source=source,
             file_path=file_path,
             detection_done=detection_done,
+            thumbnail=thumbnail,
+            image_shape=image_shape,
         )
         self._collected.append(entry)
 
         # Thumbnail
         badge = detected if entry.detection_done else None
-        if image is not None:
-            pm = _numpy_to_pixmap(image, 120)
+        icon_source = image if image is not None else thumbnail
+        if icon_source is not None:
+            pm = _numpy_to_pixmap(icon_source, 120)
             icon_pm = _thumbnail_with_badge(pm, badge)
         else:
             icon_pm = self._placeholder_thumbnail(badge)
@@ -1285,8 +1335,13 @@ class _LensCalTab(QWidget):
             if idx >= self._image_list.count():
                 break
             badge = entry.detected if entry.detection_done else None
-            if entry.image is not None:
-                icon_pm = _thumbnail_with_badge(_numpy_to_pixmap(entry.image, 120), badge)
+            icon_source = (
+                entry.image if entry.image is not None else entry.thumbnail
+            )
+            if icon_source is not None:
+                icon_pm = _thumbnail_with_badge(
+                    _numpy_to_pixmap(icon_source, 120), badge,
+                )
             else:
                 icon_pm = self._placeholder_thumbnail(badge)
             self._image_list.item(idx).setIcon(QIcon(icon_pm))
@@ -1371,6 +1426,67 @@ class _LensCalTab(QWidget):
     def _reload_saved_set(self) -> None:
         self._load_persisted_images(silent=False)
 
+    def _start_thumbnail_loader(self, jobs: list[tuple[int, str]]) -> None:
+        self._stop_thumbnail_loader(wait=True)
+        if not jobs:
+            return
+        self._thumbnail_load_generation += 1
+        generation = self._thumbnail_load_generation
+        worker = _ThumbnailLoadWorker(generation, jobs)
+        thread = QThread(self)
+        worker.moveToThread(thread)
+        thread.started.connect(worker.run)
+        worker.thumbnail_ready.connect(self._thumbnail_loaded)
+        worker.finished.connect(self._thumbnail_load_finished)
+        worker.finished.connect(worker.deleteLater)
+        worker.finished.connect(thread.quit)
+        thread.finished.connect(thread.deleteLater)
+        thread.finished.connect(lambda t=thread: self._thumbnail_thread_finished(t))
+        self._thumbnail_worker = worker
+        self._thumbnail_thread = thread
+        thread.start()
+
+    def _stop_thumbnail_loader(self, wait: bool = False) -> None:
+        thread = self._thumbnail_thread
+        worker = self._thumbnail_worker
+        if worker is not None and hasattr(worker, "cancel"):
+            worker.cancel()
+        if thread is not None and thread.isRunning():
+            thread.quit()
+            if wait:
+                thread.wait(1000)
+        self._thumbnail_worker = None
+        self._thumbnail_thread = None
+
+    def _thumbnail_loaded(
+        self,
+        generation: int,
+        idx: int,
+        thumbnail: object,
+        image_shape: object,
+    ) -> None:
+        if generation != self._thumbnail_load_generation:
+            return
+        if not (0 <= idx < len(self._collected)) or idx >= self._image_list.count():
+            return
+        if not isinstance(thumbnail, np.ndarray):
+            return
+        entry = self._collected[idx]
+        entry.thumbnail = thumbnail
+        if isinstance(image_shape, tuple) and len(image_shape) >= 2:
+            entry.image_shape = (int(image_shape[0]), int(image_shape[1]))
+        badge = entry.detected if entry.detection_done else None
+        icon_pm = _thumbnail_with_badge(_numpy_to_pixmap(thumbnail, 120), badge)
+        self._image_list.item(idx).setIcon(QIcon(icon_pm))
+
+    def _thumbnail_load_finished(self, generation: int) -> None:
+        if generation == self._thumbnail_load_generation:
+            self._thumbnail_worker = None
+
+    def _thumbnail_thread_finished(self, thread: QThread) -> None:
+        if self._thumbnail_thread is thread:
+            self._thumbnail_thread = None
+
     def _open_saved_folder(self) -> None:
         _LENS_IMAGE_DIR.mkdir(parents=True, exist_ok=True)
         url = QUrl.fromLocalFile(str(_LENS_IMAGE_DIR))
@@ -1398,11 +1514,11 @@ class _LensCalTab(QWidget):
             if write_images and image is not None and not path.exists():
                 if not cv2.imwrite(str(path), image):
                     continue
-            if image is None and path.exists():
-                image = cv2.imread(str(path), cv2.IMREAD_COLOR)
             if image is not None:
                 h, w = image.shape[:2]
                 shape = [int(w), int(h)]
+            elif entry.image_shape is not None:
+                shape = [int(entry.image_shape[0]), int(entry.image_shape[1])]
             else:
                 shape = []
             manifest["images"].append({
@@ -1498,6 +1614,7 @@ class _LensCalTab(QWidget):
         self._collected.clear()
         self._image_list.clear()
         loaded = 0
+        thumbnail_jobs: list[tuple[int, str]] = []
         for item in images:
             if not isinstance(item, dict):
                 continue
@@ -1508,11 +1625,13 @@ class _LensCalTab(QWidget):
             if not path.exists():
                 continue
             source = str(item.get("source") or filename)
-            image = cv2.imread(str(path), cv2.IMREAD_COLOR)
-            if image is None:
-                continue
+            raw_shape = item.get("shape", [])
+            image_shape = None
+            if isinstance(raw_shape, list) and len(raw_shape) >= 2:
+                image_shape = (int(raw_shape[0]), int(raw_shape[1]))
+            # Keep dialog opening cheap; the worker below hydrates thumbnails.
             self._add_image_entry(
-                image=image,
+                image=None,
                 source=source,
                 persist=False,
                 detect=False,
@@ -1521,9 +1640,12 @@ class _LensCalTab(QWidget):
                     item.get("detection_done", item.get("detected", False)),
                 ),
                 file_path=str(path),
+                image_shape=image_shape,
             )
+            thumbnail_jobs.append((loaded, str(path)))
             loaded += 1
         self._update_count()
+        self._start_thumbnail_loader(thumbnail_jobs)
         if loaded and not silent:
             self._status_label.setText(
                 f"Reloaded {loaded} saved calibration images from {_LENS_IMAGE_DIR}"
@@ -1813,6 +1935,7 @@ class _LensCalTab(QWidget):
     # ── Cleanup ──────────────────────────────────────────────────────
 
     def cleanup(self) -> None:
+        self._stop_thumbnail_loader(wait=True)
         self._persist_collected_images()
         if self._camera is not None:
             try:
