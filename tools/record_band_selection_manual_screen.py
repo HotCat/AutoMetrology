@@ -13,6 +13,7 @@ from pathlib import Path
 
 import cv2
 import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 from PySide6.QtCore import QPoint, Qt
 from PySide6.QtGui import QCursor, QImage, QPixmap
 from PySide6.QtTest import QTest
@@ -35,6 +36,7 @@ TARGET_TOKEN = "AC66:3"
 FPS = 25
 CAPTURE_W = 1880
 CAPTURE_H = 1040
+FONT_PATH = Path("/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
 _RECORDER = None
 
 
@@ -83,6 +85,14 @@ class ManualFrameRecorder:
         self.started_at = time.monotonic()
         self._last_frame_at = 0.0
         self._period = 1.0 / FPS
+        self._subtitle_title = ""
+        self._subtitle_detail = ""
+        self._title_font = ImageFont.truetype(str(FONT_PATH), 34)
+        self._detail_font = ImageFont.truetype(str(FONT_PATH), 25)
+
+    def set_subtitle(self, title: str, detail: str = "") -> None:
+        self._subtitle_title = title
+        self._subtitle_detail = detail
 
     def maybe_capture(self) -> None:
         now = time.monotonic()
@@ -103,6 +113,7 @@ class ManualFrameRecorder:
             elif popup is not None and popup.isVisible():
                 self._overlay_widget(frame, popup)
         self._draw_cursor(frame)
+        self._draw_subtitle(frame)
         return frame
 
     def _current_band_combo(self):
@@ -136,6 +147,22 @@ class ManualFrameRecorder:
         pts = np.array([[x, y], [x + 19, y + 8], [x + 8, y + 12], [x + 13, y + 25]], dtype=np.int32)
         cv2.fillPoly(frame, [pts], (245, 245, 245))
         cv2.polylines(frame, [pts], True, (20, 20, 20), 1, cv2.LINE_AA)
+
+    def _draw_subtitle(self, frame: np.ndarray) -> None:
+        if not self._subtitle_title and not self._subtitle_detail:
+            return
+        image = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        overlay = Image.new("RGBA", image.size, (0, 0, 0, 0))
+        draw = ImageDraw.Draw(overlay)
+        box_h = 136 if self._subtitle_detail else 88
+        y0 = CAPTURE_H - box_h
+        draw.rectangle((0, y0, CAPTURE_W, CAPTURE_H), fill=(0, 0, 0, 190))
+        if self._subtitle_title:
+            draw.text((34, y0 + 16), self._subtitle_title, font=self._title_font, fill=(255, 255, 255, 255))
+        if self._subtitle_detail:
+            draw.text((36, y0 + 72), self._subtitle_detail, font=self._detail_font, fill=(255, 232, 96, 255))
+        composed = Image.alpha_composite(image.convert("RGBA"), overlay).convert("RGB")
+        frame[:] = cv2.cvtColor(np.asarray(composed), cv2.COLOR_RGB2BGR)
 
     def write(self) -> None:
         if not self.frames:
@@ -204,12 +231,12 @@ def set_view(window: MainWindow, center: tuple[float, float], scale: float) -> N
 def animate_zoom(app: QApplication, window: MainWindow, center: tuple[float, float]) -> None:
     canvas = window._viewer
     move_cursor(app, canvas.mapToGlobal(QPoint(450, 400)), 0.7)
-    for idx in range(80):
-        t = idx / 79
+    for idx in range(140):
+        t = idx / 139
         eased = 0.5 - 0.5 * math.cos(math.pi * t)
         set_view(window, center, 5.0 + (60.0 - 5.0) * eased)
-        pump(app, 0.045)
-    pump(app, 0.8)
+        pump(app, 0.05)
+    pump(app, 1.0)
 
 
 def setup_app(app: QApplication) -> tuple[MainWindow, str, tuple[float, float]]:
@@ -323,24 +350,64 @@ def main() -> int:
 
     recorder = ManualFrameRecorder(window)
     _RECORDER = recorder
+    initial_results = []
     positive_results = []
     negative_results = []
     try:
-        pump(app, 1.2)
+        recorder.set_subtitle(
+            "演示目标：让操作者看清 +N / -N 灰度带如何改变线拟合",
+            "左侧是已配准的 CAD+图像视图；右侧是“测量查询”和每条 Line ID 的灰度带选择。",
+        )
+        pump(app, 3.0)
+
+        recorder.set_subtitle(
+            "第一步：放大印刷线区域",
+            "先把画布放大到 6000%，这样能看清青色边缘采样点和绿色拟合线的位置。",
+        )
         animate_zoom(app, window, center)
-        pump(app, 1.0)
+
+        recorder.set_subtitle(
+            "第二步：先计算一次，停留观察图像拟合结果",
+            "此时还没有操作 Line ID 表；请注意左侧青色点是参与拟合的边缘点，绿色线是当前拟合出来的印刷边。",
+        )
+        click_evaluate(app, window)
+        initial_results = window._query_panel.results()
+        pump(app, 9.0)
+
+        recorder.set_subtitle(
+            "第三步：选择要控制灰度带方向的 CAD 线",
+            "在 Line ID 表中点击 AC66:3；这一步只是指定哪一条 CAD 线使用手动 +N/-N 灰度带。",
+        )
         select_line_row(app, window, row)
-        pump(app, 0.8)
+        pump(app, 3.0)
+
+        recorder.set_subtitle(
+            "第四步：选择 +N 灰度带并点击“计算”",
+            "+N 表示沿 CAD 线法向的一侧寻找印刷边；计算后看左侧绿色拟合线以及右侧第 3 行结果。",
+        )
         choose_combo_index(app, combo, 0)
-        pump(app, 0.8)
+        pump(app, 1.5)
         click_evaluate(app, window)
         positive_results = window._query_panel.results()
-        pump(app, 2.6)
+        recorder.set_subtitle(
+            "+N 灰度带结果：拟合线贴在当前选择的一侧",
+            "第 3 行 lines(AC66:3, AB8E:7) 为 OK，绿色拟合线靠近 CAD 名义线所在的这一侧。",
+        )
+        pump(app, 7.0)
+
+        recorder.set_subtitle(
+            "第五步：切换为 -N 灰度带",
+            "-N 表示选择相反一侧的灰度带；切换后再次点击“计算”，拟合线会跳到另一侧。",
+        )
         choose_combo_index(app, combo, 1)
-        pump(app, 0.8)
+        pump(app, 1.5)
         click_evaluate(app, window)
         negative_results = window._query_panel.results()
-        pump(app, 4.0)
+        recorder.set_subtitle(
+            "-N 灰度带结果：绿色拟合线跳到相反侧",
+            "同一条 CAD 线 AC66:3，只改变灰度带方向，测量值和状态立即变化；这就是手动消除印刷双边歧义的作用。",
+        )
+        pump(app, 8.0)
     finally:
         _RECORDER = None
     recorder.write()
@@ -352,14 +419,16 @@ def main() -> int:
             "image": str(IMAGE_PATH),
             "target_line": TARGET_TOKEN,
             "target_feature_id": target_id,
-            "recording_type": "continuous Qt window recording with visible cursor, combo popup, and real UI clicks",
+            "recording_type": "continuous Qt window recording with visible cursor, Chinese subtitles, combo value changes, Evaluate clicks, and real UI actions",
             "actions": [
                 "zoom in the printed line",
+                "evaluate once and hold on the fitted green line before Line ID selection",
                 "select AC66:3 in Line ID table",
                 "select +N band and click Evaluate",
                 "select -N band and click Evaluate",
             ],
             "results": {
+                "initial": result_summary(initial_results),
                 "positive": result_summary(positive_results),
                 "negative": result_summary(negative_results),
             },
