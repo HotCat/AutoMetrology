@@ -4,55 +4,61 @@
   "image": "/tmp/cadrefs_camera_capture.png",
   "target_line": "AC66:3",
   "target_feature_id": "401f0066-e7a6-52d7-5c7e-d72e10772f9e",
-  "recording_type": "animated Qt screen/widget recording",
+  "recording_type": "continuous Qt window recording with visible cursor, combo value changes, Evaluate clicks, and real UI actions",
+  "actions": [
+    "zoom in the printed line",
+    "select AC66:3 in Line ID table",
+    "select +N band and click Evaluate",
+    "select -N band and click Evaluate"
+  ],
   "results": {
     "positive": [
       {
         "query": "lines(AB8E:7, AB8E:3), 0.5706",
         "status": "ok",
-        "value": 57.1069,
+        "value": 57.1059,
         "nominal": 57.06,
-        "deviation": 0.0469,
+        "deviation": 0.0459,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:1, AB8E:5), 0.8018",
         "status": "ok",
-        "value": 80.1947,
+        "value": 80.1929,
         "nominal": 80.18,
-        "deviation": 0.0147,
+        "deviation": 0.0129,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC66:3, AB8E:7), 0.1100",
         "status": "ok",
-        "value": 10.9591,
+        "value": 10.9603,
         "nominal": 11.0,
-        "deviation": -0.0409,
+        "deviation": -0.0397,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:3, AC68:3), 0.1100",
         "status": "ok",
-        "value": 11.1051,
+        "value": 11.0918,
         "nominal": 11.0,
-        "deviation": 0.1051,
+        "deviation": 0.0918,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC68:1, AB8E:1), 0.1970",
         "status": "ok",
-        "value": 19.614,
+        "value": 19.6168,
         "nominal": 19.7048,
-        "deviation": -0.0908,
+        "deviation": -0.088,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:5, AC68:5), 0.1972",
         "status": "ok",
-        "value": 19.6932,
+        "value": 19.6957,
         "nominal": 19.7152,
-        "deviation": -0.022,
+        "deviation": -0.0195,
         "geometry_source": "MEASURED"
       }
     ],
@@ -60,99 +66,49 @@
       {
         "query": "lines(AB8E:7, AB8E:3), 0.5706",
         "status": "ok",
-        "value": 57.1069,
+        "value": 57.1059,
         "nominal": 57.06,
-        "deviation": 0.0469,
+        "deviation": 0.0459,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:1, AB8E:5), 0.8018",
         "status": "ok",
-        "value": 80.1947,
+        "value": 80.1929,
         "nominal": 80.18,
-        "deviation": 0.0147,
+        "deviation": 0.0129,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC66:3, AB8E:7), 0.1100",
         "status": "ng",
-        "value": 10.7668,
+        "value": 10.7534,
         "nominal": 11.0,
-        "deviation": -0.2332,
+        "deviation": -0.2466,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:3, AC68:3), 0.1100",
         "status": "ok",
-        "value": 11.1051,
+        "value": 11.0918,
         "nominal": 11.0,
-        "deviation": 0.1051,
+        "deviation": 0.0918,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC68:1, AB8E:1), 0.1970",
         "status": "ok",
-        "value": 19.614,
+        "value": 19.6168,
         "nominal": 19.7048,
-        "deviation": -0.0908,
+        "deviation": -0.088,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:5, AC68:5), 0.1972",
         "status": "ok",
-        "value": 19.6932,
+        "value": 19.6957,
         "nominal": 19.7152,
-        "deviation": -0.022,
-        "geometry_source": "MEASURED"
-      }
-    ],
-    "positive_again": [
-      {
-        "query": "lines(AB8E:7, AB8E:3), 0.5706",
-        "status": "ok",
-        "value": 57.1069,
-        "nominal": 57.06,
-        "deviation": 0.0469,
-        "geometry_source": "MEASURED"
-      },
-      {
-        "query": "lines(AB8E:1, AB8E:5), 0.8018",
-        "status": "ok",
-        "value": 80.1947,
-        "nominal": 80.18,
-        "deviation": 0.0147,
-        "geometry_source": "MEASURED"
-      },
-      {
-        "query": "lines(AC66:3, AB8E:7), 0.1100",
-        "status": "ok",
-        "value": 10.9591,
-        "nominal": 11.0,
-        "deviation": -0.0409,
-        "geometry_source": "MEASURED"
-      },
-      {
-        "query": "lines(AB8E:3, AC68:3), 0.1100",
-        "status": "ok",
-        "value": 11.1051,
-        "nominal": 11.0,
-        "deviation": 0.1051,
-        "geometry_source": "MEASURED"
-      },
-      {
-        "query": "lines(AC68:1, AB8E:1), 0.1970",
-        "status": "ok",
-        "value": 19.614,
-        "nominal": 19.7048,
-        "deviation": -0.0908,
-        "geometry_source": "MEASURED"
-      },
-      {
-        "query": "lines(AB8E:5, AC68:5), 0.1972",
-        "status": "ok",
-        "value": 19.6932,
-        "nominal": 19.7152,
-        "deviation": -0.022,
+        "deviation": -0.0195,
         "geometry_source": "MEASURED"
       }
     ]
