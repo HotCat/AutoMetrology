@@ -4,6 +4,7 @@
   "image": "/tmp/cadrefs_camera_capture.png",
   "target_line": "AC66:3",
   "target_feature_id": "401f0066-e7a6-52d7-5c7e-d72e10772f9e",
+  "recording_type": "animated Qt screen/widget recording",
   "results": {
     "positive": [
       {
