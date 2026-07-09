@@ -372,7 +372,7 @@ def main() -> int:
         )
         click_evaluate(app, window)
         initial_results = window._query_panel.results()
-        pump(app, 9.0)
+        pump(app, 20.0)
 
         recorder.set_subtitle(
             "第三步：选择要控制灰度带方向的 CAD 线",
@@ -393,7 +393,7 @@ def main() -> int:
             "+N 灰度带结果：拟合线贴在当前选择的一侧",
             "第 3 行 lines(AC66:3, AB8E:7) 为 OK，绿色拟合线靠近 CAD 名义线所在的这一侧。",
         )
-        pump(app, 7.0)
+        pump(app, 17.0)
 
         recorder.set_subtitle(
             "第五步：切换为 -N 灰度带",
@@ -407,7 +407,7 @@ def main() -> int:
             "-N 灰度带结果：绿色拟合线跳到相反侧",
             "同一条 CAD 线 AC66:3，只改变灰度带方向，测量值和状态立即变化；这就是手动消除印刷双边歧义的作用。",
         )
-        pump(app, 8.0)
+        pump(app, 18.0)
     finally:
         _RECORDER = None
     recorder.write()
