@@ -32,7 +32,9 @@ IMAGE_PATH = Path("/tmp/cadrefs_camera_capture.png")
 OUT_DIR = Path("docs/demos")
 VIDEO_PATH = OUT_DIR / "band_selection_demo.mp4"
 SUMMARY_PATH = OUT_DIR / "band_selection_demo_summary.json"
-TARGET_TOKEN = "AC66:3"
+TARGET_TOKEN = "AC68:3"
+TARGET_QUERY = "lines(AB8E:3, AC68:3)"
+TARGET_RESULT_ROW = 3
 FPS = 25
 CAPTURE_W = 1880
 CAPTURE_H = 1040
@@ -321,7 +323,7 @@ def choose_combo_index(app: QApplication, combo: QComboBox, index: int) -> None:
 def click_evaluate(app: QApplication, window: MainWindow) -> None:
     button = window._query_panel._btn_evaluate
     click_widget(app, button, button.rect().center(), 1.1)
-    window._query_panel._table.selectRow(2)
+    window._query_panel._table.selectRow(TARGET_RESULT_ROW)
     pump(app, 0.7)
 
 
@@ -372,11 +374,11 @@ def main() -> int:
         )
         click_evaluate(app, window)
         initial_results = window._query_panel.results()
-        pump(app, 20.0)
+        pump(app, 9.5)
 
         recorder.set_subtitle(
             "第三步：选择要控制灰度带方向的 CAD 线",
-            "在 Line ID 表中点击 AC66:3；这一步只是指定哪一条 CAD 线使用手动 +N/-N 灰度带。",
+            "在 Line ID 表中点击 AC68:3；这一步只是指定哪一条 CAD 线使用手动 +N/-N 灰度带。",
         )
         select_line_row(app, window, row)
         pump(app, 3.0)
@@ -391,9 +393,9 @@ def main() -> int:
         positive_results = window._query_panel.results()
         recorder.set_subtitle(
             "+N 灰度带结果：拟合线贴在当前选择的一侧",
-            "第 3 行 lines(AC66:3, AB8E:7) 为 OK，绿色拟合线靠近 CAD 名义线所在的这一侧。",
+            f"第 4 行 {TARGET_QUERY} 使用 AC68:3 的 +N 灰度带；注意 CAD 线与印刷边存在可见偏移。",
         )
-        pump(app, 17.0)
+        pump(app, 7.5)
 
         recorder.set_subtitle(
             "第五步：切换为 -N 灰度带",
@@ -405,9 +407,9 @@ def main() -> int:
         negative_results = window._query_panel.results()
         recorder.set_subtitle(
             "-N 灰度带结果：绿色拟合线跳到相反侧",
-            "同一条 CAD 线 AC66:3，只改变灰度带方向，测量值和状态立即变化；这就是手动消除印刷双边歧义的作用。",
+            "同一条 CAD 线 AC68:3，只改变灰度带方向，绿色拟合线会跳到另一侧，更容易看清两侧灰度带差异。",
         )
-        pump(app, 18.0)
+        pump(app, 8.4)
     finally:
         _RECORDER = None
     recorder.write()
@@ -423,7 +425,7 @@ def main() -> int:
             "actions": [
                 "zoom in the printed line",
                 "evaluate once and hold on the fitted green line before Line ID selection",
-                "select AC66:3 in Line ID table",
+                "select AC68:3 in Line ID table",
                 "select +N band and click Evaluate",
                 "select -N band and click Evaluate",
             ],

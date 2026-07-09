@@ -2,13 +2,13 @@
   "video": "docs/demos/band_selection_demo.mp4",
   "dxf": "/home/hotcat/Downloads/cadrefs/cads/弘毅云佳-工位牌-（大号）无挂绳孔V1.1_窗口雕刻测量22222.dxf",
   "image": "/tmp/cadrefs_camera_capture.png",
-  "target_line": "AC66:3",
-  "target_feature_id": "401f0066-e7a6-52d7-5c7e-d72e10772f9e",
+  "target_line": "AC68:3",
+  "target_feature_id": "d0069084-2312-5923-d546-dbdb1658df61",
   "recording_type": "continuous Qt window recording with visible cursor, Chinese subtitles, combo value changes, Evaluate clicks, and real UI actions",
   "actions": [
     "zoom in the printed line",
     "evaluate once and hold on the fitted green line before Line ID selection",
-    "select AC66:3 in Line ID table",
+    "select AC68:3 in Line ID table",
     "select +N band and click Evaluate",
     "select -N band and click Evaluate"
   ],
@@ -17,49 +17,49 @@
       {
         "query": "lines(AB8E:7, AB8E:3), 0.5706",
         "status": "ok",
-        "value": 57.1059,
+        "value": 57.1039,
         "nominal": 57.06,
-        "deviation": 0.0459,
+        "deviation": 0.0439,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:1, AB8E:5), 0.8018",
         "status": "ok",
-        "value": 80.1929,
+        "value": 80.1914,
         "nominal": 80.18,
-        "deviation": 0.0129,
+        "deviation": 0.0114,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC66:3, AB8E:7), 0.1100",
-        "status": "ok",
-        "value": 10.9603,
+        "status": "ng",
+        "value": 10.7667,
         "nominal": 11.0,
-        "deviation": -0.0397,
+        "deviation": -0.2333,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:3, AC68:3), 0.1100",
         "status": "ok",
-        "value": 11.0918,
+        "value": 11.1026,
         "nominal": 11.0,
-        "deviation": 0.0918,
+        "deviation": 0.1026,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC68:1, AB8E:1), 0.1970",
         "status": "ok",
-        "value": 19.6168,
+        "value": 19.6364,
         "nominal": 19.7048,
-        "deviation": -0.088,
+        "deviation": -0.0684,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:5, AC68:5), 0.1972",
         "status": "ok",
-        "value": 19.6957,
+        "value": 19.7127,
         "nominal": 19.7152,
-        "deviation": -0.0195,
+        "deviation": -0.0025,
         "geometry_source": "MEASURED"
       }
     ],
@@ -67,49 +67,49 @@
       {
         "query": "lines(AB8E:7, AB8E:3), 0.5706",
         "status": "ok",
-        "value": 57.1059,
+        "value": 57.1039,
         "nominal": 57.06,
-        "deviation": 0.0459,
+        "deviation": 0.0439,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:1, AB8E:5), 0.8018",
         "status": "ok",
-        "value": 80.1929,
+        "value": 80.1914,
         "nominal": 80.18,
-        "deviation": 0.0129,
+        "deviation": 0.0114,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC66:3, AB8E:7), 0.1100",
-        "status": "ok",
-        "value": 10.9603,
+        "status": "ng",
+        "value": 10.7667,
         "nominal": 11.0,
-        "deviation": -0.0397,
+        "deviation": -0.2333,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:3, AC68:3), 0.1100",
         "status": "ok",
-        "value": 11.0918,
+        "value": 11.1026,
         "nominal": 11.0,
-        "deviation": 0.0918,
+        "deviation": 0.1026,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC68:1, AB8E:1), 0.1970",
         "status": "ok",
-        "value": 19.6168,
+        "value": 19.6364,
         "nominal": 19.7048,
-        "deviation": -0.088,
+        "deviation": -0.0684,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:5, AC68:5), 0.1972",
         "status": "ok",
-        "value": 19.6957,
+        "value": 19.7127,
         "nominal": 19.7152,
-        "deviation": -0.0195,
+        "deviation": -0.0025,
         "geometry_source": "MEASURED"
       }
     ],
@@ -117,49 +117,49 @@
       {
         "query": "lines(AB8E:7, AB8E:3), 0.5706",
         "status": "ok",
-        "value": 57.1059,
+        "value": 57.1039,
         "nominal": 57.06,
-        "deviation": 0.0459,
+        "deviation": 0.0439,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:1, AB8E:5), 0.8018",
         "status": "ok",
-        "value": 80.1929,
+        "value": 80.1914,
         "nominal": 80.18,
-        "deviation": 0.0129,
+        "deviation": 0.0114,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC66:3, AB8E:7), 0.1100",
         "status": "ng",
-        "value": 10.7534,
+        "value": 10.7667,
         "nominal": 11.0,
-        "deviation": -0.2466,
+        "deviation": -0.2333,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:3, AC68:3), 0.1100",
-        "status": "ok",
-        "value": 11.0918,
+        "status": "ng",
+        "value": 11.2989,
         "nominal": 11.0,
-        "deviation": 0.0918,
+        "deviation": 0.2989,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AC68:1, AB8E:1), 0.1970",
         "status": "ok",
-        "value": 19.6168,
+        "value": 19.6364,
         "nominal": 19.7048,
-        "deviation": -0.088,
+        "deviation": -0.0684,
         "geometry_source": "MEASURED"
       },
       {
         "query": "lines(AB8E:5, AC68:5), 0.1972",
         "status": "ok",
-        "value": 19.6957,
+        "value": 19.7127,
         "nominal": 19.7152,
-        "deviation": -0.0195,
+        "deviation": -0.0025,
         "geometry_source": "MEASURED"
       }
     ]
