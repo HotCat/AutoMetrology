@@ -37,6 +37,7 @@ class QueryPanel(QWidget):
     selected_line_band_requested = Signal(str)  # band mode
     line_band_row_selected = Signal(str)  # line id/handle/prefix from table
     production_run_requested = Signal()
+    dual_light_production_run_requested = Signal()
     production_log_requested = Signal()
     live_query_view_requested = Signal()
     line_band_overrides_changed = Signal()
@@ -91,6 +92,11 @@ class QueryPanel(QWidget):
         self._btn_production_run = QPushButton("Run Production")
         self._btn_production_run.setToolTip("Capture camera frame, register, and evaluate queries (F5)")
         self._btn_production_run.clicked.connect(self._request_production_run)
+        self._btn_dual_light_run = QPushButton("Run Dual-Light Measurement")
+        self._btn_dual_light_run.setToolTip(
+            "Capture manual backlight/ring-light frames and evaluate using fixed-scale registration"
+        )
+        self._btn_dual_light_run.clicked.connect(self._request_dual_light_production_run)
         self._btn_evaluate = QPushButton("Evaluate")
         self._btn_evaluate.clicked.connect(self._evaluate)
         self._btn_export = QPushButton("Export Results")
@@ -104,7 +110,7 @@ class QueryPanel(QWidget):
         self._btn_queries.hide()
 
         for btn in [
-            self._btn_production_run, self._btn_evaluate, self._btn_export,
+            self._btn_production_run, self._btn_dual_light_run, self._btn_evaluate, self._btn_export,
             self._btn_logs, self._btn_queries,
         ]:
             btn.setStyleSheet("""
@@ -311,7 +317,8 @@ class QueryPanel(QWidget):
 
         self._query_view_widgets = [
             self._editor,
-            self._btn_production_run, self._btn_evaluate, self._btn_export,
+            self._btn_production_run, self._btn_dual_light_run,
+            self._btn_evaluate, self._btn_export,
             self._btn_logs,
             self._btn_pick_lines, self._btn_pick_circles, self._btn_pick_circle,
             self._btn_pick_arc, self._btn_cancel_pick, self._pair_pick_status,
@@ -694,6 +701,10 @@ class QueryPanel(QWidget):
     @Slot()
     def _request_production_run(self) -> None:
         self.production_run_requested.emit()
+
+    @Slot()
+    def _request_dual_light_production_run(self) -> None:
+        self.dual_light_production_run_requested.emit()
 
     @Slot()
     def _export_results(self) -> None:

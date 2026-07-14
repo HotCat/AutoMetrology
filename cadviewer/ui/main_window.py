@@ -301,6 +301,9 @@ class MainWindow(QMainWindow):
         bus.queries_evaluated.connect(self._on_queries_evaluated)
         self._query_panel.result_selected.connect(self._on_query_result_selected)
         self._query_panel.production_run_requested.connect(self._run_production_measurement_cycle)
+        self._query_panel.dual_light_production_run_requested.connect(
+            self._run_dual_light_measurement_cycle
+        )
         self._query_panel.production_log_requested.connect(self._show_production_log_viewer)
         self._query_panel.live_query_view_requested.connect(self._restore_live_production_context)
         if self._production_log_viewer is not None:
@@ -557,6 +560,142 @@ class MainWindow(QMainWindow):
             self._status_label.setText(
                 f"Production cycle complete — evaluated {count} queries; log save failed"
             )
+
+    @Slot()
+    def _run_dual_light_measurement_cycle(self) -> None:
+        """Capture manual backlight/ring-light frames and run fixed-scale metrology."""
+        if self._query_pair_pick_mode is not None:
+            self._cancel_query_pair_pick(update_panel=True)
+        self._restore_live_production_context()
+        if self._config.pixel_size_mm <= 0:
+            self._status_label.setText(tr("Dual-light measurement failed: pixel size calibration missing"))
+            return
+        edge_ids = self._reg_panel.window_edge_ids()
+        if len(edge_ids) != 4:
+            self._status_label.setText(tr("Dual-light measurement failed: select 4 window CAD edges"))
+            return
+
+        self._status_label.setText(tr("Dual-light measurement: capture backlight and ring-light frames..."))
+        QApplication.processEvents()
+        captured = self._reg_panel.capture_dual_light_pair_manual()
+        if captured is None:
+            self._status_label.setText(tr("Dual-light measurement cancelled"))
+            return
+        backlight_frame, ring_frame, capture_metadata = captured
+
+        try:
+            from ..registration.auto_correspondence import undistort_if_calibrated
+            backlight_frame, backlight_undistorted = undistort_if_calibrated(
+                backlight_frame, self._config,
+            )
+            ring_frame, ring_undistorted = undistort_if_calibrated(
+                ring_frame, self._config,
+            )
+            from ..measurement.dual_light_pipeline import run_dual_light_measurement
+            artifact_dir = Path("/tmp/cadviewer_dual_light")
+            metadata = {
+                "capture": capture_metadata,
+                "images_undistorted_by_app": {
+                    "backlight": bool(backlight_undistorted),
+                    "ring_light": bool(ring_undistorted),
+                },
+                "cad_path": getattr(self, "_last_dxf_path", self._config.last_dxf_path),
+                "created": __import__("datetime").datetime.now().isoformat(timespec="milliseconds"),
+            }
+            result = run_dual_light_measurement(
+                repo=self._repo,
+                query_text=self._query_panel.get_query_text(),
+                backlight_image=backlight_frame,
+                ring_light_image=ring_frame,
+                edge_tokens=edge_ids,
+                pixel_size_mm=float(self._config.pixel_size_mm),
+                residual_map=(
+                    self._reg_panel.measurement_residual_map()
+                    if hasattr(self, "_reg_panel") else None
+                ),
+                line_pair_bias_mode=(
+                    "nearest"
+                    if self._query_panel.force_nearest_line_bias()
+                    else "center"
+                ),
+                line_fit_side_mode=self._query_panel.line_fit_side_mode(),
+                line_fit_side_overrides=self._query_panel.line_fit_side_overrides(),
+                output_dir=artifact_dir,
+                metadata=metadata,
+            )
+        except Exception as exc:
+            self._status_label.setText(f"Dual-light measurement failed: {exc}")
+            QMessageBox.warning(self, tr("Dual-Light Measurement"), str(exc))
+            return
+
+        self._query_panel.set_results(result.results)
+        self._last_measurement_debug = dict(result.pipeline.get_debug_data())
+        self._last_measurement_affine = result.pipeline.measurement_transform
+        self._viewer.set_measurement_debug(
+            self._last_measurement_debug,
+            self._last_measurement_affine,
+        )
+        image_layer = self._viewer.get_image_layer()
+        image_layer.load_from_array(ring_frame)
+        image_layer.set_pixel_size_mm(float(self._config.pixel_size_mm))
+        image_layer.set_affine_transform(result.pipeline.measurement_transform)
+        self._viewer.update()
+        self._reg_panel._last_measurement_pixel_to_world = result.pipeline.measurement_transform
+        self._reg_panel._last_display_pixel_to_world = result.pipeline.measurement_transform
+        self._reg_panel._last_auto_registration = dict(result.registration)
+
+        record_id = self._save_dual_light_production_log(
+            result.results,
+            result.registration,
+            result.artifacts,
+            ring_frame,
+            capture_metadata,
+        )
+        if record_id and self._production_log_viewer is not None:
+            self._production_log_viewer.refresh(select_record_id=record_id)
+        suffix = f"; log {record_id[:8]}" if record_id else "; log save failed"
+        self._status_label.setText(
+            f"Dual-light measurement complete — evaluated {len(result.results)} queries{suffix}"
+        )
+
+    def _save_dual_light_production_log(
+        self,
+        results,
+        registration: dict,
+        artifacts,
+        ring_image,
+        capture_metadata: dict,
+    ) -> str:
+        try:
+            calibration = {
+                "pixel_size_mm": self._config.pixel_size_mm,
+                "lens_calibration": getattr(self._config, "lens_calibration", None),
+                "calibration_applied": True,
+                "dual_light": True,
+            }
+            camera = {
+                "live_preview": self._reg_panel._profile_camera_settings("live_preview"),
+                "backlight": self._reg_panel._profile_camera_settings("backlight"),
+                "ring_light": self._reg_panel._profile_camera_settings("ring_light"),
+                "capture": capture_metadata,
+            }
+            source_path = getattr(artifacts, "ring_light_raw_image_path", "")
+            return self._production_log_store.create_record(
+                results=results,
+                query_text=self._query_panel.get_query_text(),
+                cad_path=getattr(self, "_last_dxf_path", self._config.last_dxf_path),
+                source_image_path=source_path,
+                image=ring_image,
+                pixel_size_mm=self._reg_panel.production_pixel_size_mm(),
+                affine=registration.get("measurement_transform_pixel_to_cad"),
+                registration=registration,
+                production_profile=self._reg_panel.production_profile_snapshot(),
+                calibration=calibration,
+                camera=camera,
+            )
+        except Exception as e:
+            self._status_label.setText(f"Dual-light production log save error: {e}")
+            return ""
 
     def _save_current_production_log(self) -> str:
         """Persist the current production result set and replay context."""

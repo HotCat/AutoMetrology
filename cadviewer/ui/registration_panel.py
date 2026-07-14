@@ -11,7 +11,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict
+from datetime import datetime
 from typing import Optional
+import time
 
 from PySide6.QtCore import Qt, Slot
 from PySide6.QtGui import QColor, QFont, QIcon
@@ -68,6 +70,9 @@ class RegistrationPanel(QWidget):
         self._last_measurement_pixel_to_world = None
         self._last_display_pixel_to_world = None
         self._loading_profile_combo = False
+        self._last_dual_light_backlight_image = None
+        self._last_dual_light_ring_image = None
+        self._last_dual_light_confirmations: list[dict] = []
 
         # Pixel size from config
         if config is not None:
@@ -467,9 +472,15 @@ class RegistrationPanel(QWidget):
     def _default_production_profile(self) -> dict:
         camera = asdict(self._config.camera) if self._config is not None else {}
         return {
-            "version": 1,
+            "version": 2,
             "name": "Default",
-            "camera": camera,
+            "camera": {
+                "live_preview": dict(camera),
+                "backlight": dict(camera),
+                "ring_light": dict(camera),
+            },
+            "capture": {"settle_delay_ms": 200},
+            "lighting": {"control_mode": "manual"},
             "auto_correspondence": {
                 "cad_fiducials": [],
                 "image_rois": [None, None],
@@ -539,6 +550,51 @@ class RegistrationPanel(QWidget):
             cam = self._config.camera
         return asdict(cam) if cam is not None else {}
 
+    def _profile_camera_sections(self, profile: Optional[dict] = None) -> dict:
+        if profile is None:
+            profile = self._find_production_profile(self._current_profile_name())
+        camera = profile.get("camera", {}) if isinstance(profile, dict) else {}
+        fallback = {}
+        if isinstance(camera, dict):
+            from ..core.config import CameraConfig
+            allowed = set(CameraConfig.__dataclass_fields__.keys())
+            if any(key in camera for key in allowed):
+                fallback = {k: camera[k] for k in allowed if k in camera}
+        if not fallback:
+            fallback = self._camera_profile_dict()
+        sections = {
+            "live_preview": dict(fallback),
+            "backlight": dict(fallback),
+            "ring_light": dict(fallback),
+        }
+        if isinstance(camera, dict):
+            for key in sections:
+                value = camera.get(key)
+                if isinstance(value, dict):
+                    sections[key].update(value)
+        return sections
+
+    def _capture_profile(self, profile: Optional[dict] = None) -> dict:
+        if not isinstance(profile, dict):
+            profile = self._find_production_profile(self._current_profile_name()) or {}
+        capture = profile.get("capture", {})
+        if not isinstance(capture, dict):
+            capture = {}
+        return {"settle_delay_ms": int(capture.get("settle_delay_ms", 200) or 0)}
+
+    def _lighting_profile(self, profile: Optional[dict] = None) -> dict:
+        if not isinstance(profile, dict):
+            profile = self._find_production_profile(self._current_profile_name()) or {}
+        lighting = profile.get("lighting", {})
+        if not isinstance(lighting, dict):
+            lighting = {}
+        mode = str(lighting.get("control_mode", "manual") or "manual").lower()
+        return {"control_mode": "manual" if mode != "manual" else mode}
+
+    def _profile_camera_settings(self, role: str) -> dict:
+        sections = self._profile_camera_sections()
+        return dict(sections.get(role, {}) or {})
+
     def _fiducial_profile_entry(self, index: int) -> dict:
         edit = self._auto_cad1_edit if index == 0 else self._auto_cad2_edit
         entry = {
@@ -603,10 +659,23 @@ class RegistrationPanel(QWidget):
         }
 
     def _snapshot_production_profile(self, name: str) -> dict:
+        existing = self._find_production_profile(name)
+        camera_sections = self._profile_camera_sections(existing)
+        live = self._camera_profile_dict()
+        if live:
+            camera_sections["live_preview"] = live
+        settle_ms = self._capture_profile(existing)["settle_delay_ms"]
+        if hasattr(self, "_settle_delay_edit"):
+            try:
+                settle_ms = max(0, int(float(self._settle_delay_edit.text().strip())))
+            except Exception:
+                pass
         return {
-            "version": 1,
+            "version": 2,
             "name": name,
-            "camera": self._camera_profile_dict(),
+            "camera": camera_sections,
+            "capture": {"settle_delay_ms": settle_ms},
+            "lighting": {"control_mode": "manual"},
             "auto_correspondence": self._auto_correspondence_profile(),
             "window_registration": self._window_registration_profile(),
         }
@@ -627,6 +696,8 @@ class RegistrationPanel(QWidget):
         from ..core.config import CameraConfig
         camera_data = profile.get("camera", {})
         if isinstance(camera_data, dict):
+            if "live_preview" in camera_data and isinstance(camera_data["live_preview"], dict):
+                camera_data = camera_data["live_preview"]
             allowed = CameraConfig.__dataclass_fields__.keys()
             filtered = {k: camera_data[k] for k in allowed if k in camera_data}
             self._config.camera = CameraConfig(**filtered)
@@ -684,6 +755,8 @@ class RegistrationPanel(QWidget):
         if self._config is None or not isinstance(camera_data, dict):
             return
         from ..core.config import CameraConfig
+        if "live_preview" in camera_data and isinstance(camera_data["live_preview"], dict):
+            camera_data = camera_data["live_preview"]
         allowed = CameraConfig.__dataclass_fields__.keys()
         filtered = {k: camera_data[k] for k in allowed if k in camera_data}
         try:
@@ -695,6 +768,12 @@ class RegistrationPanel(QWidget):
                 self._camera.apply_settings(CameraSettings(**asdict(self._config.camera)))
             except Exception as e:
                 self._reg_status.setText(f"Camera profile apply error: {e}")
+
+    def _apply_capture_profile_ui(self, profile: dict) -> None:
+        if not hasattr(self, "_settle_delay_edit"):
+            return
+        capture = self._capture_profile(profile)
+        self._settle_delay_edit.setText(str(capture["settle_delay_ms"]))
 
     def _apply_auto_correspondence_profile(self, auto_data: dict) -> None:
         if not isinstance(auto_data, dict):
@@ -802,6 +881,7 @@ class RegistrationPanel(QWidget):
         self._apply_window_registration_profile(
             profile.get("window_registration", {})
         )
+        self._apply_capture_profile_ui(profile)
         self._config.active_production_profile = str(profile.get("name", ""))
         self._config.save()
         if hasattr(self, "_canvas"):
@@ -1017,6 +1097,84 @@ class RegistrationPanel(QWidget):
         capture_row.addWidget(self._btn_focus_preview)
 
         cam_layout.addLayout(capture_row)
+
+        profile_capture_row = QHBoxLayout()
+        profile_capture_row.setSpacing(4)
+        self._btn_save_live_settings = QPushButton("Save Live")
+        self._btn_save_backlight_settings = QPushButton("Save Backlight")
+        self._btn_save_ring_settings = QPushButton("Save Ring")
+        self._btn_save_live_settings.clicked.connect(
+            lambda: self._save_current_camera_settings_role("live_preview")
+        )
+        self._btn_save_backlight_settings.clicked.connect(
+            lambda: self._save_current_camera_settings_role("backlight")
+        )
+        self._btn_save_ring_settings.clicked.connect(
+            lambda: self._save_current_camera_settings_role("ring_light")
+        )
+        for btn in [
+            self._btn_save_live_settings,
+            self._btn_save_backlight_settings,
+            self._btn_save_ring_settings,
+        ]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 3px 6px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:disabled { background: #252525; color: #666; }
+            """)
+            profile_capture_row.addWidget(btn)
+        cam_layout.addLayout(profile_capture_row)
+
+        test_capture_row = QHBoxLayout()
+        test_capture_row.setSpacing(4)
+        self._btn_test_backlight_capture = QPushButton("Test Backlight Capture")
+        self._btn_test_ring_capture = QPushButton("Test Ring-Light Capture")
+        self._btn_test_backlight_capture.clicked.connect(
+            lambda: self._test_manual_capture("backlight")
+        )
+        self._btn_test_ring_capture.clicked.connect(
+            lambda: self._test_manual_capture("ring_light")
+        )
+        for btn in [self._btn_test_backlight_capture, self._btn_test_ring_capture]:
+            btn.setStyleSheet("""
+                QPushButton {
+                    background: #333; color: #ccc; border: 1px solid #555;
+                    padding: 3px 6px; border-radius: 3px; font-size: 10px;
+                }
+                QPushButton:hover { background: #444; }
+                QPushButton:disabled { background: #252525; color: #666; }
+            """)
+            test_capture_row.addWidget(btn)
+        cam_layout.addLayout(test_capture_row)
+
+        dual_row = QHBoxLayout()
+        dual_row.setSpacing(4)
+        dual_row.addWidget(QLabel("Settle ms:"))
+        self._settle_delay_edit = QLineEdit()
+        self._settle_delay_edit.setText(
+            str(self._capture_profile(self._find_production_profile(self._current_profile_name())).get("settle_delay_ms", 200))
+        )
+        self._settle_delay_edit.setStyleSheet(
+            "QLineEdit { background: #333; color: #ccc; border: 1px solid #555; "
+            "padding: 2px 4px; border-radius: 2px; font-size: 10px; max-width: 64px; }"
+        )
+        self._settle_delay_edit.editingFinished.connect(self._save_capture_profile_from_ui)
+        dual_row.addWidget(self._settle_delay_edit)
+        self._btn_debug_dual_window = QPushButton("Debug Window Registration")
+        self._btn_debug_dual_window.clicked.connect(self.debug_dual_light_window_registration)
+        self._btn_debug_dual_window.setStyleSheet("""
+            QPushButton {
+                background: #264f78; color: white; border: none;
+                padding: 3px 6px; border-radius: 3px; font-size: 10px;
+            }
+            QPushButton:hover { background: #306898; }
+            QPushButton:disabled { background: #333; color: #666; }
+        """)
+        dual_row.addWidget(self._btn_debug_dual_window)
+        cam_layout.addLayout(dual_row)
 
         # Camera status
         self._camera_status = QLabel("No camera connected")
@@ -1249,6 +1407,279 @@ class RegistrationPanel(QWidget):
             )
         except Exception:
             return None
+
+    def _save_current_camera_settings_role(self, role: str) -> None:
+        if self._config is None:
+            return
+        current = self._camera_profile_dict()
+        if not current:
+            self._reg_status.setText(tr("Camera settings are not available"))
+            return
+        profile = self._find_production_profile(self._current_profile_name())
+        if profile is None:
+            profile = self._snapshot_production_profile(self._current_profile_name())
+        sections = self._profile_camera_sections(profile)
+        sections[role] = current
+        profile["version"] = 2
+        profile["camera"] = sections
+        profile["capture"] = self._capture_profile(profile)
+        profile["lighting"] = {"control_mode": "manual"}
+        self._upsert_production_profile(profile, silent=True)
+        labels = {
+            "live_preview": "live preview",
+            "backlight": "backlight capture",
+            "ring_light": "ring-light capture",
+        }
+        self._reg_status.setText(f"Saved current camera settings as {labels.get(role, role)}")
+
+    def _save_capture_profile_from_ui(self) -> None:
+        profile = self._find_production_profile(self._current_profile_name())
+        if profile is None:
+            return
+        try:
+            settle_ms = max(0, int(float(self._settle_delay_edit.text().strip())))
+        except Exception:
+            settle_ms = 200
+            self._settle_delay_edit.setText(str(settle_ms))
+        profile["capture"] = {"settle_delay_ms": settle_ms}
+        profile["lighting"] = {"control_mode": "manual"}
+        self._upsert_production_profile(profile, silent=True)
+
+    def _camera_settings_from_dict(self, settings: dict):
+        if CameraSettings is None:
+            return None
+        from ..core.config import CameraConfig
+        allowed = CameraConfig.__dataclass_fields__.keys()
+        filtered = {k: settings[k] for k in allowed if k in settings}
+        return CameraSettings(**filtered)
+
+    def _apply_camera_settings_dict(self, settings: dict) -> None:
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            raise RuntimeError("Camera is not open")
+        camera_settings = self._camera_settings_from_dict(settings)
+        if camera_settings is None:
+            raise RuntimeError("Camera support is not available")
+        self._camera.apply_settings(camera_settings)
+        QApplication.processEvents()
+        time.sleep(0.05)
+        QApplication.processEvents()
+
+    def pause_live_preview(self) -> bool:
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            raise RuntimeError("Camera is not open")
+        was_live = False
+        try:
+            was_live = str(getattr(self._camera, "_mode", "")).lower() == "live"
+        except Exception:
+            was_live = True
+        set_trigger_mode = getattr(self._camera, "set_trigger_mode", None)
+        if callable(set_trigger_mode):
+            set_trigger_mode()
+        return was_live
+
+    def restore_live_preview(self, was_live: bool = True) -> None:
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            return
+        try:
+            self._apply_camera_settings_dict(self._profile_camera_settings("live_preview"))
+        except Exception:
+            pass
+        if was_live:
+            set_live_mode = getattr(self._camera, "set_live_mode", None)
+            if callable(set_live_mode):
+                try:
+                    set_live_mode()
+                except Exception as exc:
+                    self._camera_status.setText(f"Live preview restore error: {exc}")
+
+    def request_manual_light_state(self, mode: str) -> bool:
+        if mode == "backlight":
+            title = tr("Backlight Ready")
+            message = tr("Please turn ON backlight, turn OFF ring light, then click Confirm.")
+        else:
+            title = tr("Ring-Light Ready")
+            message = tr("Please turn OFF backlight and turn ON ring light, then click Confirm.")
+        box = QMessageBox(self)
+        box.setWindowTitle(title)
+        box.setIcon(QMessageBox.Information)
+        box.setText(message)
+        confirm = box.addButton(tr("Confirm"), QMessageBox.AcceptRole)
+        box.addButton(tr("Cancel"), QMessageBox.RejectRole)
+        retranslate_widget_tree(box)
+        box.exec()
+        accepted = box.clickedButton() == confirm
+        self._last_dual_light_confirmations.append({
+            "mode": mode,
+            "confirmed": bool(accepted),
+            "timestamp": datetime.now().isoformat(timespec="milliseconds"),
+        })
+        return accepted
+
+    def _settle_delay_ms(self) -> int:
+        try:
+            return max(0, int(float(self._settle_delay_edit.text().strip())))
+        except Exception:
+            return self._capture_profile()["settle_delay_ms"]
+
+    def software_trigger_capture(self, timeout_ms: int = 2500):
+        if not HAS_CAMERA or self._camera is None or not self._camera_open:
+            raise RuntimeError("Camera is not open")
+        frame_box = {"frame": None}
+
+        def _on_grab(frame):
+            frame_box["frame"] = frame
+
+        self._camera.signals.grab_done.connect(_on_grab)
+        try:
+            trigger = getattr(self._camera, "software_trigger", None)
+            if not callable(trigger):
+                raise RuntimeError("Camera backend does not support software trigger")
+            trigger()
+            deadline = time.monotonic() + timeout_ms / 1000.0
+            while frame_box["frame"] is None and time.monotonic() < deadline:
+                QApplication.processEvents()
+                time.sleep(0.01)
+            if frame_box["frame"] is None:
+                raise RuntimeError("Software trigger timed out")
+            return frame_box["frame"]
+        finally:
+            try:
+                self._camera.signals.grab_done.disconnect(_on_grab)
+            except Exception:
+                pass
+
+    def capture_manual_light_frame(self, mode: str, restore_preview: bool = True):
+        if mode not in {"backlight", "ring_light"}:
+            raise ValueError("mode must be backlight or ring_light")
+        was_live = False
+        try:
+            was_live = self.pause_live_preview()
+            self._apply_camera_settings_dict(self._profile_camera_settings(mode))
+            prompt_mode = "backlight" if mode == "backlight" else "ring_light"
+            if not self.request_manual_light_state(prompt_mode):
+                raise RuntimeError("Capture cancelled by operator")
+            settle_ms = self._settle_delay_ms()
+            if settle_ms > 0:
+                deadline = time.monotonic() + settle_ms / 1000.0
+                while time.monotonic() < deadline:
+                    QApplication.processEvents()
+                    time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+            frame = self.software_trigger_capture()
+            if frame is None:
+                raise RuntimeError("No frame returned from software trigger")
+            return frame
+        finally:
+            if restore_preview:
+                self.restore_live_preview(was_live)
+
+    def capture_dual_light_pair_manual(self) -> Optional[tuple[np.ndarray, np.ndarray, dict]]:
+        self._last_dual_light_confirmations = []
+        was_live = False
+        backlight = None
+        ring = None
+        try:
+            was_live = self.pause_live_preview()
+            self._apply_camera_settings_dict(self._profile_camera_settings("backlight"))
+            if not self.request_manual_light_state("backlight"):
+                self._reg_status.setText(tr("Dual-light capture cancelled"))
+                return None
+            self._wait_settle_delay()
+            backlight = self.software_trigger_capture()
+
+            self._apply_camera_settings_dict(self._profile_camera_settings("ring_light"))
+            if not self.request_manual_light_state("ring_light"):
+                self._reg_status.setText(tr("Dual-light capture cancelled"))
+                return None
+            self._wait_settle_delay()
+            ring = self.software_trigger_capture()
+            if backlight is None or ring is None:
+                raise RuntimeError("Dual-light capture did not return both frames")
+            if backlight.shape[:2] != ring.shape[:2]:
+                raise RuntimeError("Backlight and ring-light frames have different resolution/ROI")
+            self._last_dual_light_backlight_image = backlight
+            self._last_dual_light_ring_image = ring
+            metadata = {
+                "confirmations": list(self._last_dual_light_confirmations),
+                "backlight_camera_settings": self._profile_camera_settings("backlight"),
+                "ring_light_camera_settings": self._profile_camera_settings("ring_light"),
+                "settle_delay_ms": self._settle_delay_ms(),
+                "lighting_control_mode": "manual",
+            }
+            return backlight, ring, metadata
+        finally:
+            self.restore_live_preview(was_live)
+
+    def _wait_settle_delay(self) -> None:
+        settle_ms = self._settle_delay_ms()
+        if settle_ms <= 0:
+            return
+        deadline = time.monotonic() + settle_ms / 1000.0
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+
+    def _test_manual_capture(self, mode: str) -> None:
+        try:
+            frame = self.capture_manual_light_frame(mode, restore_preview=True)
+            if frame is None:
+                return
+            from ..registration.auto_correspondence import undistort_if_calibrated
+            frame, applied = undistort_if_calibrated(frame, self._config)
+            self._canvas.get_image_layer().load_from_array(frame)
+            self._canvas.get_image_layer().set_pixel_size_mm(self._pixel_size_mm)
+            self._image_calibration_applied = applied
+            self._image_calibration_disabled = False
+            self._image_path_label.setText(
+                f"<{mode} test capture undistorted>" if applied else f"<{mode} test capture>"
+            )
+            self._canvas.update()
+            self._reg_status.setText(f"{mode} test capture complete")
+        except Exception as exc:
+            self._reg_status.setText(f"{mode} test capture error: {exc}")
+
+    def debug_dual_light_window_registration(self) -> bool:
+        try:
+            frame = self.capture_manual_light_frame("backlight", restore_preview=True)
+            if frame is None:
+                return False
+            from ..registration.auto_correspondence import undistort_if_calibrated
+            frame, applied = undistort_if_calibrated(frame, self._config)
+            from ..measurement.dual_light_pipeline import DualLightMeasurementPipeline
+            pipeline = DualLightMeasurementPipeline(
+                self._repo,
+                frame,
+                frame,
+                edge_tokens=list(self._window_edge_ids),
+                pixel_size_mm=float(self._config.pixel_size_mm),
+                residual_map=self.measurement_residual_map(),
+            )
+            from pathlib import Path
+            artifact_dir = Path("/tmp/cadviewer_dual_light")
+            artifact_dir.mkdir(parents=True, exist_ok=True)
+            overlay = artifact_dir / "debug_backlight_window_registration.png"
+            pipeline.save_backlight_overlay(overlay)
+            self._canvas.get_image_layer().load_from_array(frame)
+            self._canvas.get_image_layer().set_pixel_size_mm(self._pixel_size_mm)
+            self._canvas.get_image_layer().set_affine_transform(pipeline.measurement_transform)
+            self._last_measurement_pixel_to_world = pipeline.measurement_transform
+            self._last_display_pixel_to_world = pipeline.measurement_transform
+            self._last_auto_registration = pipeline.registration_debug
+            self._last_auto_registration["calibration_applied"] = bool(applied)
+            self._last_auto_registration["debug_overlay"] = str(overlay)
+            self._image_calibration_applied = applied
+            self._image_calibration_disabled = False
+            self._canvas.update()
+            fit = pipeline.registration_debug["backlight_window_fit"]
+            self._reg_status.setText(
+                "Dual-light window debug OK: "
+                f"W={fit['raw_distances_with_chessboard_scale_mm']['width_mm']:.4f} mm, "
+                f"H={fit['raw_distances_with_chessboard_scale_mm']['height_mm']:.4f} mm; "
+                f"overlay={overlay}"
+            )
+            return True
+        except Exception as exc:
+            self._reg_status.setText(f"Dual-light window debug error: {exc}")
+            return False
 
     def _connect_signals(self) -> None:
         bus.highlight_feature.connect(self._on_feature_highlighted)
@@ -1968,6 +2399,12 @@ class RegistrationPanel(QWidget):
 
     def image_calibration_applied(self) -> bool:
         return bool(self._image_calibration_applied)
+
+    def window_edge_ids(self) -> list[str]:
+        return list(self._window_edge_ids)
+
+    def last_dual_light_confirmations(self) -> list[dict]:
+        return list(self._last_dual_light_confirmations)
 
     def _get_anchor_handles(self) -> list[str]:
         text = self._anchor_edit.text().strip()
