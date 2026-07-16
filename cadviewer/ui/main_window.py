@@ -636,7 +636,11 @@ class MainWindow(QMainWindow):
             self._last_measurement_affine,
         )
         image_layer = self._viewer.get_image_layer()
-        image_layer.load_from_array(ring_frame)
+        ring_artifact_path = getattr(result.artifacts, "ring_light_raw_image_path", "")
+        if ring_artifact_path and Path(ring_artifact_path).exists():
+            image_layer.load_image(ring_artifact_path)
+        else:
+            image_layer.load_from_array(ring_frame)
         image_layer.set_pixel_size_mm(float(self._config.pixel_size_mm))
         image_layer.set_affine_transform(result.pipeline.measurement_transform)
         self._viewer.update()

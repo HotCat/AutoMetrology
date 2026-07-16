@@ -19,6 +19,7 @@ import numpy as np
 
 from ..calibration.residual_map import ResidualDistortionMap
 from ..measurement.measurement_pipeline import MeasurementPipeline
+from ..measurement.query_parser import QueryParser
 from ..models.feature import CADFeature, FeatureType
 from ..models.measured_feature import MeasuredFeature, MeasuredFeatureStore
 from ..models.query import QueryResult
@@ -27,6 +28,7 @@ from ..registration import affine_solver
 from ..registration.window_line_registration import (
     _cad_corners_from_line_features,
     _resolve_line,
+    register_window_lines,
 )
 from .evaluator import QueryEvaluator
 
@@ -155,6 +157,119 @@ class DualLightMeasurementPipeline:
     @property
     def registration_debug(self) -> dict:
         return self._registration_debug()
+
+    def validate_ring_pose_consistency(self, max_mean_corner_delta_px: float = 25.0) -> dict:
+        """Check that ring-light and backlight frames show the same window pose."""
+        diagnostic = {
+            "status": "not_checked",
+            "max_mean_corner_delta_px": float(max_mean_corner_delta_px),
+        }
+        try:
+            result = register_window_lines(
+                self._repo,
+                self._ring_bgr,
+                edge_tokens=[f.feature_id for f in self._window_features],
+                pixel_size_mm=self._pixel_size_mm,
+                prefer_homography=False,
+                detection_mode="dark",
+            )
+            ring_corners = np.asarray(result.image_corners, dtype=np.float64)
+            backlight_corners = np.asarray(self._image_corners, dtype=np.float64)
+            deltas = np.linalg.norm(ring_corners - backlight_corners, axis=1)
+            mean_delta = float(np.mean(deltas))
+            diagnostic.update({
+                "status": "ok" if mean_delta <= max_mean_corner_delta_px else "mismatch",
+                "mean_corner_delta_px": mean_delta,
+                "corner_deltas_px": [float(v) for v in deltas],
+                "ring_window_confidence": float(result.confidence),
+                "ring_component_bbox": list(result.component_bbox),
+            })
+            if mean_delta > max_mean_corner_delta_px:
+                raise RuntimeError(
+                    "Backlight and ring-light window poses disagree "
+                    f"(mean corner delta {mean_delta:.1f}px). "
+                    "Rejecting dual-light measurement because the two frames "
+                    "may not be the same product pose."
+                )
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            diagnostic.update({"status": "unavailable", "error": str(exc)})
+        return diagnostic
+
+    def validate_orientation_with_ring_prints(
+        self,
+        query_text: str,
+        line_fit_side_overrides: Optional[dict[str, str]] = None,
+        ambiguity_margin: float = 0.15,
+    ) -> dict:
+        """Reject 180-degree ambiguity when ring-light witnesses are symmetric.
+
+        The hollow window alone cannot distinguish a product loaded normally
+        from one rotated 180 degrees.  We compare the current corner mapping
+        with the 180-degree alternate using printed-line fit quality.  If both
+        hypotheses are similarly good, the measurement is unsafe because CAD
+        line labels can be swapped silently.
+        """
+        window_ids = {feature.feature_id for feature in self._window_features}
+        printed_ids = _printed_line_ids_from_queries(self._repo, query_text, window_ids)
+        diagnostic = {
+            "status": "not_checked",
+            "printed_line_count": len(printed_ids),
+            "ambiguity_margin": float(ambiguity_margin),
+            "candidates": [],
+        }
+        if not printed_ids:
+            diagnostic["status"] = "no_printed_line_witness"
+            return diagnostic
+
+        candidates = []
+        for roll in (0, 2):
+            image_corners = np.roll(self._image_corners, -roll, axis=0)
+            transform = _solve_fixed_scale_transform(
+                image_corners,
+                self._cad_corners,
+                self._pixel_size_mm,
+            )
+            score, details = _printed_line_pose_score(
+                self._repo,
+                self._ring_gray,
+                transform,
+                self._pixel_size_mm,
+                printed_ids,
+                line_fit_side_overrides or {},
+            )
+            candidates.append({
+                "corner_roll": int(roll),
+                "score": float(score),
+                "details": details,
+            })
+        candidates.sort(key=lambda item: item["score"])
+        diagnostic["candidates"] = candidates
+        best = candidates[0]["score"]
+        alternate = candidates[1]["score"]
+        rel_gap = (alternate - best) / max(abs(best), 1.0)
+        diagnostic["relative_score_gap"] = float(rel_gap)
+        if rel_gap <= ambiguity_margin:
+            diagnostic["status"] = "ambiguous_180"
+            raise RuntimeError(
+                "Dual-light registration is 180-degree ambiguous. "
+                "The backlight hollow window is symmetric, and the ring-light "
+                "printed-line witnesses do not distinguish the normal and "
+                "180-degree hypotheses strongly enough. Measurement aborted "
+                "to avoid silently applying the backlight pose to the wrong "
+                "printed-line labels. Add an asymmetric CAD witness or prevent "
+                "180-degree flipped loading."
+            )
+        if candidates[0]["corner_roll"] != 0:
+            diagnostic["status"] = "wrong_orientation"
+            raise RuntimeError(
+                "Dual-light registration selected the 180-degree alternate as "
+                "a better fit. Product orientation likely does not match the "
+                "configured CAD orientation; measurement aborted."
+            )
+        diagnostic["status"] = "ok"
+        return diagnostic
 
     def measure_feature(self, cad_feature_id: str) -> Optional[MeasuredFeature]:
         if cad_feature_id in self._window_measured:
@@ -352,6 +467,11 @@ def run_dual_light_measurement(
         line_fit_side_mode=line_fit_side_mode,
         line_fit_side_overrides=line_fit_side_overrides,
     )
+    ring_pose_diagnostic = pipeline.validate_ring_pose_consistency()
+    orientation_diagnostic = pipeline.validate_orientation_with_ring_prints(
+        query_text,
+        line_fit_side_overrides=line_fit_side_overrides,
+    )
     evaluator = QueryEvaluator(repo, measurement_pipeline=pipeline)
     results = evaluator.evaluate(query_text)
     artifacts = DualLightArtifacts()
@@ -362,6 +482,8 @@ def run_dual_light_measurement(
             metadata=metadata,
         )
     registration = pipeline.registration_debug
+    registration["ring_pose_consistency"] = ring_pose_diagnostic
+    registration["orientation_validation"] = orientation_diagnostic
     registration["artifacts"] = artifacts.__dict__.copy()
     return DualLightMeasurementResult(
         results=results,
@@ -389,6 +511,104 @@ def _line_points_world(geom: dict) -> np.ndarray:
 
 def _feature_token(feature: CADFeature) -> str:
     return str(feature.dxf_handle or feature.feature_id[:8])
+
+
+def _resolve_query_feature(repo: FeatureRepository, raw_id: str) -> Optional[CADFeature]:
+    feature = repo.get(raw_id) or repo.get_by_handle(raw_id)
+    if feature is not None:
+        return feature
+    needle = str(raw_id or "").lower()
+    for candidate in repo.all_features():
+        handle = str(candidate.dxf_handle or "").lower()
+        if candidate.feature_id.lower().startswith(needle):
+            return candidate
+        if handle and handle.startswith(needle):
+            return candidate
+    return None
+
+
+def _printed_line_ids_from_queries(
+    repo: FeatureRepository,
+    query_text: str,
+    window_ids: set[str],
+) -> list[str]:
+    ids: list[str] = []
+    try:
+        instructions = QueryParser().parse(query_text)
+    except Exception:
+        return ids
+    for inst in instructions:
+        for raw_id in (inst.feature_id_1, inst.feature_id_2):
+            feature = _resolve_query_feature(repo, raw_id)
+            if feature is None:
+                continue
+            if feature.feature_type != FeatureType.LINE:
+                continue
+            if feature.feature_id in window_ids:
+                continue
+            if feature.feature_id not in ids:
+                ids.append(feature.feature_id)
+    return ids
+
+
+def _printed_line_pose_score(
+    repo: FeatureRepository,
+    ring_gray: np.ndarray,
+    transform: np.ndarray,
+    pixel_size_mm: float,
+    printed_ids: list[str],
+    line_fit_side_overrides: dict[str, str],
+) -> tuple[float, list[dict]]:
+    pipeline = MeasurementPipeline(
+        repo,
+        ring_gray,
+        transform,
+        pixel_size_mm=pixel_size_mm,
+        pixel_to_world_transform=transform,
+        line_fit_side_overrides=line_fit_side_overrides,
+    )
+    details = []
+    total = 0.0
+    for feature_id in printed_ids:
+        feature = repo.get(feature_id)
+        measured = pipeline.measure_feature(feature_id)
+        if measured is None:
+            score = 9999.0
+            details.append({
+                "feature": _feature_token(feature) if feature is not None else feature_id,
+                "status": "no_measurement",
+                "score": score,
+            })
+            total += score
+            continue
+        debug = pipeline.get_debug_data().get(feature_id, {})
+        try:
+            disp1 = float(np.linalg.norm(
+                np.asarray(debug.get("fitted_p1"), dtype=np.float64)
+                - np.asarray(debug.get("predicted_p1"), dtype=np.float64)
+            ))
+            disp2 = float(np.linalg.norm(
+                np.asarray(debug.get("fitted_p2"), dtype=np.float64)
+                - np.asarray(debug.get("predicted_p2"), dtype=np.float64)
+            ))
+            displacement = (disp1 + disp2) * 0.5
+        except Exception:
+            displacement = 9999.0
+        score = (
+            float(measured.residual_error)
+            + 0.05 * displacement
+            + 10.0 * max(0.0, 1.0 - float(measured.confidence))
+        )
+        details.append({
+            "feature": _feature_token(feature) if feature is not None else feature_id,
+            "status": "ok",
+            "score": float(score),
+            "residual_px": float(measured.residual_error),
+            "confidence": float(measured.confidence),
+            "predicted_to_fitted_displacement_px": float(displacement),
+        })
+        total += score
+    return total / max(len(printed_ids), 1), details
 
 
 def _pixel_metric(points_px: np.ndarray, pixel_size_mm: float) -> np.ndarray:
