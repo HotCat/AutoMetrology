@@ -658,8 +658,13 @@ class MainWindow(QMainWindow):
         if record_id and self._production_log_viewer is not None:
             self._production_log_viewer.refresh(select_record_id=record_id)
         suffix = f"; log {record_id[:8]}" if record_id else "; log save failed"
+        warning = ""
+        orientation = result.registration.get("orientation_validation", {})
+        if isinstance(orientation, dict) and orientation.get("status") == "ambiguous_180_warning":
+            warning = "; WARNING: 180-degree orientation ambiguous"
         self._status_label.setText(
-            f"Dual-light measurement complete — evaluated {len(result.results)} queries{suffix}"
+            f"Dual-light measurement complete — evaluated {len(result.results)} queries"
+            f"{suffix}{warning}"
         )
 
     def _save_dual_light_production_log(

@@ -251,16 +251,15 @@ class DualLightMeasurementPipeline:
         rel_gap = (alternate - best) / max(abs(best), 1.0)
         diagnostic["relative_score_gap"] = float(rel_gap)
         if rel_gap <= ambiguity_margin:
-            diagnostic["status"] = "ambiguous_180"
-            raise RuntimeError(
-                "Dual-light registration is 180-degree ambiguous. "
-                "The backlight hollow window is symmetric, and the ring-light "
-                "printed-line witnesses do not distinguish the normal and "
-                "180-degree hypotheses strongly enough. Measurement aborted "
-                "to avoid silently applying the backlight pose to the wrong "
-                "printed-line labels. Add an asymmetric CAD witness or prevent "
-                "180-degree flipped loading."
+            diagnostic["status"] = "ambiguous_180_warning"
+            diagnostic["warning"] = (
+                "The backlight hollow window is 180-degree symmetric, and the "
+                "configured ring-light printed-line witnesses do not distinguish "
+                "the normal and 180-degree hypotheses strongly enough. Continuing "
+                "with the configured corner order; use an asymmetric witness or "
+                "mechanical loading keying if flipped products must be rejected."
             )
+            return diagnostic
         if candidates[0]["corner_roll"] != 0:
             diagnostic["status"] = "wrong_orientation"
             raise RuntimeError(
