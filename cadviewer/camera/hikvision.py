@@ -179,6 +179,14 @@ class HikvisionCamera:
     def resolution(self) -> tuple[int, int]:
         return self._width, self._height
 
+    @property
+    def preview_max_side(self) -> int:
+        return int(self._preview_max_side)
+
+    def set_preview_max_side(self, max_side: int) -> None:
+        """Set live-preview downsample limit; <=0 keeps full camera frames."""
+        self._preview_max_side = int(max_side)
+
     def enumerate_devices(self) -> list[dict]:
         _ensure_sdk_initialized()
         device_list = MV_CC_DEVICE_INFO_LIST()
@@ -406,7 +414,7 @@ class HikvisionCamera:
     def _preview_frame(self, frame: np.ndarray) -> np.ndarray:
         h, w = frame.shape[:2]
         max_side = max(h, w)
-        if max_side <= self._preview_max_side:
+        if self._preview_max_side <= 0 or max_side <= self._preview_max_side:
             return frame
         scale = self._preview_max_side / max_side
         out_w = max(1, int(w * scale))

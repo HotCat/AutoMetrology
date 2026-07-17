@@ -8,11 +8,11 @@ can adjust exposure, gain, etc. while watching the live feed at full size.
 from __future__ import annotations
 
 import numpy as np
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSplitter, QGroupBox,
+    QSplitter, QSlider, QSpinBox,
 )
 
 from .preview_widget import CameraPreviewWidget
@@ -21,6 +21,8 @@ from .settings_widget import CameraSettingsWidget
 
 class CameraLiveWindow(QWidget):
     """Full-size live preview sub-window for camera focus adjustment."""
+
+    closed = Signal()
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -72,6 +74,34 @@ class CameraLiveWindow(QWidget):
         self._btn_fit.clicked.connect(self._fit_to_window)
         toolbar.addWidget(self._btn_fit)
 
+        toolbar.addWidget(QLabel("Zoom:"))
+        self._btn_zoom_out = QPushButton("-")
+        self._btn_zoom_out.setFixedWidth(32)
+        self._btn_zoom_out.clicked.connect(self._zoom_out)
+        toolbar.addWidget(self._btn_zoom_out)
+
+        self._zoom_slider = QSlider(Qt.Horizontal)
+        self._zoom_slider.setRange(10, 2000)
+        self._zoom_slider.setSingleStep(10)
+        self._zoom_slider.setPageStep(100)
+        self._zoom_slider.setValue(100)
+        self._zoom_slider.setMinimumWidth(180)
+        self._zoom_slider.valueChanged.connect(self._on_zoom_value_changed)
+        toolbar.addWidget(self._zoom_slider)
+
+        self._zoom_spin = QSpinBox()
+        self._zoom_spin.setRange(10, 2000)
+        self._zoom_spin.setSingleStep(10)
+        self._zoom_spin.setSuffix("%")
+        self._zoom_spin.setValue(100)
+        self._zoom_spin.valueChanged.connect(self._on_zoom_value_changed)
+        toolbar.addWidget(self._zoom_spin)
+
+        self._btn_zoom_in = QPushButton("+")
+        self._btn_zoom_in.setFixedWidth(32)
+        self._btn_zoom_in.clicked.connect(self._zoom_in)
+        toolbar.addWidget(self._btn_zoom_in)
+
         self._status = QLabel("Waiting for frames...")
         self._status.setStyleSheet("color: #888; font-size: 10px;")
         toolbar.addWidget(self._status)
@@ -121,7 +151,8 @@ class CameraLiveWindow(QWidget):
 
         h, w = frame.shape[:2]
         self._resolution_label.setText(f"{w}x{h}")
-        self._status.setText("Live")
+        zoom = self._preview.zoom_percent
+        self._status.setText("Live Fit" if zoom is None else f"Live {zoom:.0f}%")
 
     def get_latest_frame(self) -> np.ndarray | None:
         return self._latest_frame
@@ -135,12 +166,59 @@ class CameraLiveWindow(QWidget):
 
     def _fit_to_window(self) -> None:
         if self._latest_frame is not None:
-            self._preview.display_frame(self._latest_frame)
+            self._preview.fit_to_window()
+            self._status.setText("Live Fit")
+
+    def _on_zoom_value_changed(self, value: int) -> None:
+        sender = self.sender()
+        if sender is not self._zoom_slider:
+            self._zoom_slider.blockSignals(True)
+            self._zoom_slider.setValue(value)
+            self._zoom_slider.blockSignals(False)
+        if sender is not self._zoom_spin:
+            self._zoom_spin.blockSignals(True)
+            self._zoom_spin.setValue(value)
+            self._zoom_spin.blockSignals(False)
+        self._preview.set_zoom_percent(float(value))
+        self._status.setText(f"Live {value}%")
+
+    def _set_zoom_control_value(self, value: float) -> None:
+        value_i = int(np.clip(round(value), 10, 2000))
+        self._zoom_slider.blockSignals(True)
+        self._zoom_spin.blockSignals(True)
+        self._zoom_slider.setValue(value_i)
+        self._zoom_spin.setValue(value_i)
+        self._zoom_slider.blockSignals(False)
+        self._zoom_spin.blockSignals(False)
+
+    def _zoom_in(self) -> None:
+        self._preview.zoom_in()
+        zoom = self._preview.zoom_percent or 100.0
+        self._set_zoom_control_value(zoom)
+        self._status.setText(f"Live {zoom:.0f}%")
+
+    def _zoom_out(self) -> None:
+        self._preview.zoom_out()
+        zoom = self._preview.zoom_percent or 100.0
+        self._set_zoom_control_value(zoom)
+        self._status.setText(f"Live {zoom:.0f}%")
 
     def keyPressEvent(self, event: QKeyEvent) -> None:
         if event.key() == Qt.Key_Escape:
             self.close()
         elif event.key() == Qt.Key_F:
             self._fit_to_window()
+        elif event.key() in (Qt.Key_Plus, Qt.Key_Equal):
+            self._zoom_in()
+        elif event.key() == Qt.Key_Minus:
+            self._zoom_out()
+        elif event.key() == Qt.Key_0:
+            self._set_zoom_control_value(100)
+            self._preview.set_zoom_percent(100.0)
+            self._status.setText("Live 100%")
         else:
             super().keyPressEvent(event)
+
+    def closeEvent(self, event) -> None:
+        self.closed.emit()
+        super().closeEvent(event)

@@ -75,6 +75,7 @@ class RegistrationPanel(QWidget):
         self._last_dual_light_backlight_image = None
         self._last_dual_light_ring_image = None
         self._last_dual_light_confirmations: list[dict] = []
+        self._focus_preview_previous_max_side: int | None = None
 
         # Pixel size from config
         if config is not None:
@@ -1302,6 +1303,7 @@ class RegistrationPanel(QWidget):
         if not HAS_CAMERA or self._camera is None:
             return
 
+        self._restore_focus_preview_resolution()
         self._camera.close()
         self._camera_open = False
         self._btn_open.setEnabled(len(self._camera_devices) > 0)
@@ -1400,7 +1402,9 @@ class RegistrationPanel(QWidget):
             self._live_window.activateWindow()
             return
 
+        self._enable_focus_preview_resolution()
         self._live_window = CameraLiveWindow(self)
+        self._live_window.closed.connect(self._restore_focus_preview_resolution)
         self._live_window._btn_capture.clicked.connect(self._capture_from_camera)
 
         # Populate settings ranges and current values in the live window
@@ -1414,6 +1418,35 @@ class RegistrationPanel(QWidget):
 
         self._camera.signals.frame_ready.connect(self._live_window.display_frame)
         self._live_window.show()
+
+    def _enable_focus_preview_resolution(self) -> None:
+        if self._camera is None:
+            return
+        getter = getattr(type(self._camera), "preview_max_side", None)
+        setter = getattr(self._camera, "set_preview_max_side", None)
+        if getter is None or not callable(setter):
+            return
+        try:
+            self._focus_preview_previous_max_side = int(self._camera.preview_max_side)
+            setter(0)
+            self._camera_status.setText("Focus preview: full-resolution live frames")
+        except Exception:
+            self._focus_preview_previous_max_side = None
+
+    def _restore_focus_preview_resolution(self) -> None:
+        if self._camera is None:
+            return
+        previous = self._focus_preview_previous_max_side
+        self._focus_preview_previous_max_side = None
+        if previous is None:
+            return
+        setter = getattr(self._camera, "set_preview_max_side", None)
+        if callable(setter):
+            try:
+                setter(previous)
+                self._camera_status.setText("Focus preview closed")
+            except Exception:
+                pass
 
     def _on_method_changed(self, index: int) -> None:
         """Switch registration strategy when method dropdown changes."""
