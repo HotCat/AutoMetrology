@@ -602,6 +602,7 @@ class MainWindow(QMainWindow):
                 "cad_path": getattr(self, "_last_dxf_path", self._config.last_dxf_path),
                 "created": __import__("datetime").datetime.now().isoformat(timespec="milliseconds"),
             }
+            fit_settings = self._reg_panel.backlight_window_fit_settings()
             result = run_dual_light_measurement(
                 repo=self._repo,
                 query_text=self._query_panel.get_query_text(),
@@ -620,6 +621,9 @@ class MainWindow(QMainWindow):
                 ),
                 line_fit_side_mode=self._query_panel.line_fit_side_mode(),
                 line_fit_side_overrides=self._query_panel.line_fit_side_overrides(),
+                fit_mode=fit_settings["fit_mode"],
+                light_fraction=fit_settings["light_fraction"],
+                edge_bias=fit_settings["edge_bias"],
                 output_dir=artifact_dir,
                 metadata=metadata,
             )

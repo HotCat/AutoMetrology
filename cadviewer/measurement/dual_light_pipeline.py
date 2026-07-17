@@ -78,7 +78,8 @@ class DualLightMeasurementPipeline:
         line_fit_side_mode: str = "auto",
         line_fit_side_overrides: Optional[dict[str, str]] = None,
         fit_mode: str = "light-inner",
-        light_fraction: float = 0.85,
+        light_fraction: float = 0.95,
+        edge_bias: Optional[str] = None,
         prefer_diplib: bool = True,
     ) -> None:
         if not HAS_CV2:
@@ -115,7 +116,11 @@ class DualLightMeasurementPipeline:
             gt_height_mm=0.0,
             prefer_diplib=prefer_diplib,
             fit_mode=fit_mode,
-            edge_bias="inner",
+            edge_bias=(
+                edge_bias
+                if edge_bias is not None
+                else ("strongest" if str(fit_mode).lower() == "gradient" else "inner")
+            ),
             light_fraction=light_fraction,
             undistorted=True,
         )
@@ -593,6 +598,9 @@ def run_dual_light_measurement(
     line_fit_side_overrides: Optional[dict[str, str]] = None,
     output_dir: Optional[Path | str] = None,
     metadata: Optional[dict] = None,
+    fit_mode: str = "light-inner",
+    light_fraction: float = 0.95,
+    edge_bias: Optional[str] = None,
 ) -> DualLightMeasurementResult:
     pipeline = DualLightMeasurementPipeline(
         repo,
@@ -604,6 +612,9 @@ def run_dual_light_measurement(
         line_pair_bias_mode=line_pair_bias_mode,
         line_fit_side_mode=line_fit_side_mode,
         line_fit_side_overrides=line_fit_side_overrides,
+        fit_mode=fit_mode,
+        light_fraction=light_fraction,
+        edge_bias=edge_bias,
     )
     ring_pose_diagnostic = pipeline.validate_ring_pose_consistency()
     orientation_diagnostic = pipeline.validate_orientation_with_ring_prints(

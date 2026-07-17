@@ -187,14 +187,16 @@ def _select_profile_peak(
     edge_bias: str,
     inner_sign: int,
 ) -> Optional[int]:
+    mode = str(edge_bias or "inner").strip().lower()
     peaks, threshold = _profile_peaks(profile)
     if not peaks:
         idx = int(np.argmax(profile))
+        if mode == "strongest":
+            return idx
         if float(profile[idx]) < threshold:
             return None
         peaks = [idx]
     center = (profile.size - 1) / 2.0
-    mode = str(edge_bias or "inner").strip().lower()
     if mode in {"inner", "outer"}:
         sign = inner_sign if mode == "inner" else -inner_sign
         biased = [idx for idx in peaks if (idx - center) * sign >= 0.0]
@@ -689,31 +691,20 @@ def main(argv: list[str]) -> int:
     )
     parser.add_argument(
         "--fit-mode",
-        choices=["light-inner", "gradient"],
+        choices=["light-inner"],
         default="light-inner",
         help=(
             "Line fitting mode. light-inner fits the bright-side grayscale "
-            "crossing inside the backlight transition band; gradient fits the "
-            "strongest gradient peak."
+            "crossing inside the backlight transition band."
         ),
     )
     parser.add_argument(
         "--light-fraction",
         type=float,
-        default=0.85,
+        default=0.95,
         help=(
             "For --fit-mode light-inner, fraction from local dark level to "
             "bright level. Higher values bias further into the bright window."
-        ),
-    )
-    parser.add_argument(
-        "--edge-bias",
-        choices=["inner", "strongest", "outer"],
-        default="inner",
-        help=(
-            "Peak selection for the bright window band. 'inner' biases each "
-            "side toward the hollow-window interior; 'strongest' preserves the "
-            "old strongest-gradient behavior."
         ),
     )
     args = parser.parse_args(argv)
@@ -739,7 +730,7 @@ def main(argv: list[str]) -> int:
         gt_height_mm=float(args.gt_height_mm),
         prefer_diplib=not args.no_diplib,
         fit_mode=args.fit_mode,
-        edge_bias=args.edge_bias,
+        edge_bias="inner",
         light_fraction=args.light_fraction,
         undistorted=bool(undistorted),
     )

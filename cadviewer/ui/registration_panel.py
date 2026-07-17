@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QListWidget, QListWidgetItem,
     QPushButton, QLabel, QGroupBox, QFormLayout, QLineEdit,
     QInputDialog, QAbstractItemView, QSplitter, QComboBox, QCheckBox,
-    QMessageBox, QApplication,
+    QMessageBox, QApplication, QDoubleSpinBox,
 )
 
 from ..models.feature import FeatureType
@@ -63,6 +63,8 @@ class RegistrationPanel(QWidget):
         self._auto_cad_ids = ["", ""]
         self._window_edge_ids: list[str] = []
         self._window_detection_mode = "auto"
+        self._backlight_fit_mode = "light-inner"
+        self._backlight_light_fraction = 0.95
         self._image_calibration_applied = False
         self._image_calibration_disabled = False
         self._auto_source_image_path = ""
@@ -199,9 +201,7 @@ class RegistrationPanel(QWidget):
         reg_layout.addWidget(self._image_path_label)
 
         self._apply_correction_map = QCheckBox("Apply correction map")
-        self._apply_correction_map.setChecked(
-            bool(getattr(self._config, "apply_correction_map", True))
-        )
+        self._apply_correction_map.setChecked(False)
         self._apply_correction_map.setToolTip(
             tr(
                 "Apply saved residual/coordinate correction in measurement. "
@@ -210,7 +210,7 @@ class RegistrationPanel(QWidget):
         )
         self._apply_correction_map.setStyleSheet("color: #aaa; font-size: 10px;")
         self._apply_correction_map.toggled.connect(self._on_apply_correction_map_toggled)
-        reg_layout.addWidget(self._apply_correction_map)
+        self._apply_correction_map.hide()
 
         # Registration method dropdown
         method_row = QHBoxLayout()
@@ -421,6 +421,28 @@ class RegistrationPanel(QWidget):
         mode_row.addWidget(self._window_mode_combo)
         window_layout.addLayout(mode_row)
 
+        fraction_row = QHBoxLayout()
+        fraction_label = QLabel("Fraction:")
+        fraction_label.setStyleSheet("color: #aaa; font-size: 11px;")
+        fraction_row.addWidget(fraction_label)
+        self._backlight_fraction_spin = QDoubleSpinBox()
+        self._backlight_fraction_spin.setRange(0.50, 0.98)
+        self._backlight_fraction_spin.setDecimals(3)
+        self._backlight_fraction_spin.setSingleStep(0.01)
+        self._backlight_fraction_spin.setValue(self._backlight_light_fraction)
+        self._backlight_fraction_spin.setToolTip(
+            "For Light fraction mode: crossing level from dark to bright inside the backlight edge band."
+        )
+        self._backlight_fraction_spin.valueChanged.connect(
+            self._on_backlight_light_fraction_changed
+        )
+        self._backlight_fraction_spin.setStyleSheet(
+            "QDoubleSpinBox { background: #333; color: #ccc; border: 1px solid #555; "
+            "padding: 2px 4px; border-radius: 2px; font-size: 10px; }"
+        )
+        fraction_row.addWidget(self._backlight_fraction_spin)
+        window_layout.addLayout(fraction_row)
+
         self._window_edges_edit = QLineEdit()
         self._window_edges_edit.setReadOnly(True)
         self._window_edges_edit.setPlaceholderText("Select CAD edge, click Add; need 4")
@@ -491,6 +513,9 @@ class RegistrationPanel(QWidget):
             "window_registration": {
                 "edge_ids": [],
                 "edge_labels": [],
+                "fit_mode": "light-inner",
+                "light_fraction": 0.95,
+                "edge_bias": "inner",
             },
         }
 
@@ -652,10 +677,26 @@ class RegistrationPanel(QWidget):
         for feature_id in self._window_edge_ids:
             feature = self._repo.get(feature_id)
             labels.append(self._window_edge_label(feature_id, feature))
+        fit_settings = self.backlight_window_fit_settings()
         return {
             "edge_ids": list(self._window_edge_ids),
             "edge_labels": labels,
             "detection_mode": self._window_detection_mode,
+            "fit_mode": fit_settings["fit_mode"],
+            "light_fraction": fit_settings["light_fraction"],
+            "edge_bias": fit_settings["edge_bias"],
+        }
+
+    def backlight_window_fit_settings(self) -> dict:
+        mode = "light-inner"
+        fraction = float(self._backlight_light_fraction)
+        if hasattr(self, "_backlight_fraction_spin"):
+            fraction = float(self._backlight_fraction_spin.value())
+        fraction = max(0.50, min(0.98, fraction))
+        return {
+            "fit_mode": mode,
+            "light_fraction": fraction,
+            "edge_bias": "inner",
         }
 
     def _snapshot_production_profile(self, name: str) -> dict:
@@ -862,12 +903,24 @@ class RegistrationPanel(QWidget):
         if mode not in {"auto", "dark", "bright", "grid"}:
             mode = "auto"
         self._window_detection_mode = mode
+        fit_mode = "light-inner"
+        try:
+            light_fraction = float(window_data.get("light_fraction", 0.95))
+        except Exception:
+            light_fraction = 0.95
+        light_fraction = max(0.50, min(0.98, light_fraction))
+        self._backlight_fit_mode = fit_mode
+        self._backlight_light_fraction = light_fraction
         if hasattr(self, "_window_mode_combo"):
             idx = self._window_mode_combo.findData(mode)
             if idx >= 0:
                 self._window_mode_combo.blockSignals(True)
                 self._window_mode_combo.setCurrentIndex(idx)
                 self._window_mode_combo.blockSignals(False)
+        if hasattr(self, "_backlight_fraction_spin"):
+            self._backlight_fraction_spin.blockSignals(True)
+            self._backlight_fraction_spin.setValue(light_fraction)
+            self._backlight_fraction_spin.blockSignals(False)
         self._refresh_window_edges_edit()
 
     def _apply_production_profile(self, profile: dict) -> None:
@@ -889,9 +942,7 @@ class RegistrationPanel(QWidget):
             self._canvas.update()
 
     def correction_map_enabled(self) -> bool:
-        if hasattr(self, "_apply_correction_map"):
-            return bool(self._apply_correction_map.isChecked())
-        return bool(getattr(self._config, "apply_correction_map", True))
+        return False
 
     def measurement_residual_map(self):
         if not self.correction_map_enabled():
@@ -1602,6 +1653,7 @@ class RegistrationPanel(QWidget):
                 "confirmations": list(self._last_dual_light_confirmations),
                 "backlight_camera_settings": self._profile_camera_settings("backlight"),
                 "ring_light_camera_settings": self._profile_camera_settings("ring_light"),
+                "backlight_window_fit": self.backlight_window_fit_settings(),
                 "settle_delay_ms": self._settle_delay_ms(),
                 "lighting_control_mode": "manual",
             }
@@ -1645,6 +1697,7 @@ class RegistrationPanel(QWidget):
             from ..registration.auto_correspondence import undistort_if_calibrated
             frame, applied = undistort_if_calibrated(frame, self._config)
             from ..measurement.dual_light_pipeline import DualLightMeasurementPipeline
+            fit_settings = self.backlight_window_fit_settings()
             pipeline = DualLightMeasurementPipeline(
                 self._repo,
                 frame,
@@ -1652,6 +1705,9 @@ class RegistrationPanel(QWidget):
                 edge_tokens=list(self._window_edge_ids),
                 pixel_size_mm=float(self._config.pixel_size_mm),
                 residual_map=self.measurement_residual_map(),
+                fit_mode=fit_settings["fit_mode"],
+                light_fraction=fit_settings["light_fraction"],
+                edge_bias=fit_settings["edge_bias"],
             )
             from pathlib import Path
             artifact_dir = Path("/tmp/cadviewer_dual_light")
@@ -1749,6 +1805,10 @@ class RegistrationPanel(QWidget):
         self._window_detection_mode = mode
         self._save_selected_production_profile(silent=True)
         self._reg_status.setText(f"Window detection mode: {self._window_mode_combo.currentText()}")
+
+    def _on_backlight_light_fraction_changed(self, value: float) -> None:
+        self._backlight_light_fraction = max(0.50, min(0.98, float(value)))
+        self._save_selected_production_profile(silent=True)
 
     def _get_selected_group(self):
         return None

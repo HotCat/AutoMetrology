@@ -112,6 +112,14 @@ def main(argv: list[str]) -> int:
     edge_ids = (profile.get("window_registration", {}) or {}).get("edge_ids", [])
     if len(edge_ids) != 4:
         raise RuntimeError("Active profile must contain exactly 4 window CAD edges")
+    window_fit = profile.get("window_registration", {}) or {}
+    fit_mode = "light-inner"
+    try:
+        light_fraction = float(window_fit.get("light_fraction", 0.95))
+    except Exception:
+        light_fraction = 0.95
+    light_fraction = max(0.50, min(0.98, light_fraction))
+    edge_bias = "inner"
     query_text = str(getattr(cfg, "measurement_queries", "") or "")
     if not query_text.strip():
         raise RuntimeError("No measurement queries configured")
@@ -145,12 +153,20 @@ def main(argv: list[str]) -> int:
                 edge_tokens=edge_ids,
                 pixel_size_mm=float(cfg.pixel_size_mm),
                 line_fit_side_overrides=getattr(cfg, "line_fit_side_overrides", {}) or {},
+                fit_mode=fit_mode,
+                light_fraction=light_fraction,
+                edge_bias=edge_bias,
                 output_dir=output_dir / f"run_{index + 1:03d}",
                 metadata={
                     "run_index": index + 1,
                     "backlight_undistorted": bool(back_applied),
                     "ring_light_undistorted": bool(ring_applied),
                     "settle_delay_ms": settle_ms,
+                    "backlight_window_fit": {
+                        "fit_mode": fit_mode,
+                        "light_fraction": light_fraction,
+                        "edge_bias": edge_bias,
+                    },
                 },
             )
             for result_row in result.results:

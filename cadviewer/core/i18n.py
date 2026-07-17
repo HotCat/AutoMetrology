@@ -190,6 +190,7 @@ ZH_CN: dict[str, str] = {
     "Window Register": "窗口配准",
     "Window CAD Edges": "窗口 CAD 边",
     "Detect:": "检测:",
+    "Fraction:": "比例:",
     "Dark window": "暗窗口",
     "Bright backlight": "明亮背光",
     "Printed grid": "印刷网格",
