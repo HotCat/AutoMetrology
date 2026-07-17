@@ -20,6 +20,11 @@ import numpy as np
 from ..calibration.residual_map import ResidualDistortionMap
 from ..measurement.measurement_pipeline import MeasurementPipeline
 from ..measurement.query_parser import QueryParser
+from ..measurement.window_dimensions import (
+    WindowLineDimensions,
+    measure_window_line_dimensions,
+    side_line_corners,
+)
 from ..models.feature import CADFeature, FeatureType
 from ..models.measured_feature import MeasuredFeature, MeasuredFeatureStore
 from ..models.query import QueryResult
@@ -95,6 +100,11 @@ class DualLightMeasurementPipeline:
         self._ring_bgr = _ensure_bgr(ring_light_image)
         self._backlight_gray = _to_gray(self._backlight_bgr)
         self._ring_gray = _to_gray(self._ring_bgr)
+        self._point_corrector = (
+            residual_map.correct
+            if residual_map is not None and getattr(residual_map, "is_built", False)
+            else None
+        )
         self._window_features = [_resolve_line(repo, token) for token in edge_tokens]
         self._cad_corners = _cad_corners_from_line_features(self._window_features)
 
@@ -109,7 +119,15 @@ class DualLightMeasurementPipeline:
             light_fraction=light_fraction,
             undistorted=True,
         )
-        self._image_corners = np.asarray(self._backlight_fit.corners, dtype=np.float64)
+        self._image_corners = side_line_corners(
+            self._backlight_fit.side_lines,
+            point_corrector=self._point_corrector,
+        )
+        self._backlight_dimensions = measure_window_line_dimensions(
+            self._backlight_fit.side_lines,
+            pixel_size_mm=self._pixel_size_mm,
+            point_corrector=self._point_corrector,
+        )
         self._transform = _solve_fixed_scale_transform(
             self._image_corners,
             self._cad_corners,
@@ -345,6 +363,46 @@ class DualLightMeasurementPipeline:
             pts = _project_cad_line_to_pixel(self._transform, feature)
             _draw_line(canvas, pts[0], pts[1], (255, 0, 0), 2)
             _label(canvas, _feature_token(feature), np.mean(pts, axis=0), (255, 0, 0))
+        dims = self._backlight_dimensions
+        _label(
+            canvas,
+            (
+                f"W {dims.opposite_line_width_mm:.4f}mm "
+                f"({dims.opposite_line_width_px:.2f}px)"
+            ),
+            np.array([40.0, 70.0], dtype=np.float64),
+            (0, 255, 0),
+        )
+        _label(
+            canvas,
+            (
+                f"H {dims.opposite_line_height_mm:.4f}mm "
+                f"({dims.opposite_line_height_px:.2f}px)"
+            ),
+            np.array([40.0, 115.0], dtype=np.float64),
+            (0, 255, 0),
+        )
+        _label(
+            canvas,
+            (
+                "diag corner "
+                f"W={dims.corner_segment_width_mm:.4f}mm "
+                f"H={dims.corner_segment_height_mm:.4f}mm"
+            ),
+            np.array([40.0, 160.0], dtype=np.float64),
+            (255, 255, 0),
+        )
+        _label(
+            canvas,
+            (
+                f"angle dW={dims.width_stats.angle_difference_deg:.4f}deg "
+                f"dH={dims.height_stats.angle_difference_deg:.4f}deg; "
+                f"range W={dims.width_stats.separation_range_px:.3f}px "
+                f"H={dims.height_stats.separation_range_px:.3f}px"
+            ),
+            np.array([40.0, 205.0], dtype=np.float64),
+            (255, 255, 0),
+        )
         _write_resized(Path(path), canvas)
 
     def save_ring_overlay(self, path: Path | str) -> None:
@@ -386,7 +444,70 @@ class DualLightMeasurementPipeline:
         output["measurements"] = [
             _query_result_to_dict(result) for result in (results or [])
         ]
+        if results is not None:
+            output["geometric_consistency"] = self.geometric_consistency_diagnostics(results)
         return output
+
+    def geometric_consistency_diagnostics(self, results: list[QueryResult]) -> dict:
+        """Report gap + window size consistency against printed contour span."""
+        window_ids = set(self._window_measured.keys())
+        center = np.mean(self._image_corners, axis=0)
+        gaps: dict[str, dict] = {}
+        printed_by_axis: dict[str, set[str]] = {"x": set(), "y": set()}
+
+        for result in results:
+            inst = result.instruction
+            if inst is None or result.value is None:
+                continue
+            feature_1 = _resolve_query_feature(self._repo, inst.feature_id_1)
+            feature_2 = _resolve_query_feature(self._repo, inst.feature_id_2)
+            if feature_1 is None or feature_2 is None:
+                continue
+            ids = [feature_1.feature_id, feature_2.feature_id]
+            in_window = [fid in window_ids for fid in ids]
+            if in_window.count(True) != 1:
+                continue
+            window_feature = feature_1 if in_window[0] else feature_2
+            printed_feature = feature_2 if in_window[0] else feature_1
+            side = _window_side_from_measured(
+                self._window_measured[window_feature.feature_id],
+                center,
+            )
+            if side is None:
+                continue
+            axis = "x" if side in ("left", "right") else "y"
+            gaps[side] = {
+                "query": inst.raw_text,
+                "gap_mm": float(result.value),
+                "window_feature": _feature_token(window_feature),
+                "printed_feature": _feature_token(printed_feature),
+                "axis": axis,
+            }
+            printed_by_axis[axis].add(printed_feature.feature_id)
+
+        diagnostics = {
+            "horizontal": _axis_consistency(
+                self._store,
+                printed_by_axis["x"],
+                gaps.get("left"),
+                gaps.get("right"),
+                self._backlight_dimensions.opposite_line_width_mm,
+                axis="x",
+            ),
+            "vertical": _axis_consistency(
+                self._store,
+                printed_by_axis["y"],
+                gaps.get("top"),
+                gaps.get("bottom"),
+                self._backlight_dimensions.opposite_line_height_mm,
+                axis="y",
+            ),
+            "note": (
+                "Diagnostic only. Measurements are not modified to force "
+                "gap + window + gap consistency."
+            ),
+        }
+        return diagnostics
 
     def _build_initial_debug_data(self) -> dict:
         data: dict = {}
@@ -420,8 +541,26 @@ class DualLightMeasurementPipeline:
                     key: [float(v) for v in value]
                     for key, value in self._backlight_fit.side_lines.items()
                 },
-                "raw_distances_px": self._backlight_fit.distances_px,
-                "raw_distances_with_chessboard_scale_mm": self._backlight_fit.distances_mm,
+                "window_dimensions": self._backlight_dimensions.to_dict(
+                    self._pixel_size_mm,
+                ),
+                "fit_quality": self._backlight_fit.fit_quality,
+                "authoritative_distances_px": self._backlight_dimensions.distances_px(),
+                "authoritative_distances_with_chessboard_scale_mm": (
+                    self._backlight_dimensions.distances_mm()
+                ),
+                "corner_segment_distances_diagnostic_px": {
+                    "corner_segment_width_px": (
+                        self._backlight_dimensions.corner_segment_width_px
+                    ),
+                    "corner_segment_height_px": (
+                        self._backlight_dimensions.corner_segment_height_px
+                    ),
+                },
+                "raw_distances_px": self._backlight_dimensions.distances_px(),
+                "raw_distances_with_chessboard_scale_mm": (
+                    self._backlight_dimensions.distances_mm()
+                ),
             },
             "raw_window_derived_scale_diagnostic_only": _raw_window_scale_diagnostics(
                 self._cad_corners,
@@ -483,6 +622,9 @@ def run_dual_light_measurement(
     registration = pipeline.registration_debug
     registration["ring_pose_consistency"] = ring_pose_diagnostic
     registration["orientation_validation"] = orientation_diagnostic
+    registration["geometric_consistency"] = pipeline.geometric_consistency_diagnostics(
+        results,
+    )
     registration["artifacts"] = artifacts.__dict__.copy()
     return DualLightMeasurementResult(
         results=results,
@@ -825,6 +967,85 @@ def _measured_feature_to_dict(mf: MeasuredFeature) -> dict:
         "confidence": float(mf.confidence),
         "detection_method": mf.detection_method,
     }
+
+
+def _window_side_from_measured(
+    mf: MeasuredFeature,
+    center_px: np.ndarray,
+) -> Optional[str]:
+    geom = mf.fitted_geometry
+    p1 = np.array([geom["x1"], geom["y1"]], dtype=np.float64)
+    p2 = np.array([geom["x2"], geom["y2"]], dtype=np.float64)
+    vec = p2 - p1
+    mid = (p1 + p2) * 0.5
+    if abs(vec[1]) >= abs(vec[0]):
+        return "left" if mid[0] < center_px[0] else "right"
+    return "top" if mid[1] < center_px[1] else "bottom"
+
+
+def _axis_consistency(
+    store: MeasuredFeatureStore,
+    printed_ids: set[str],
+    gap_a: Optional[dict],
+    gap_b: Optional[dict],
+    window_size_mm: float,
+    *,
+    axis: str,
+) -> dict:
+    diagnostic = {
+        "status": "not_available",
+        "axis": axis,
+        "window_size_mm": float(window_size_mm),
+        "gap_a": gap_a,
+        "gap_b": gap_b,
+    }
+    if gap_a is None or gap_b is None or len(printed_ids) < 2:
+        return diagnostic
+    measured = [
+        store.get_by_cad_id(feature_id)
+        for feature_id in printed_ids
+    ]
+    measured = [mf for mf in measured if mf is not None and mf.feature_type == FeatureType.LINE]
+    if len(measured) < 2:
+        return diagnostic
+    best_pair = None
+    best_span = None
+    for i, first in enumerate(measured):
+        for second in measured[i + 1:]:
+            span = _line_distance_world_features(first, second)
+            if best_span is None or span > best_span:
+                best_span = span
+                best_pair = (first, second)
+    if best_pair is None or best_span is None:
+        return diagnostic
+    gap_sum = float(gap_a["gap_mm"]) + float(window_size_mm) + float(gap_b["gap_mm"])
+    discrepancy = gap_sum - float(best_span)
+    diagnostic.update({
+        "status": "ok",
+        "gap_plus_window_plus_gap_mm": gap_sum,
+        "printed_contour_span_mm": float(best_span),
+        "discrepancy_mm": float(discrepancy),
+        "printed_features": [
+            best_pair[0].cad_feature_id,
+            best_pair[1].cad_feature_id,
+        ],
+    })
+    return diagnostic
+
+
+def _line_distance_world_features(first: MeasuredFeature, second: MeasuredFeature) -> float:
+    g1 = first.fitted_geometry_world
+    g2 = second.fitted_geometry_world
+    p1 = np.array([g1["x1"], g1["y1"]], dtype=np.float64)
+    p2 = np.array([g1["x2"], g1["y2"]], dtype=np.float64)
+    q1 = np.array([g2["x1"], g2["y1"]], dtype=np.float64)
+    q2 = np.array([g2["x2"], g2["y2"]], dtype=np.float64)
+    vec = p2 - p1
+    length = float(np.linalg.norm(vec))
+    if length <= 1e-12:
+        return 0.0
+    normal = np.array([-vec[1] / length, vec[0] / length], dtype=np.float64)
+    return abs(float(((q1 - p1) @ normal + (q2 - p1) @ normal) * 0.5))
 
 
 def _query_result_to_dict(result: QueryResult) -> dict:
