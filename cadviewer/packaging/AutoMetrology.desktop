@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=AutoMetrology
+Comment=CAD-guided production metrology
+Exec=/home/hotcat/Downloads/cadrefs/dist/AutoMetrology/AutoMetrology
+Path=/home/hotcat/Downloads/cadrefs
+Icon=/home/hotcat/Downloads/cadrefs/cadviewer/assets/icons/autometrology.svg
+Terminal=false
+Categories=Graphics;Engineering;Qt;
+StartupNotify=true
+X-GNOME-UsesNotifications=false

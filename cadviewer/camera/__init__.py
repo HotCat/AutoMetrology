@@ -12,12 +12,12 @@ from .base import CameraSettings, CameraSettingRanges
 
 try:
     from .device import MindVisionCamera
-except ImportError:
+except Exception:
     MindVisionCamera = None
 
 try:
     from .hikvision import HikvisionCamera
-except ImportError:
+except Exception:
     HikvisionCamera = None
 
 CameraClass = HikvisionCamera or MindVisionCamera
