@@ -48,6 +48,24 @@ class CameraConfig:
 
 
 @dataclass
+class LightChannelConfig:
+    brightness: int = 180
+    enabled: bool = False
+
+
+@dataclass
+class LightControllerConfig:
+    device: str = "/dev/ttyUSB0"
+    baud: int = 9600
+    timeout_s: float = 0.7
+    backlight_settle_delay_ms: int = 200
+    ring_light_settle_delay_ms: int = 200
+    ring_ch1: LightChannelConfig = field(default_factory=LightChannelConfig)
+    ring_ch2: LightChannelConfig = field(default_factory=LightChannelConfig)
+    backlight_ch4: LightChannelConfig = field(default_factory=LightChannelConfig)
+
+
+@dataclass
 class CalibrationConfig:
     chessboard_cols: int = 11
     chessboard_rows: int = 8
@@ -128,6 +146,7 @@ class AppConfig:
     active_production_profile: str = ""
     last_dxf_file: str = ""
     language: str = "en"
+    light_controller: LightControllerConfig = field(default_factory=LightControllerConfig)
     line_fit_side_overrides: dict = field(default_factory=dict)
     apply_correction_map: bool = True
     measurement_queries: str = ""
@@ -141,6 +160,7 @@ class AppConfig:
             cam_data = data.pop("camera", {})
             cal_data = data.pop("calibration", {})
             lens_data = data.pop("lens_calibration", {})
+            light_data = data.pop("light_controller", {})
             data.pop("registration_groups", None)
             production_profiles = data.pop("production_profiles", [])
             active_production_profile = data.pop("active_production_profile", "")
@@ -148,6 +168,7 @@ class AppConfig:
             cfg.camera = CameraConfig(**cam_data)
             cfg.calibration = CalibrationConfig(**cal_data)
             cfg.lens_calibration = LensCalibrationConfig(**lens_data)
+            cfg.light_controller = _load_light_controller_config(light_data)
             cfg.production_profiles = (
                 production_profiles if isinstance(production_profiles, list) else []
             )
@@ -166,3 +187,31 @@ class AppConfig:
             json.dumps(data, indent=2, ensure_ascii=False),
             encoding="utf-8",
         )
+
+
+def _load_light_channel_config(data: Any) -> LightChannelConfig:
+    if not isinstance(data, dict):
+        return LightChannelConfig()
+    return LightChannelConfig(
+        brightness=max(0, min(255, int(data.get("brightness", 180)))),
+        enabled=bool(data.get("enabled", False)),
+    )
+
+
+def _load_light_controller_config(data: Any) -> LightControllerConfig:
+    if not isinstance(data, dict):
+        return LightControllerConfig()
+    return LightControllerConfig(
+        device=str(data.get("device", "/dev/ttyUSB0") or "/dev/ttyUSB0"),
+        baud=int(data.get("baud", 9600) or 9600),
+        timeout_s=float(data.get("timeout_s", 0.7) or 0.7),
+        backlight_settle_delay_ms=max(
+            0, int(data.get("backlight_settle_delay_ms", 200) or 0),
+        ),
+        ring_light_settle_delay_ms=max(
+            0, int(data.get("ring_light_settle_delay_ms", 200) or 0),
+        ),
+        ring_ch1=_load_light_channel_config(data.get("ring_ch1")),
+        ring_ch2=_load_light_channel_config(data.get("ring_ch2")),
+        backlight_ch4=_load_light_channel_config(data.get("backlight_ch4")),
+    )

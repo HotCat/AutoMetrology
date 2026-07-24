@@ -38,6 +38,7 @@ from ..ui.registration_panel import RegistrationPanel
 from ..ui.query_panel import QueryPanel
 from ..ui.dwg_import_dialog import DWGImportDialog
 from ..ui.dwg_settings_dialog import DWGSettingsDialog
+from ..ui.light_control_dialog import LightControlDialog
 from ..registration.pipeline import RegistrationPipeline
 from ..converters.dwg_converter import DWGConverter
 from ..converters.converter_config import ConversionConfig
@@ -211,6 +212,9 @@ class MainWindow(QMainWindow):
         oda_config_action = QAction("Configure DWG Converter...", self)
         oda_config_action.triggered.connect(self._show_dwg_settings)
         settings_menu.addAction(oda_config_action)
+        light_control_action = QAction("Light Source Control...", self)
+        light_control_action.triggered.connect(self._show_light_control)
+        settings_menu.addAction(light_control_action)
         settings_menu.addSeparator()
         language_menu = settings_menu.addMenu("Language")
         self._language_menu = language_menu
@@ -577,7 +581,12 @@ class MainWindow(QMainWindow):
 
         self._status_label.setText(tr("Dual-light measurement: capture backlight and ring-light frames..."))
         QApplication.processEvents()
-        captured = self._reg_panel.capture_dual_light_pair_manual()
+        try:
+            captured = self._reg_panel.capture_dual_light_pair_auto()
+        except Exception as exc:
+            self._status_label.setText(f"{tr('Dual-light capture failed:')} {exc}")
+            QMessageBox.warning(self, tr("Dual-Light Measurement"), str(exc))
+            return
         if captured is None:
             self._status_label.setText(tr("Dual-light measurement cancelled"))
             return
@@ -1193,6 +1202,12 @@ class MainWindow(QMainWindow):
                 self._dwg_action.setToolTip(
                     tr("DWG converter not found — configure in Settings")
                 )
+
+    def _show_light_control(self) -> None:
+        """Open light-source controller dialog."""
+        dialog = LightControlDialog(self._config, self)
+        retranslate_widget_tree(dialog)
+        dialog.exec()
 
     def _show_about(self) -> None:
         QMessageBox.about(

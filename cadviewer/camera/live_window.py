@@ -17,6 +17,7 @@ from PySide6.QtWidgets import (
 
 from .preview_widget import CameraPreviewWidget
 from .settings_widget import CameraSettingsWidget
+from ..ui.light_control_panel import LightControlPanel
 
 
 class CameraLiveWindow(QWidget):
@@ -24,12 +25,13 @@ class CameraLiveWindow(QWidget):
 
     closed = Signal()
 
-    def __init__(self, parent=None) -> None:
+    def __init__(self, config=None, parent=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Camera Live Preview")
         self.setWindowFlags(Qt.Window | Qt.WindowMinMaxButtonsHint)
         self.resize(1280, 800)
         self._latest_frame: np.ndarray | None = None
+        self._config = config
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -131,6 +133,11 @@ class CameraLiveWindow(QWidget):
         self._settings = CameraSettingsWidget()
         right_layout.addWidget(self._settings)
 
+        self._light_panel = None
+        if self._config is not None:
+            self._light_panel = LightControlPanel(self._config)
+            right_layout.addWidget(self._light_panel)
+
         right_layout.addStretch()
         splitter.addWidget(right)
 
@@ -143,6 +150,11 @@ class CameraLiveWindow(QWidget):
     def settings_widget(self) -> CameraSettingsWidget:
         """Expose the embedded settings widget for external wiring."""
         return self._settings
+
+    @property
+    def light_panel(self):
+        """Expose the embedded light panel for cleanup/testing."""
+        return self._light_panel
 
     def display_frame(self, frame: np.ndarray) -> None:
         """Receive and display a live frame from the camera."""
@@ -220,5 +232,7 @@ class CameraLiveWindow(QWidget):
             super().keyPressEvent(event)
 
     def closeEvent(self, event) -> None:
+        if self._light_panel is not None:
+            self._light_panel.close_controller()
         self.closed.emit()
         super().closeEvent(event)

@@ -165,6 +165,7 @@ hiddenimports = [
 ]
 hiddenimports += mvs_hiddenimports()
 hiddenimports += optional_collect_submodules("ezdxf")
+hiddenimports += optional_collect_submodules("serial")
 
 # OpenCascade is optional in this application. The default runtime uses the
 # QPainter canvas, but this keeps packaged builds usable if pythonocc-core is

@@ -29,6 +29,7 @@ from ..models.repository import FeatureRepository
 from ..models.registration import RegistrationManager
 from ..core.signals import bus
 from ..core.i18n import retranslate_widget_tree, tr
+from ..hardware.light_controller import LightController
 from .image_load_dialog import ImageLoadDialog
 
 # Optional camera import
@@ -1403,9 +1404,10 @@ class RegistrationPanel(QWidget):
             return
 
         self._enable_focus_preview_resolution()
-        self._live_window = CameraLiveWindow(self)
+        self._live_window = CameraLiveWindow(self._config, self)
         self._live_window.closed.connect(self._restore_focus_preview_resolution)
         self._live_window._btn_capture.clicked.connect(self._capture_from_camera)
+        retranslate_widget_tree(self._live_window)
 
         # Populate settings ranges and current values in the live window
         ranges = self._camera.get_setting_ranges()
@@ -1702,6 +1704,149 @@ class RegistrationPanel(QWidget):
         while time.monotonic() < deadline:
             QApplication.processEvents()
             time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+
+    def _light_settle_delay_ms(self, mode: str) -> int:
+        if self._config is None:
+            return self._settle_delay_ms()
+        light_config = getattr(self._config, "light_controller", None)
+        if light_config is None:
+            return self._settle_delay_ms()
+        if mode == "backlight":
+            return max(0, int(getattr(light_config, "backlight_settle_delay_ms", 200)))
+        return max(0, int(getattr(light_config, "ring_light_settle_delay_ms", 200)))
+
+    def _wait_ms(self, delay_ms: int) -> None:
+        delay_ms = max(0, int(delay_ms))
+        if delay_ms <= 0:
+            return
+        deadline = time.monotonic() + delay_ms / 1000.0
+        while time.monotonic() < deadline:
+            QApplication.processEvents()
+            time.sleep(min(0.02, max(0.0, deadline - time.monotonic())))
+
+    def _light_controller(self) -> LightController:
+        if self._config is None:
+            raise RuntimeError("Application configuration is not available")
+        light_config = getattr(self._config, "light_controller", None)
+        if light_config is None:
+            raise RuntimeError("Light controller configuration is missing")
+        return LightController(
+            device=str(light_config.device or "/dev/ttyUSB0"),
+            baud=int(light_config.baud or 9600),
+            timeout_s=float(light_config.timeout_s or 0.7),
+        )
+
+    def _set_dual_light_state(self, ctrl: LightController, mode: str) -> dict:
+        if self._config is None:
+            raise RuntimeError("Application configuration is not available")
+        light_config = self._config.light_controller
+        ring1 = getattr(light_config, "ring_ch1")
+        ring2 = getattr(light_config, "ring_ch2")
+        backlight = getattr(light_config, "backlight_ch4")
+
+        state = {
+            "mode": mode,
+            "commands": [],
+            "timestamp": datetime.now().isoformat(timespec="milliseconds"),
+        }
+
+        def close_channel(channel: int, label: str) -> None:
+            ctrl.close_channel(channel)
+            state["commands"].append({
+                "label": label,
+                "channel": channel,
+                "enabled": False,
+            })
+
+        def open_channel(channel: int, label: str, brightness: int) -> None:
+            value = max(0, min(255, int(brightness)))
+            ctrl.set_brightness(channel, value)
+            ctrl.open_channel(channel)
+            state["commands"].append({
+                "label": label,
+                "channel": channel,
+                "enabled": True,
+                "brightness": value,
+            })
+
+        if mode == "backlight":
+            close_channel(1, "ring_ch1")
+            close_channel(2, "ring_ch2")
+            open_channel(4, "backlight_ch4", backlight.brightness)
+            return state
+        if mode == "ring_light":
+            close_channel(4, "backlight_ch4")
+            open_channel(1, "ring_ch1", ring1.brightness)
+            open_channel(2, "ring_ch2", ring2.brightness)
+            return state
+        raise ValueError("mode must be backlight or ring_light")
+
+    def capture_dual_light_pair_auto(self) -> Optional[tuple[np.ndarray, np.ndarray, dict]]:
+        self._last_dual_light_confirmations = []
+        was_live = False
+        lighting_events: list[dict] = []
+        backlight = None
+        ring = None
+        ctrl: LightController | None = None
+        capture_complete = False
+        try:
+            was_live = self.pause_live_preview()
+            ctrl = self._light_controller()
+            ctrl.open()
+
+            self._apply_camera_settings_dict(self._profile_camera_settings("backlight"))
+            self._reg_status.setText(tr("Dual-light capture: backlight on, ring light off"))
+            QApplication.processEvents()
+            lighting_events.append(self._set_dual_light_state(ctrl, "backlight"))
+            backlight_delay_ms = self._light_settle_delay_ms("backlight")
+            self._wait_ms(backlight_delay_ms)
+            backlight = self.software_trigger_capture()
+
+            self._apply_camera_settings_dict(self._profile_camera_settings("ring_light"))
+            self._reg_status.setText(tr("Dual-light capture: ring light on, backlight off"))
+            QApplication.processEvents()
+            lighting_events.append(self._set_dual_light_state(ctrl, "ring_light"))
+            ring_delay_ms = self._light_settle_delay_ms("ring_light")
+            self._wait_ms(ring_delay_ms)
+            ring = self.software_trigger_capture()
+            capture_complete = True
+
+            if backlight is None or ring is None:
+                raise RuntimeError("Dual-light capture did not return both frames")
+            if backlight.shape[:2] != ring.shape[:2]:
+                raise RuntimeError("Backlight and ring-light frames have different resolution/ROI")
+            self._last_dual_light_backlight_image = backlight
+            self._last_dual_light_ring_image = ring
+            light_config = self._config.light_controller if self._config is not None else None
+            metadata = {
+                "confirmations": [],
+                "lighting_events": lighting_events,
+                "backlight_camera_settings": self._profile_camera_settings("backlight"),
+                "ring_light_camera_settings": self._profile_camera_settings("ring_light"),
+                "backlight_window_fit": self.backlight_window_fit_settings(),
+                "backlight_settle_delay_ms": self._light_settle_delay_ms("backlight"),
+                "ring_light_settle_delay_ms": self._light_settle_delay_ms("ring_light"),
+                "lighting_control_mode": "auto_rs232",
+                "light_controller": {
+                    "device": getattr(light_config, "device", ""),
+                    "baud": getattr(light_config, "baud", 0),
+                    "timeout_s": getattr(light_config, "timeout_s", 0.0),
+                },
+            }
+            return backlight, ring, metadata
+        except Exception:
+            if ctrl is not None and ctrl.is_open and not capture_complete:
+                try:
+                    ctrl.close_channel(1)
+                    ctrl.close_channel(2)
+                    ctrl.close_channel(4)
+                except Exception:
+                    pass
+            raise
+        finally:
+            if ctrl is not None:
+                ctrl.close()
+            self.restore_live_preview(was_live)
 
     def _test_manual_capture(self, mode: str) -> None:
         try:
