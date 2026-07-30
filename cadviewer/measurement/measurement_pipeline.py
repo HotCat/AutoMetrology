@@ -1664,6 +1664,12 @@ class MeasurementPipeline:
                 return mode
         return getattr(self, "_line_fit_side_mode", "auto")
 
+    def line_fit_side_for_feature(self, feature_id: str) -> str:
+        feat = self._repo.get(feature_id) if hasattr(self, "_repo") else None
+        if feat is None:
+            return getattr(self, "_line_fit_side_mode", "auto")
+        return self._line_fit_side_for_feature(feat)
+
     def _line_fit_preferred_side_sign(self, feat: CADFeature | None = None) -> Optional[int]:
         mode = (
             self._line_fit_side_for_feature(feat)

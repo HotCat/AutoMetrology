@@ -32,6 +32,7 @@ from ..models.repository import FeatureRepository
 from ..registration import affine_solver
 from ..registration.window_line_registration import (
     _cad_corners_from_line_features,
+    _corner_aspect,
     _resolve_line,
     register_window_lines,
 )
@@ -123,6 +124,7 @@ class DualLightMeasurementPipeline:
             ),
             light_fraction=light_fraction,
             undistorted=True,
+            target_aspect=_corner_aspect(self._cad_corners),
         )
         self._image_corners = side_line_corners(
             self._backlight_fit.side_lines,
@@ -196,6 +198,11 @@ class DualLightMeasurementPipeline:
                 prefer_homography=False,
                 detection_mode="dark",
             )
+        except Exception as exc:
+            diagnostic.update({"status": "unavailable", "error": str(exc)})
+            return diagnostic
+
+        try:
             ring_corners = np.asarray(result.image_corners, dtype=np.float64)
             backlight_corners = np.asarray(self._image_corners, dtype=np.float64)
             deltas = np.linalg.norm(ring_corners - backlight_corners, axis=1)
@@ -601,6 +608,7 @@ def run_dual_light_measurement(
     fit_mode: str = "light-inner",
     light_fraction: float = 0.95,
     edge_bias: Optional[str] = None,
+    orientation_guard_enabled: bool = True,
 ) -> DualLightMeasurementResult:
     pipeline = DualLightMeasurementPipeline(
         repo,
@@ -616,11 +624,33 @@ def run_dual_light_measurement(
         light_fraction=light_fraction,
         edge_bias=edge_bias,
     )
-    ring_pose_diagnostic = pipeline.validate_ring_pose_consistency()
-    orientation_diagnostic = pipeline.validate_orientation_with_ring_prints(
-        query_text,
-        line_fit_side_overrides=line_fit_side_overrides,
-    )
+    if orientation_guard_enabled:
+        ring_pose_diagnostic = pipeline.validate_ring_pose_consistency()
+        orientation_diagnostic = pipeline.validate_orientation_with_ring_prints(
+            query_text,
+            line_fit_side_overrides=line_fit_side_overrides,
+        )
+    else:
+        ring_pose_diagnostic = {
+            "status": "skipped",
+            "reason": "dual-light orientation guard disabled",
+        }
+        orientation_diagnostic = {
+            "status": "skipped",
+            "reason": "dual-light orientation guard disabled",
+        }
+    if orientation_diagnostic.get("status") != "ok" and orientation_guard_enabled:
+        status = orientation_diagnostic.get("status", "unresolved")
+        warning = orientation_diagnostic.get("warning") or orientation_diagnostic.get("error") or ""
+        message = (
+            "Dual-light orientation could not be resolved: "
+            f"{status}. "
+            f"{warning} "
+            "The ring-light witnesses were insufficient to disambiguate the "
+            "backlight window orientation. Use an asymmetric witness or "
+            "manual window registration."
+        ).strip()
+        raise RuntimeError(message)
     evaluator = QueryEvaluator(repo, measurement_pipeline=pipeline)
     results = evaluator.evaluate(query_text)
     artifacts = DualLightArtifacts()
@@ -633,6 +663,12 @@ def run_dual_light_measurement(
     registration = pipeline.registration_debug
     registration["ring_pose_consistency"] = ring_pose_diagnostic
     registration["orientation_validation"] = orientation_diagnostic
+    registration["orientation_guard_enabled"] = bool(orientation_guard_enabled)
+    if orientation_diagnostic.get("status") != "ok" and not orientation_guard_enabled:
+        registration["orientation_guard_warning"] = (
+            "Dual-light orientation guard is disabled; continuing with the "
+            "configured backlight corner order."
+        )
     registration["geometric_consistency"] = pipeline.geometric_consistency_diagnostics(
         results,
     )

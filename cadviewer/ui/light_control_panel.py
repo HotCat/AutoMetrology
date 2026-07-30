@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QCheckBox,
     QGridLayout,
@@ -81,15 +81,23 @@ class _CompactChannel:
 class LightControlPanel(QGroupBox):
     """Live-preview light controls using the saved light-controller settings."""
 
+    light_profile_changed = Signal()
+
     CHANNELS = (
         ("Ring Light CH1", "ring_ch1", 1),
         ("Ring Light CH2", "ring_ch2", 2),
         ("Backlight CH4", "backlight_ch4", 4),
     )
 
-    def __init__(self, config: AppConfig, parent: QWidget | None = None):
+    def __init__(
+        self,
+        config: AppConfig,
+        parent: QWidget | None = None,
+        controller_owner=None,
+    ):
         super().__init__("Light Source Control", parent)
         self._config = config
+        self._controller_owner = controller_owner
         self._controller: LightController | None = None
         self._controller_key: tuple[str, int, float] | None = None
         self._channels: dict[str, _CompactChannel] = {}
@@ -131,6 +139,8 @@ class LightControlPanel(QGroupBox):
             self._debounce[role] = timer
 
     def close_controller(self) -> None:
+        if self._controller_owner is not None:
+            return
         if self._controller is not None:
             self._controller.close()
             self._controller = None
@@ -149,6 +159,11 @@ class LightControlPanel(QGroupBox):
         )
 
     def _ensure_controller(self) -> LightController:
+        if self._controller_owner is not None:
+            controller = self._controller_owner._light_controller(self._current_key())
+            self._controller = controller
+            self._controller_key = self._current_key()
+            return controller
         key = self._current_key()
         if self._controller is not None and self._controller_key == key:
             return self._controller
@@ -165,6 +180,14 @@ class LightControlPanel(QGroupBox):
         for role, item in self._channels.items():
             setattr(light_config, role, item.to_config())
         self._config.save()
+        self.light_profile_changed.emit()
+
+    def refresh_from_config(self) -> None:
+        light_config = self._config.light_controller
+        for role, item in self._channels.items():
+            channel_config = getattr(light_config, role)
+            item.set_brightness(int(channel_config.brightness))
+            item.set_enabled(bool(channel_config.enabled))
 
     def _set_error(self, message: str) -> None:
         self._status.setText(message)

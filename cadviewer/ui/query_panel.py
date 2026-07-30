@@ -42,6 +42,9 @@ class QueryPanel(QWidget):
     live_query_view_requested = Signal()
     line_band_overrides_changed = Signal()
     query_text_changed = Signal(str)
+    force_nearest_line_bias_changed = Signal(bool)
+    line_fit_side_mode_changed = Signal(str)
+    dual_light_orientation_guard_changed = Signal(bool)
 
     def __init__(self, parent=None) -> None:
         super().__init__(parent)
@@ -94,7 +97,7 @@ class QueryPanel(QWidget):
         self._btn_production_run.clicked.connect(self._request_production_run)
         self._btn_dual_light_run = QPushButton("Run Dual-Light Measurement")
         self._btn_dual_light_run.setToolTip(
-            "Capture manual backlight/ring-light frames and evaluate using fixed-scale registration"
+            "Automatically switch backlight/ring light, capture fresh frames, and evaluate using fixed-scale registration"
         )
         self._btn_dual_light_run.clicked.connect(self._request_dual_light_production_run)
         self._btn_evaluate = QPushButton("Evaluate")
@@ -162,7 +165,31 @@ class QueryPanel(QWidget):
         self._force_nearest_line_bias.setToolTip(
             "For stroke/window line pairs, use the stroke edge nearest the window edge"
         )
+        self._force_nearest_line_bias.stateChanged.connect(
+            lambda _state: self.force_nearest_line_bias_changed.emit(
+                self.force_nearest_line_bias()
+            )
+        )
         self._force_nearest_line_bias.setStyleSheet("""
+            QCheckBox {
+                color: #aaa; font-size: 10px; padding-left: 8px;
+            }
+            QCheckBox::indicator {
+                width: 12px; height: 12px;
+            }
+        """)
+        self._dual_light_orientation_guard = QCheckBox("Dual-light orientation guard")
+        self._dual_light_orientation_guard.setChecked(True)
+        self._dual_light_orientation_guard.setToolTip(
+            "Reject dual-light measurements when ring-light witnesses cannot "
+            "disambiguate the 180-degree symmetric backlight window pose"
+        )
+        self._dual_light_orientation_guard.stateChanged.connect(
+            lambda _state: self.dual_light_orientation_guard_changed.emit(
+                self.dual_light_orientation_guard_enabled()
+            )
+        )
+        self._dual_light_orientation_guard.setStyleSheet("""
             QCheckBox {
                 color: #aaa; font-size: 10px; padding-left: 8px;
             }
@@ -178,6 +205,11 @@ class QueryPanel(QWidget):
         self._line_fit_side.addItem("Auto", "auto")
         self._line_fit_side.addItem("+N band", "positive")
         self._line_fit_side.addItem("-N band", "negative")
+        self._line_fit_side.currentIndexChanged.connect(
+            lambda _index: self.line_fit_side_mode_changed.emit(
+                self.line_fit_side_mode()
+            )
+        )
         self._line_fit_side.setToolTip(
             "Select which grayscale band to fit for printed lines. "
             "+N/-N use the CAD line normal from start to end; Auto preserves "
@@ -203,6 +235,7 @@ class QueryPanel(QWidget):
         pick_layout.addWidget(self._tol_percent_label)
         pick_layout.addWidget(self._tol_percent)
         pick_layout.addWidget(self._force_nearest_line_bias)
+        pick_layout.addWidget(self._dual_light_orientation_guard)
         pick_layout.addWidget(self._line_fit_side_label)
         pick_layout.addWidget(self._line_fit_side)
         pick_layout.addWidget(self._pair_pick_status, stretch=1)
@@ -377,8 +410,38 @@ class QueryPanel(QWidget):
     def force_nearest_line_bias(self) -> bool:
         return bool(self._force_nearest_line_bias.isChecked())
 
+    def set_force_nearest_line_bias_enabled(self, enabled: bool) -> None:
+        blocker = QSignalBlocker(self._force_nearest_line_bias)
+        try:
+            self._force_nearest_line_bias.setChecked(bool(enabled))
+        finally:
+            del blocker
+
+    def dual_light_orientation_guard_enabled(self) -> bool:
+        return bool(self._dual_light_orientation_guard.isChecked())
+
+    def set_dual_light_orientation_guard_enabled(self, enabled: bool) -> None:
+        blocker = QSignalBlocker(self._dual_light_orientation_guard)
+        try:
+            self._dual_light_orientation_guard.setChecked(bool(enabled))
+        finally:
+            del blocker
+
     def line_fit_side_mode(self) -> str:
         return str(self._line_fit_side.currentData() or "auto")
+
+    def set_line_fit_side_mode(self, mode: str) -> None:
+        mode = str(mode or "auto").strip().lower()
+        if mode not in {"auto", "positive", "negative"}:
+            mode = "auto"
+        idx = self._line_fit_side.findData(mode)
+        if idx < 0:
+            idx = 0
+        blocker = QSignalBlocker(self._line_fit_side)
+        try:
+            self._line_fit_side.setCurrentIndex(idx)
+        finally:
+            del blocker
 
     def line_fit_side_overrides(self) -> dict[str, str]:
         overrides: dict[str, str] = {}

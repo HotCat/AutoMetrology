@@ -603,13 +603,11 @@ def _select_window_component(
     best_score = float("-inf")
     for idx in range(1, len(stats)):
         x, y, bw, bh, area = stats[idx]
-        if area < 80000 or bw < w * 0.25 or bh < h * 0.20:
+        if area < 80000:
             continue
         if bw > w * 0.82 or bh > h * 0.78:
             continue
         aspect = float(bw) / max(float(bh), 1.0)
-        if not 0.9 <= aspect <= 2.3:
-            continue
         cx, cy = centroids[idx]
         center_penalty = abs(cx - w / 2.0) + abs(cy - h / 2.0)
         border_penalty = 0.0
@@ -617,6 +615,8 @@ def _select_window_component(
             border_penalty = float(area) * 0.6
         if target_aspect is not None and np.isfinite(target_aspect) and target_aspect > 0:
             normalized_aspect = max(aspect, 1.0 / max(aspect, 1e-12))
+            if not 0.35 <= normalized_aspect <= 3.5:
+                continue
             aspect_error = abs(float(np.log(normalized_aspect / target_aspect)))
             score = (
                 -aspect_error * 1_000_000.0
@@ -625,6 +625,8 @@ def _select_window_component(
                 - border_penalty
             )
         else:
+            if not 0.9 <= aspect <= 2.3:
+                continue
             score = float(area) - center_penalty * 80.0 - border_penalty
         if score > best_score:
             best = idx

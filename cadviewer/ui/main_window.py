@@ -268,11 +268,29 @@ class MainWindow(QMainWindow):
         # Query window: keep measurements in a wide standalone window so
         # operators can see many Value/Nominal/Deviation/Status rows at once.
         self._query_panel = QueryPanel()
+        active_profile = None
+        if hasattr(self, "_reg_panel"):
+            try:
+                active_profile = self._reg_panel._find_production_profile(
+                    getattr(self._config, "active_production_profile", "")
+                )
+            except Exception:
+                active_profile = None
+        profile_query_settings = self._profile_query_settings(active_profile or {})
         self._query_panel.set_query_text(
-            getattr(self._config, "measurement_queries", "")
+            self._profile_measurement_queries(active_profile or {})
         )
         self._query_panel.set_line_fit_side_overrides(
-            getattr(self._config, "line_fit_side_overrides", {})
+            self._profile_line_fit_side_overrides(active_profile or {})
+        )
+        self._query_panel.set_force_nearest_line_bias_enabled(
+            profile_query_settings["force_nearest_line_bias"]
+        )
+        self._query_panel.set_line_fit_side_mode(
+            profile_query_settings["line_fit_side_mode"]
+        )
+        self._query_panel.set_dual_light_orientation_guard_enabled(
+            profile_query_settings["dual_light_orientation_guard_enabled"]
         )
         self._production_log_viewer = ProductionLogViewer(self._production_log_store)
         self._query_panel.set_production_log_viewer(self._production_log_viewer)
@@ -325,6 +343,18 @@ class MainWindow(QMainWindow):
             self._save_line_band_overrides
         )
         self._query_panel.query_text_changed.connect(self._on_query_text_changed)
+        self._query_panel.force_nearest_line_bias_changed.connect(
+            self._save_force_nearest_line_bias
+        )
+        self._query_panel.line_fit_side_mode_changed.connect(
+            self._save_line_fit_side_mode
+        )
+        self._reg_panel.production_profile_applied.connect(
+            self._on_production_profile_applied
+        )
+        self._query_panel.dual_light_orientation_guard_changed.connect(
+            self._save_dual_light_orientation_guard
+        )
         i18n.language_changed.connect(self._on_language_changed)
 
     def retranslate_ui(self) -> None:
@@ -356,14 +386,49 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _save_line_band_overrides(self) -> None:
-        self._config.line_fit_side_overrides = (
+        self._set_active_profile_line_fit_side_overrides(
             self._query_panel.line_fit_side_overrides()
+        )
+        self._config.save()
+
+    @Slot(bool)
+    def _save_dual_light_orientation_guard(self, enabled: bool) -> None:
+        self._set_active_profile_query_settings(
+            {
+                "dual_light_orientation_guard_enabled": bool(enabled),
+                "force_nearest_line_bias": self._query_panel.force_nearest_line_bias(),
+                "line_fit_side_mode": self._query_panel.line_fit_side_mode(),
+            }
+        )
+        self._config.dual_light_orientation_guard_enabled = bool(enabled)
+        self._query_panel.set_dual_light_orientation_guard_enabled(bool(enabled))
+        self._config.save()
+
+    @Slot(bool)
+    def _save_force_nearest_line_bias(self, enabled: bool) -> None:
+        self._set_active_profile_query_settings(
+            {
+                "force_nearest_line_bias": bool(enabled),
+                "dual_light_orientation_guard_enabled": self._query_panel.dual_light_orientation_guard_enabled(),
+                "line_fit_side_mode": self._query_panel.line_fit_side_mode(),
+            }
+        )
+        self._config.save()
+
+    @Slot(str)
+    def _save_line_fit_side_mode(self, mode: str) -> None:
+        self._set_active_profile_query_settings(
+            {
+                "line_fit_side_mode": mode,
+                "force_nearest_line_bias": self._query_panel.force_nearest_line_bias(),
+                "dual_light_orientation_guard_enabled": self._query_panel.dual_light_orientation_guard_enabled(),
+            }
         )
         self._config.save()
 
     @Slot(str)
     def _on_query_text_changed(self, text: str) -> None:
-        self._config.measurement_queries = str(text or "")
+        self._set_active_profile_measurement_queries(str(text or ""))
         if self._saving_query_text:
             return
         self._saving_query_text = True
@@ -372,8 +437,118 @@ class MainWindow(QMainWindow):
     @Slot()
     def _save_queries_to_config(self) -> None:
         self._saving_query_text = False
-        self._config.measurement_queries = self._query_panel.get_query_text()
+        self._set_active_profile_measurement_queries(
+            self._query_panel.get_query_text()
+        )
         self._config.save()
+
+    @Slot(str, dict)
+    def _on_production_profile_applied(self, name: str, profile: dict) -> None:
+        query_text = self._profile_measurement_queries(profile)
+        overrides = self._profile_line_fit_side_overrides(profile)
+        query_settings = self._profile_query_settings(profile)
+        self._config.measurement_queries = query_text
+        self._config.line_fit_side_overrides = dict(overrides)
+        self._config.dual_light_orientation_guard_enabled = bool(
+            query_settings["dual_light_orientation_guard_enabled"]
+        )
+        self._query_panel.set_query_text(query_text)
+        self._query_panel.set_line_fit_side_overrides(overrides)
+        self._query_panel.set_force_nearest_line_bias_enabled(
+            query_settings["force_nearest_line_bias"]
+        )
+        self._query_panel.set_line_fit_side_mode(query_settings["line_fit_side_mode"])
+        self._query_panel.set_dual_light_orientation_guard_enabled(
+            query_settings["dual_light_orientation_guard_enabled"]
+        )
+
+    def _profile_measurement_queries(self, profile: dict) -> str:
+        if isinstance(profile, dict) and "measurement_queries" in profile:
+            return str(profile.get("measurement_queries") or "")
+        return str(getattr(self._config, "measurement_queries", "") or "")
+
+    def _profile_line_fit_side_overrides(self, profile: dict) -> dict:
+        if isinstance(profile, dict) and "line_fit_side_overrides" in profile:
+            overrides = profile.get("line_fit_side_overrides")
+            return dict(overrides) if isinstance(overrides, dict) else {}
+        overrides = getattr(self._config, "line_fit_side_overrides", {}) or {}
+        return dict(overrides) if isinstance(overrides, dict) else {}
+
+    def _profile_query_settings(self, profile: dict) -> dict:
+        if isinstance(profile, dict) and "query_settings" in profile:
+            settings = profile.get("query_settings")
+            if isinstance(settings, dict):
+                mode = str(settings.get("line_fit_side_mode", "auto") or "auto").strip().lower()
+                if mode not in {"auto", "positive", "negative"}:
+                    mode = "auto"
+                return {
+                    "force_nearest_line_bias": bool(settings.get("force_nearest_line_bias", False)),
+                    "dual_light_orientation_guard_enabled": bool(
+                        settings.get(
+                            "dual_light_orientation_guard_enabled",
+                            getattr(self._config, "dual_light_orientation_guard_enabled", True),
+                        )
+                    ),
+                    "line_fit_side_mode": mode,
+                }
+        return {
+            "force_nearest_line_bias": False,
+            "dual_light_orientation_guard_enabled": bool(
+                getattr(self._config, "dual_light_orientation_guard_enabled", True)
+            ),
+            "line_fit_side_mode": "auto",
+        }
+
+    def _set_active_profile_measurement_queries(self, text: str) -> None:
+        text = str(text or "")
+        self._config.measurement_queries = text
+        active = str(getattr(self._config, "active_production_profile", "") or "")
+        profiles = getattr(self._config, "production_profiles", [])
+        if not active or not isinstance(profiles, list):
+            return
+        for profile in profiles:
+            if (
+                isinstance(profile, dict)
+                and str(profile.get("name", "")).strip().lower()
+                == active.strip().lower()
+            ):
+                profile["measurement_queries"] = text
+                return
+
+    def _set_active_profile_line_fit_side_overrides(self, overrides: dict) -> None:
+        overrides = dict(overrides) if isinstance(overrides, dict) else {}
+        self._config.line_fit_side_overrides = overrides
+        active = str(getattr(self._config, "active_production_profile", "") or "")
+        profiles = getattr(self._config, "production_profiles", [])
+        if not active or not isinstance(profiles, list):
+            return
+        for profile in profiles:
+            if (
+                isinstance(profile, dict)
+                and str(profile.get("name", "")).strip().lower()
+                == active.strip().lower()
+            ):
+                profile["line_fit_side_overrides"] = dict(overrides)
+                return
+
+    def _set_active_profile_query_settings(self, settings: dict) -> None:
+        settings = dict(settings) if isinstance(settings, dict) else {}
+        active = str(getattr(self._config, "active_production_profile", "") or "")
+        profiles = getattr(self._config, "production_profiles", [])
+        normalized = self._profile_query_settings({"query_settings": settings})
+        self._config.dual_light_orientation_guard_enabled = bool(
+            normalized["dual_light_orientation_guard_enabled"]
+        )
+        if not active or not isinstance(profiles, list):
+            return
+        for profile in profiles:
+            if (
+                isinstance(profile, dict)
+                and str(profile.get("name", "")).strip().lower()
+                == active.strip().lower()
+            ):
+                profile["query_settings"] = dict(normalized)
+                return
 
     # ── slot handlers ──────────────────────────────────────────────
 
@@ -567,7 +742,7 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def _run_dual_light_measurement_cycle(self) -> None:
-        """Capture manual backlight/ring-light frames and run fixed-scale metrology."""
+        """Capture automatic backlight/ring-light frames and run fixed-scale metrology."""
         if self._query_pair_pick_mode is not None:
             self._cancel_query_pair_pick(update_panel=True)
         self._restore_live_production_context()
@@ -633,6 +808,9 @@ class MainWindow(QMainWindow):
                 fit_mode=fit_settings["fit_mode"],
                 light_fraction=fit_settings["light_fraction"],
                 edge_bias=fit_settings["edge_bias"],
+                orientation_guard_enabled=(
+                    self._query_panel.dual_light_orientation_guard_enabled()
+                ),
                 output_dir=artifact_dir,
                 metadata=metadata,
             )
@@ -1205,7 +1383,11 @@ class MainWindow(QMainWindow):
 
     def _show_light_control(self) -> None:
         """Open light-source controller dialog."""
-        dialog = LightControlDialog(self._config, self)
+        dialog = LightControlDialog(self._config, self, controller_owner=self._reg_panel)
+        if hasattr(self, "_reg_panel") and hasattr(dialog, "light_profile_changed"):
+            dialog.light_profile_changed.connect(
+                self._reg_panel.save_active_light_controller_profile
+            )
         retranslate_widget_tree(dialog)
         dialog.exec()
 
@@ -1268,10 +1450,19 @@ class MainWindow(QMainWindow):
             if hasattr(self._reg_panel, 'cleanup'):
                 self._reg_panel.cleanup()
         if hasattr(self, "_query_panel"):
-            self._config.line_fit_side_overrides = (
+            self._set_active_profile_line_fit_side_overrides(
                 self._query_panel.line_fit_side_overrides()
             )
-            self._config.measurement_queries = self._query_panel.get_query_text()
+            self._set_active_profile_measurement_queries(
+                self._query_panel.get_query_text()
+            )
+            self._set_active_profile_query_settings(
+                {
+                    "force_nearest_line_bias": self._query_panel.force_nearest_line_bias(),
+                    "dual_light_orientation_guard_enabled": self._query_panel.dual_light_orientation_guard_enabled(),
+                    "line_fit_side_mode": self._query_panel.line_fit_side_mode(),
+                }
+            )
         self._config.save()
         event.accept()
 

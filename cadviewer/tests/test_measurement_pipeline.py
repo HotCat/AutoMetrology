@@ -8,6 +8,8 @@ from cadviewer.models.feature import FeatureType
 from cadviewer.models.feature import CADFeature
 from cadviewer.models.measured_feature import MeasuredFeature
 from cadviewer.models.repository import FeatureRepository
+from cadviewer.measurement.evaluator import QueryEvaluator
+from cadviewer.models.query import QueryInstruction, QueryType
 from cadviewer.measurement.line_fitter import LineFittingEngine
 from cadviewer.measurement.measurement_pipeline import MeasurementPipeline
 
@@ -178,6 +180,66 @@ class MeasurementPipelineTest(unittest.TestCase):
         self.assertIsNotNone(negative)
         self.assertGreater(np.mean(positive.edge_points[:, 1]), 43.0)
         self.assertLess(np.mean(negative.edge_points[:, 1]), 37.0)
+
+    def test_explicit_band_overrides_disable_pairwise_line_distance_path(self) -> None:
+        repo = FeatureRepository()
+        feat1 = CADFeature(
+            feature_id="line-1",
+            feature_type=FeatureType.LINE,
+            geometry={"x1": 0.0, "y1": 0.0, "x2": 10.0, "y2": 0.0},
+            dxf_handle="AC68:3",
+        )
+        feat2 = CADFeature(
+            feature_id="line-2",
+            feature_type=FeatureType.LINE,
+            geometry={"x1": 0.0, "y1": 5.0, "x2": 10.0, "y2": 5.0},
+            dxf_handle="AB8E:3",
+        )
+        repo.add(feat1)
+        repo.add(feat2)
+
+        class FakePipeline:
+            def __init__(self) -> None:
+                self.calls = []
+
+            def line_fit_side_for_feature(self, fid: str) -> str:
+                return "negative" if fid == "line-1" else "auto"
+
+            def measure_line_pair(self, fid1: str, fid2: str):
+                self.calls.append(("pair", fid1, fid2))
+                return self.measure_feature(fid1), self.measure_feature(fid2)
+
+            def measure_feature(self, fid: str):
+                self.calls.append(("single", fid))
+                y = 2.0 if fid == "line-1" else 5.0
+                return self._measured(fid, y)
+
+            @staticmethod
+            def _measured(fid: str, y: float) -> MeasuredFeature:
+                return MeasuredFeature(
+                    feature_id=f"meas-{fid}",
+                    cad_feature_id=fid,
+                    feature_type=FeatureType.LINE,
+                    fitted_geometry={"x1": 0.0, "y1": y, "x2": 10.0, "y2": y},
+                    fitted_geometry_world={"x1": 0.0, "y1": y, "x2": 10.0, "y2": y},
+                    edge_points=np.array([[0.0, y], [10.0, y]], dtype=np.float64),
+                    roi_bbox=(0, 0, 10, 10),
+                    residual_error=0.1,
+                    confidence=0.9,
+                    detection_method="test",
+                    source_type="FITTED",
+                )
+
+        evaluator = QueryEvaluator(repo, measurement_pipeline=FakePipeline())
+        result = evaluator.evaluate("lines(AC68:3, AB8E:3)")[0]
+
+        self.assertEqual(result.status, "ok")
+        self.assertEqual(result.value, 3.0)
+        self.assertNotIn(("pair", "line-1", "line-2"), evaluator._pipeline.calls)
+        self.assertEqual(
+            [call[0] for call in evaluator._pipeline.calls],
+            ["single", "single"],
+        )
 
     @staticmethod
     def _line_measurement(cad_id: str, y: float) -> MeasuredFeature:

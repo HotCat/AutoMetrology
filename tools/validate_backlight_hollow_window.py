@@ -85,6 +85,7 @@ def _bright_threshold_candidates(gray: np.ndarray) -> list[int]:
 
 def _select_bright_window_component(
     gray: np.ndarray,
+    target_aspect: Optional[float] = None,
 ) -> tuple[np.ndarray, tuple[int, int, int, int], int, float]:
     h, w = gray.shape[:2]
     best = None
@@ -96,19 +97,29 @@ def _select_bright_window_component(
         n, labels, stats, centroids = cv2.connectedComponentsWithStats(mask, 8)
         for idx in range(1, n):
             x, y, bw, bh, area = [float(v) for v in stats[idx]]
-            if area < 80000 or bw < w * 0.25 or bh < h * 0.20:
+            if area < 80000:
                 continue
             if bw > w * 0.90 or bh > h * 0.85:
                 continue
             aspect = bw / max(bh, 1.0)
-            if not 0.8 <= aspect <= 2.6:
+            normalized_aspect = max(aspect, 1.0 / max(aspect, 1e-12))
+            if not 0.35 <= normalized_aspect <= 3.5:
                 continue
             cx, cy = centroids[idx]
             center_penalty = abs(cx - w / 2.0) + abs(cy - h / 2.0)
             border_penalty = 0.0
             if x <= 2 or y <= 2 or x + bw >= w - 2 or y + bh >= h - 2:
                 border_penalty = area * 0.6
-            score = area - center_penalty * 80.0 - border_penalty
+            if target_aspect is not None and np.isfinite(target_aspect) and target_aspect > 0:
+                aspect_error = abs(float(np.log(normalized_aspect / target_aspect)))
+                score = (
+                    -aspect_error * 1_000_000.0
+                    + area * 0.02
+                    - center_penalty * 10.0
+                    - border_penalty
+                )
+            else:
+                score = area - center_penalty * 80.0 - border_penalty
             if score > best_score:
                 best_score = score
                 best = (labels == idx, (int(x), int(y), int(x + bw - 1), int(y + bh - 1)), threshold)
@@ -504,8 +515,12 @@ def _fit_window(
     edge_bias: str,
     light_fraction: float,
     undistorted: bool,
+    target_aspect: Optional[float] = None,
 ) -> WindowFit:
-    _comp, bbox, threshold, score = _select_bright_window_component(gray)
+    _comp, bbox, threshold, score = _select_bright_window_component(
+        gray,
+        target_aspect=target_aspect,
+    )
     side_positions = _scan_component_sides(_comp, bbox)
     side_lines, gradient_method, fit_quality = _refine_side_lines(
         gray, bbox, side_positions, prefer_diplib,

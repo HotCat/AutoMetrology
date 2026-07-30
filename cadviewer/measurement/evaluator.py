@@ -177,11 +177,21 @@ class QueryEvaluator:
             audit["failure_reason"] = "no_measurement_pipeline"
             return None, audit
 
+        explicit_band = False
+        if query_type == QueryType.LINE_DISTANCE and self._pipeline is not None:
+            explicit_band = self._feature_has_explicit_line_band(fid1) or self._feature_has_explicit_line_band(fid2)
+
         # Ensure both features are measured. Line-distance queries use
         # pair-aware fitting so adjacent double-edge line art resolves to the
         # inward edge deterministically instead of whichever edge is closest
-        # to a slightly drifting registration pose.
-        if query_type == QueryType.LINE_DISTANCE and hasattr(self._pipeline, "measure_line_pair"):
+        # to a slightly drifting registration pose. When either line has an
+        # explicit band override, fall back to single-line fitting so the user
+        # choice is honored.
+        if (
+            query_type == QueryType.LINE_DISTANCE
+            and hasattr(self._pipeline, "measure_line_pair")
+            and not explicit_band
+        ):
             mf1, mf2 = self._pipeline.measure_line_pair(fid1, fid2)
         else:
             mf1 = self._pipeline.measure_feature(fid1)
@@ -234,6 +244,26 @@ class QueryEvaluator:
 
         audit["measured_value"] = result
         return result, audit
+
+    def _feature_has_explicit_line_band(self, fid: str) -> bool:
+        if self._pipeline is None:
+            return False
+        getter = getattr(self._pipeline, "line_fit_side_for_feature", None)
+        if callable(getter):
+            try:
+                return str(getter(fid)).strip().lower() in {"positive", "negative"}
+            except Exception:
+                return False
+        getter = getattr(self._pipeline, "_line_fit_side_for_feature", None)
+        if callable(getter):
+            feat = self._repo.get(fid)
+            if feat is None:
+                return False
+            try:
+                return str(getter(feat)).strip().lower() in {"positive", "negative"}
+            except Exception:
+                return False
+        return False
 
     def _measured_radius_with_audit(
         self, fid: str,

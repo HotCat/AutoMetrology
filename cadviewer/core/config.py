@@ -8,6 +8,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass, field, asdict
+import os
+import shutil
+import tempfile
 from pathlib import Path
 from typing import Optional, Any
 
@@ -17,8 +20,23 @@ try:
 except ImportError:
     HAS_NUMPY = False
 
-_CONFIG_DIR = Path.home() / ".config" / "cadviewer"
+def _default_config_dir() -> Path:
+    if os.name == "nt":
+        base = os.environ.get("APPDATA")
+        if base:
+            return Path(base) / "cadviewer"
+        return Path.home() / "AppData" / "Roaming" / "cadviewer"
+    base = os.environ.get("XDG_CONFIG_HOME")
+    if base:
+        return Path(base) / "cadviewer"
+    return Path.home() / ".config" / "cadviewer"
+
+
+_CONFIG_DIR = _default_config_dir()
 _CONFIG_FILE = _CONFIG_DIR / "settings.json"
+_CONFIG_BACKUP_FILE = _CONFIG_DIR / "settings.json.bak"
+_LAST_LOAD_STATUS = "ok"
+_LAST_LOAD_ERROR = ""
 
 
 
@@ -149,44 +167,109 @@ class AppConfig:
     light_controller: LightControllerConfig = field(default_factory=LightControllerConfig)
     line_fit_side_overrides: dict = field(default_factory=dict)
     apply_correction_map: bool = True
+    dual_light_orientation_guard_enabled: bool = True
     measurement_queries: str = ""
 
     @staticmethod
     def load() -> AppConfig:
+        global _LAST_LOAD_STATUS, _LAST_LOAD_ERROR
+        _LAST_LOAD_STATUS = "ok"
+        _LAST_LOAD_ERROR = ""
         if not _CONFIG_FILE.exists():
             return AppConfig()
         try:
             data = json.loads(_CONFIG_FILE.read_text(encoding="utf-8"))
-            cam_data = data.pop("camera", {})
-            cal_data = data.pop("calibration", {})
-            lens_data = data.pop("lens_calibration", {})
-            light_data = data.pop("light_controller", {})
-            data.pop("registration_groups", None)
-            production_profiles = data.pop("production_profiles", [])
-            active_production_profile = data.pop("active_production_profile", "")
-            cfg = AppConfig(**data)
-            cfg.camera = CameraConfig(**cam_data)
-            cfg.calibration = CalibrationConfig(**cal_data)
-            cfg.lens_calibration = LensCalibrationConfig(**lens_data)
-            cfg.light_controller = _load_light_controller_config(light_data)
-            cfg.production_profiles = (
-                production_profiles if isinstance(production_profiles, list) else []
-            )
-            cfg.active_production_profile = (
-                active_production_profile
-                if isinstance(active_production_profile, str) else ""
-            )
-            return cfg
-        except Exception:
+            _snapshot_config_backup()
+            return _build_config_from_dict(data)
+        except Exception as exc:
+            _LAST_LOAD_ERROR = str(exc)
+            backup = _try_load_backup()
+            if backup is not None:
+                _LAST_LOAD_STATUS = "recovered_from_backup"
+                return backup
+            _LAST_LOAD_STATUS = "load_failed"
             return AppConfig()
 
     def save(self) -> None:
         _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+        if _LAST_LOAD_STATUS == "load_failed" and _CONFIG_FILE.exists():
+            # Refuse to overwrite the only on-disk config with defaults when we
+            # know startup could not parse the existing file.
+            return
         data = _json_safe(asdict(self))
-        _CONFIG_FILE.write_text(
-            json.dumps(data, indent=2, ensure_ascii=False),
-            encoding="utf-8",
-        )
+        payload = json.dumps(data, indent=2, ensure_ascii=False)
+        tmp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                "w",
+                encoding="utf-8",
+                delete=False,
+                dir=str(_CONFIG_DIR),
+                prefix="settings.",
+                suffix=".tmp",
+            ) as handle:
+                handle.write(payload)
+                handle.flush()
+                os.fsync(handle.fileno())
+                tmp_path = Path(handle.name)
+            if _CONFIG_FILE.exists():
+                try:
+                    shutil.copy2(_CONFIG_FILE, _CONFIG_BACKUP_FILE)
+                except Exception:
+                    pass
+            os.replace(tmp_path, _CONFIG_FILE)
+            try:
+                shutil.copy2(_CONFIG_FILE, _CONFIG_BACKUP_FILE)
+            except Exception:
+                pass
+        finally:
+            if tmp_path is not None and tmp_path.exists():
+                try:
+                    tmp_path.unlink()
+                except Exception:
+                    pass
+
+
+def _build_config_from_dict(data: dict[str, Any]) -> AppConfig:
+    cam_data = data.pop("camera", {})
+    cal_data = data.pop("calibration", {})
+    lens_data = data.pop("lens_calibration", {})
+    light_data = data.pop("light_controller", {})
+    data.pop("registration_groups", None)
+    production_profiles = data.pop("production_profiles", [])
+    active_production_profile = data.pop("active_production_profile", "")
+    cfg = AppConfig(**data)
+    cfg.camera = CameraConfig(**cam_data)
+    cfg.calibration = CalibrationConfig(**cal_data)
+    cfg.lens_calibration = LensCalibrationConfig(**lens_data)
+    cfg.light_controller = _load_light_controller_config(light_data)
+    cfg.production_profiles = (
+        production_profiles if isinstance(production_profiles, list) else []
+    )
+    cfg.active_production_profile = (
+        active_production_profile
+        if isinstance(active_production_profile, str) else ""
+    )
+    return cfg
+
+
+def _try_load_backup() -> AppConfig | None:
+    if not _CONFIG_BACKUP_FILE.exists():
+        return None
+    try:
+        data = json.loads(_CONFIG_BACKUP_FILE.read_text(encoding="utf-8"))
+        return _build_config_from_dict(data)
+    except Exception:
+        return None
+
+
+def _snapshot_config_backup() -> None:
+    try:
+        if _CONFIG_FILE.exists():
+            _CONFIG_DIR.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(_CONFIG_FILE, _CONFIG_BACKUP_FILE)
+    except Exception:
+        pass
 
 
 def _load_light_channel_config(data: Any) -> LightChannelConfig:

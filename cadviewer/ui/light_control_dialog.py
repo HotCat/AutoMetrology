@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, Signal
 from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
@@ -87,21 +87,27 @@ class _ChannelControls:
 class LightControlDialog(QDialog):
     """Manual three-group light-control panel for the RS232 controller."""
 
+    light_profile_changed = Signal()
+
     CHANNELS = (
         ("Ring Light CH1", "ring_ch1", 1),
         ("Ring Light CH2", "ring_ch2", 2),
         ("Backlight CH4", "backlight_ch4", 4),
     )
 
-    def __init__(self, config: AppConfig, parent: QWidget | None = None):
+    def __init__(
+        self,
+        config: AppConfig,
+        parent: QWidget | None = None,
+        controller_owner=None,
+    ):
         super().__init__(parent)
         self.setWindowTitle("Light Source Control")
         self.setMinimumWidth(620)
         self._config = config
+        self._controller_owner = controller_owner
         self._controller: LightController | None = None
         self._controller_key: tuple[str, int, float] | None = None
-        self._debounce: dict[str, QTimer] = {}
-        self._channels: dict[str, _ChannelControls] = {}
 
         self._build_ui()
         self._connect_ui()
@@ -137,23 +143,10 @@ class LightControlDialog(QDialog):
 
         connection_buttons = QHBoxLayout()
         self._btn_test = QPushButton("Test Connection")
-        self._btn_read = QPushButton("Read Brightness")
-        self._btn_apply = QPushButton("Apply All")
-        self._btn_all_off = QPushButton("All Off")
         connection_buttons.addWidget(self._btn_test)
-        connection_buttons.addWidget(self._btn_read)
-        connection_buttons.addWidget(self._btn_apply)
-        connection_buttons.addWidget(self._btn_all_off)
         connection_buttons.addStretch(1)
         form.addRow(connection_buttons)
         layout.addWidget(connection_group)
-
-        light_config = self._config.light_controller
-        for title, role, channel in self.CHANNELS:
-            channel_config = getattr(light_config, role)
-            controls = _ChannelControls(title, role, channel, channel_config)
-            self._channels[role] = controls
-            layout.addWidget(controls.group)
 
         self._status_label = QLabel("Ready")
         self._status_label.setWordWrap(True)
@@ -166,29 +159,11 @@ class LightControlDialog(QDialog):
 
     def _connect_ui(self) -> None:
         self._btn_test.clicked.connect(self._test_connection)
-        self._btn_read.clicked.connect(self._read_brightness)
-        self._btn_apply.clicked.connect(self._apply_all)
-        self._btn_all_off.clicked.connect(self._all_off)
         self._device_edit.textChanged.connect(self._connection_settings_changed)
         self._baud_combo.currentIndexChanged.connect(self._connection_settings_changed)
         self._timeout_spin.valueChanged.connect(self._connection_settings_changed)
         self._backlight_delay_spin.valueChanged.connect(lambda _: self._save_config())
         self._ring_delay_spin.valueChanged.connect(lambda _: self._save_config())
-
-        for role, controls in self._channels.items():
-            controls.enabled.toggled.connect(
-                lambda checked, item=controls: self._toggle_channel(item, checked)
-            )
-            controls.slider.valueChanged.connect(
-                lambda value, item=controls: self._brightness_changed(item, value)
-            )
-            controls.spin.valueChanged.connect(
-                lambda value, item=controls: self._brightness_changed(item, value)
-            )
-            timer = QTimer(self)
-            timer.setSingleShot(True)
-            timer.timeout.connect(lambda item=controls: self._send_brightness(item))
-            self._debounce[role] = timer
 
     def _load_config(self) -> None:
         light_config = self._config.light_controller
@@ -220,12 +195,10 @@ class LightControlDialog(QDialog):
         super().accept()
 
     def reject(self) -> None:
-        self._save_config()
         self._close_controller()
         super().reject()
 
     def closeEvent(self, event) -> None:
-        self._save_config()
         self._close_controller()
         super().closeEvent(event)
 
@@ -240,6 +213,11 @@ class LightControlDialog(QDialog):
         )
 
     def _ensure_controller(self) -> LightController:
+        if self._controller_owner is not None:
+            controller = self._controller_owner._light_controller(self._current_key())
+            self._controller = controller
+            self._controller_key = self._current_key()
+            return controller
         key = self._current_key()
         if self._controller is not None and self._controller_key == key:
             return self._controller
@@ -252,6 +230,8 @@ class LightControlDialog(QDialog):
         return controller
 
     def _close_controller(self) -> None:
+        if self._controller_owner is not None:
+            return
         if self._controller is not None:
             self._controller.close()
             self._controller = None
@@ -265,9 +245,21 @@ class LightControlDialog(QDialog):
         light_config.timeout_s = timeout_s
         light_config.backlight_settle_delay_ms = int(self._backlight_delay_spin.value())
         light_config.ring_light_settle_delay_ms = int(self._ring_delay_spin.value())
-        for role, controls in self._channels.items():
-            setattr(light_config, role, controls.to_config())
         self._config.save()
+        self.light_profile_changed.emit()
+
+    def refresh_from_config(self) -> None:
+        light_config = self._config.light_controller
+        self._device_edit.setText(light_config.device or "/dev/ttyUSB0")
+        idx = self._baud_combo.findData(int(light_config.baud))
+        self._baud_combo.setCurrentIndex(max(idx, 0))
+        self._timeout_spin.setValue(max(100, int(float(light_config.timeout_s) * 1000)))
+        self._backlight_delay_spin.setValue(
+            max(0, int(getattr(light_config, "backlight_settle_delay_ms", 200))),
+        )
+        self._ring_delay_spin.setValue(
+            max(0, int(getattr(light_config, "ring_light_settle_delay_ms", 200))),
+        )
 
     def _show_error(self, message: str) -> None:
         self._status_label.setText(message)

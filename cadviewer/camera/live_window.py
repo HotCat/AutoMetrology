@@ -12,7 +12,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QKeyEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
-    QSplitter, QSlider, QSpinBox,
+    QSplitter, QSlider, QSpinBox, QGroupBox, QRadioButton, QButtonGroup,
 )
 
 from .preview_widget import CameraPreviewWidget
@@ -24,14 +24,17 @@ class CameraLiveWindow(QWidget):
     """Full-size live preview sub-window for camera focus adjustment."""
 
     closed = Signal()
+    camera_role_selected = Signal(str)
+    camera_role_save_requested = Signal(str)
 
-    def __init__(self, config=None, parent=None) -> None:
+    def __init__(self, config=None, parent=None, controller_owner=None) -> None:
         super().__init__(parent)
         self.setWindowTitle("Camera Live Preview")
         self.setWindowFlags(Qt.Window | Qt.WindowMinMaxButtonsHint)
         self.resize(1280, 800)
         self._latest_frame: np.ndarray | None = None
         self._config = config
+        self._controller_owner = controller_owner
 
         outer = QHBoxLayout(self)
         outer.setContentsMargins(0, 0, 0, 0)
@@ -133,9 +136,60 @@ class CameraLiveWindow(QWidget):
         self._settings = CameraSettingsWidget()
         right_layout.addWidget(self._settings)
 
+        role_group = QGroupBox("Camera Role")
+        role_group.setStyleSheet("""
+            QGroupBox {
+                color: #aaa; font-weight: bold; font-size: 11px;
+                border: 1px solid #333; border-radius: 4px;
+                margin-top: 8px; padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin; left: 8px; padding: 0 4px;
+            }
+            QRadioButton { color: #ccc; font-size: 11px; spacing: 4px; }
+            QPushButton {
+                background: #333; color: #ccc; border: 1px solid #555;
+                padding: 4px 8px; border-radius: 3px; font-size: 11px;
+            }
+            QPushButton:hover { background: #444; }
+        """)
+        role_layout = QVBoxLayout(role_group)
+        role_layout.setContentsMargins(6, 6, 6, 6)
+        role_layout.setSpacing(6)
+
+        role_row = QHBoxLayout()
+        role_row.setSpacing(6)
+        self._camera_role_group = QButtonGroup(self)
+        self._camera_role_radios: dict[str, QRadioButton] = {}
+        for text, role in [
+            ("Live", "live_preview"),
+            ("Backlight", "backlight"),
+            ("Ring", "ring_light"),
+        ]:
+            radio = QRadioButton(text)
+            radio.toggled.connect(
+                lambda checked, selected_role=role: self._on_camera_role_toggled(
+                    selected_role, checked,
+                )
+            )
+            self._camera_role_group.addButton(radio)
+            self._camera_role_radios[role] = radio
+            role_row.addWidget(radio)
+        role_row.addStretch()
+        role_layout.addLayout(role_row)
+
+        self._btn_save_camera_role = QPushButton("Save")
+        self._btn_save_camera_role.clicked.connect(self._emit_camera_role_save)
+        role_layout.addWidget(self._btn_save_camera_role)
+        self.set_camera_role("live_preview", emit=False)
+        right_layout.addWidget(role_group)
+
         self._light_panel = None
         if self._config is not None:
-            self._light_panel = LightControlPanel(self._config)
+            self._light_panel = LightControlPanel(
+                self._config,
+                controller_owner=self._controller_owner,
+            )
             right_layout.addWidget(self._light_panel)
 
         right_layout.addStretch()
@@ -150,6 +204,33 @@ class CameraLiveWindow(QWidget):
     def settings_widget(self) -> CameraSettingsWidget:
         """Expose the embedded settings widget for external wiring."""
         return self._settings
+
+    def selected_camera_role(self) -> str:
+        """Return the selected camera-parameter role."""
+        for role, radio in self._camera_role_radios.items():
+            if radio.isChecked():
+                return role
+        return "live_preview"
+
+    def set_camera_role(self, role: str, emit: bool = False) -> None:
+        """Select a camera-parameter role without implicitly saving settings."""
+        if role not in self._camera_role_radios:
+            role = "live_preview"
+        radios = list(self._camera_role_radios.values())
+        for radio in radios:
+            radio.blockSignals(True)
+        self._camera_role_radios[role].setChecked(True)
+        for radio in radios:
+            radio.blockSignals(False)
+        if emit:
+            self.camera_role_selected.emit(role)
+
+    def _on_camera_role_toggled(self, role: str, checked: bool) -> None:
+        if checked:
+            self.camera_role_selected.emit(role)
+
+    def _emit_camera_role_save(self) -> None:
+        self.camera_role_save_requested.emit(self.selected_camera_role())
 
     @property
     def light_panel(self):
