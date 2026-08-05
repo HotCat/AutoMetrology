@@ -1,7 +1,7 @@
 """
 AppConfig — persistent application settings stored as JSON.
 
-Saved to ~/.config/cadviewer/settings.json on exit, loaded on startup.
+Saved to the per-user cadviewer config directory on exit, loaded on startup.
 """
 
 from __future__ import annotations
@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field, asdict
 import os
+import re
 import shutil
 import tempfile
 from pathlib import Path
@@ -30,6 +31,42 @@ def _default_config_dir() -> Path:
     if base:
         return Path(base) / "cadviewer"
     return Path.home() / ".config" / "cadviewer"
+
+
+def get_config_dir() -> Path:
+    """Return the per-user configuration directory for the current OS."""
+    return _default_config_dir()
+
+
+def get_data_dir(*parts: str) -> Path:
+    """Return the per-user application data directory for the current OS."""
+    if os.name == "nt":
+        base = os.environ.get("APPDATA")
+        if base:
+            root = Path(base)
+        else:
+            root = Path.home() / "AppData" / "Roaming"
+    else:
+        base = os.environ.get("XDG_DATA_HOME")
+        if base:
+            root = Path(base)
+        else:
+            root = Path.home() / ".local" / "share"
+    return root / "cadviewer" / Path(*parts)
+
+
+def _safe_path_component(text: str) -> str:
+    value = str(text or "").strip()
+    value = re.sub(r"[\\/]+", "_", value)
+    value = re.sub(r"[\x00-\x1f]", "_", value)
+    value = value.replace("..", "_")
+    value = value.strip(" .")
+    return value or "Default"
+
+
+def get_profile_data_dir(profile_name: str, *parts: str) -> Path:
+    """Return the data directory for a production profile."""
+    return get_data_dir("production_profiles", _safe_path_component(profile_name), *parts)
 
 
 _CONFIG_DIR = _default_config_dir()

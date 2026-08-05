@@ -12,8 +12,11 @@ from __future__ import annotations
 import json
 from dataclasses import asdict
 from datetime import datetime
+import shutil
+from pathlib import Path
 from typing import Optional
 import time
+import tempfile
 
 from PySide6.QtCore import Qt, Slot, Signal
 from PySide6.QtGui import QColor, QFont, QIcon
@@ -501,7 +504,7 @@ class RegistrationPanel(QWidget):
     def _default_production_profile(self) -> dict:
         camera = asdict(self._config.camera) if self._config is not None else {}
         return {
-            "version": 2,
+            "version": 3,
             "name": "Default",
             "camera": {
                 "live_preview": dict(camera),
@@ -510,6 +513,12 @@ class RegistrationPanel(QWidget):
             },
             "capture": {"settle_delay_ms": 200},
             "lighting": {"control_mode": "manual"},
+            "cad": {
+                "source_path": "",
+                "stored_path": "",
+                "filename": "",
+                "source_type": "dxf",
+            },
             "auto_correspondence": {
                 "cad_fiducials": [],
                 "image_rois": [None, None],
@@ -576,6 +585,13 @@ class RegistrationPanel(QWidget):
                     }
                 if "light_controller" not in profile:
                     profile["light_controller"] = dict(active_light if is_active else default_light)
+                if "cad" not in profile:
+                    profile["cad"] = {
+                        "source_path": "",
+                        "stored_path": "",
+                        "filename": "",
+                        "source_type": "dxf",
+                    }
         return profiles
 
     def _find_production_profile(self, name: str) -> Optional[dict]:
@@ -658,6 +674,29 @@ class RegistrationPanel(QWidget):
         if not isinstance(capture, dict):
             capture = {}
         return {"settle_delay_ms": int(capture.get("settle_delay_ms", 200) or 0)}
+
+    def _cad_profile(self, profile: Optional[dict] = None) -> dict:
+        if not isinstance(profile, dict):
+            profile = self._find_production_profile(self._current_profile_name()) or {}
+        cad = profile.get("cad", {})
+        if not isinstance(cad, dict):
+            cad = {}
+        return {
+            "source_path": str(cad.get("source_path", "") or ""),
+            "stored_path": str(cad.get("stored_path", "") or ""),
+            "filename": str(cad.get("filename", "") or ""),
+            "source_type": str(cad.get("source_type", "dxf") or "dxf"),
+        }
+
+    def profile_cad_path(self, profile: Optional[dict] = None) -> str:
+        cad = self._cad_profile(profile)
+        stored = str(cad.get("stored_path", "") or "")
+        if stored and Path(stored).exists():
+            return stored
+        source = str(cad.get("source_path", "") or "")
+        if source and Path(source).exists():
+            return source
+        return ""
 
     def _lighting_profile(self, profile: Optional[dict] = None) -> dict:
         if not isinstance(profile, dict):
@@ -858,11 +897,17 @@ class RegistrationPanel(QWidget):
             except Exception:
                 pass
         return {
-            "version": 2,
+            "version": 3,
             "name": name,
             "camera": camera_sections,
             "capture": {"settle_delay_ms": settle_ms},
             "lighting": {"control_mode": "manual"},
+            "cad": dict(
+                (existing or {}).get(
+                    "cad",
+                    self._cad_profile(existing or {}),
+                )
+            ),
             "auto_correspondence": self._auto_correspondence_profile(),
             "window_registration": self._window_registration_profile(),
             "measurement_queries": str(
@@ -918,6 +963,40 @@ class RegistrationPanel(QWidget):
         self._refresh_production_profile_combo(name)
         if not silent:
             self._reg_status.setText(f"Production profile saved: {name}")
+
+    def save_active_cad_profile(
+        self,
+        source_path: str,
+        *,
+        source_type: str = "dxf",
+        silent: bool = True,
+    ) -> str | None:
+        if self._config is None:
+            return None
+        src = Path(str(source_path or "")).expanduser()
+        if not src.exists():
+            return None
+        profile_name = self._current_profile_name()
+        profile = self._find_production_profile(profile_name)
+        if profile is None:
+            profile = self._snapshot_production_profile(profile_name)
+        from ..core.config import get_profile_data_dir
+        cad_dir = get_profile_data_dir(profile_name, "cad")
+        cad_dir.mkdir(parents=True, exist_ok=True)
+        dest = cad_dir / src.name
+        try:
+            if src.resolve() != dest.resolve():
+                shutil.copy2(src, dest)
+        except Exception:
+            shutil.copy2(src, dest)
+        profile["cad"] = {
+            "source_path": str(src),
+            "stored_path": str(dest),
+            "filename": dest.name,
+            "source_type": str(source_type or "dxf"),
+        }
+        self._upsert_production_profile(profile, silent=silent)
+        return str(dest)
 
     def _save_selected_production_profile(self, silent: bool = False) -> None:
         name = self._current_profile_name()
@@ -1713,7 +1792,7 @@ class RegistrationPanel(QWidget):
             profile = self._snapshot_production_profile(self._current_profile_name())
         sections = self._profile_camera_sections(profile)
         sections[role] = current
-        profile["version"] = 2
+        profile["version"] = 3
         profile["camera"] = sections
         profile["capture"] = self._capture_profile(profile)
         profile["lighting"] = {"control_mode": "manual"}
@@ -2194,7 +2273,7 @@ class RegistrationPanel(QWidget):
                 edge_bias=fit_settings["edge_bias"],
             )
             from pathlib import Path
-            artifact_dir = Path("/tmp/cadviewer_dual_light")
+            artifact_dir = Path(tempfile.gettempdir()) / "cadviewer_dual_light"
             artifact_dir.mkdir(parents=True, exist_ok=True)
             overlay = artifact_dir / "debug_backlight_window_registration.png"
             pipeline.save_backlight_overlay(overlay)

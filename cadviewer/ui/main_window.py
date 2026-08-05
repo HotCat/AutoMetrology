@@ -17,6 +17,7 @@ Layout:
 from __future__ import annotations
 
 from pathlib import Path
+import tempfile
 from typing import Optional
 
 from PySide6.QtCore import Qt, Slot, QSize, Signal, QObject, QTimer
@@ -79,6 +80,7 @@ class MainWindow(QMainWindow):
         self._query_pair_pick_ids: list[str] = []
         self._saving_query_text = False
         self._last_selected_feature_id: Optional[str] = None
+        self._suppress_profile_cad_restore = False
 
         # Build UI
         self._setup_ui()
@@ -90,9 +92,9 @@ class MainWindow(QMainWindow):
         self._check_dwg_converter()
         self.retranslate_ui()
 
-        # Auto-load last DXF if available
-        if self._config.last_dxf_path and Path(self._config.last_dxf_path).exists():
-            QTimer.singleShot(0, lambda: self._load_dxf(self._config.last_dxf_path))
+        # Auto-load the active profile's CAD first; fall back to the legacy
+        # last-opened DXF only if the profile does not own one yet.
+        QTimer.singleShot(0, self._restore_startup_cad_context)
 
     def _setup_ui(self) -> None:
         """Create the main splitter layout."""
@@ -461,6 +463,7 @@ class MainWindow(QMainWindow):
         self._query_panel.set_dual_light_orientation_guard_enabled(
             query_settings["dual_light_orientation_guard_enabled"]
         )
+        self._restore_profile_cad(profile)
 
     def _profile_measurement_queries(self, profile: dict) -> str:
         if isinstance(profile, dict) and "measurement_queries" in profile:
@@ -560,9 +563,15 @@ class MainWindow(QMainWindow):
             "DXF Files (*.dxf);;All Files (*)"
         )
         if path:
-            self._load_dxf(path)
+            self._load_dxf(path, update_active_profile_cad=True, cad_source_type="dxf")
 
-    def _load_dxf(self, path: str) -> None:
+    def _load_dxf(
+        self,
+        path: str,
+        *,
+        update_active_profile_cad: bool = True,
+        cad_source_type: str = "dxf",
+    ) -> None:
         """Load and render a DXF file."""
         self._status_label.setText(f"{tr('Loading')} {Path(path).name}...")
         QApplication.processEvents()
@@ -594,12 +603,26 @@ class MainWindow(QMainWindow):
         # Create registration pipeline for new repo
         self._pipeline = RegistrationPipeline(self._repo, self._reg_manager)
         self._reg_panel.set_pipeline(self._pipeline)
-        self._reg_panel.apply_active_production_profile()
+        if update_active_profile_cad and hasattr(self, "_reg_panel"):
+            try:
+                self._reg_panel.save_active_cad_profile(
+                    path,
+                    source_type=cad_source_type,
+                    silent=True,
+                )
+            except Exception as exc:
+                self._status_label.setText(f"CAD profile storage warning: {exc}")
+        self._suppress_profile_cad_restore = True
+        try:
+            self._reg_panel.apply_active_production_profile()
+        finally:
+            self._suppress_profile_cad_restore = False
 
         # Track last DXF path for auto-restore
         self._last_dxf_path = path
-        self._config.last_dxf_path = path
-        self._config.save()
+        if update_active_profile_cad:
+            self._config.last_dxf_path = path
+            self._config.save()
 
         # Print type summary
         counts = self._repo.type_counts()
@@ -776,7 +799,7 @@ class MainWindow(QMainWindow):
                 ring_frame, self._config,
             )
             from ..measurement.dual_light_pipeline import run_dual_light_measurement
-            artifact_dir = Path("/tmp/cadviewer_dual_light")
+            artifact_dir = Path(tempfile.gettempdir()) / "cadviewer_dual_light"
             metadata = {
                 "capture": capture_metadata,
                 "images_undistorted_by_app": {
@@ -946,6 +969,41 @@ class MainWindow(QMainWindow):
         except Exception:
             pass
 
+    def _restore_startup_cad_context(self) -> None:
+        """Restore the CAD owned by the active production profile."""
+        try:
+            profile = None
+            if hasattr(self, "_reg_panel"):
+                active = str(getattr(self._config, "active_production_profile", "") or "")
+                profile = self._reg_panel._find_production_profile(active) if active else None
+                cad_path = self._reg_panel.profile_cad_path(profile) if profile is not None else ""
+                if cad_path:
+                    self._load_dxf(cad_path, update_active_profile_cad=False)
+                    return
+            legacy = str(getattr(self._config, "last_dxf_path", "") or "")
+            if legacy and Path(legacy).exists():
+                self._load_dxf(legacy, update_active_profile_cad=False)
+        except Exception:
+            pass
+
+    def _restore_profile_cad(self, profile: dict) -> None:
+        """Load the CAD file stored in the active profile, if any."""
+        try:
+            if getattr(self, "_suppress_profile_cad_restore", False):
+                return
+            if not hasattr(self, "_reg_panel"):
+                return
+            cad_path = self._reg_panel.profile_cad_path(profile)
+            if not cad_path:
+                return
+            current = str(getattr(self, "_last_dxf_path", "") or "")
+            if Path(cad_path).exists() and (
+                not current or Path(cad_path).resolve() != Path(current).resolve()
+            ):
+                self._load_dxf(cad_path, update_active_profile_cad=False)
+        except Exception:
+            pass
+
     @Slot(str)
     def _on_production_log_record_selected(self, record_id: str) -> None:
         record = self._production_log_store.get_record(record_id)
@@ -962,9 +1020,9 @@ class MainWindow(QMainWindow):
         cad_path = record.get("cad_path", "")
         image_path = record.get("image_path", "")
         if cad_path and Path(cad_path).exists() and cad_path != getattr(self, "_last_dxf_path", ""):
-            self._load_dxf(cad_path)
+            self._load_dxf(cad_path, update_active_profile_cad=False)
         elif not self._repo.count() and cad_path and Path(cad_path).exists():
-            self._load_dxf(cad_path)
+            self._load_dxf(cad_path, update_active_profile_cad=False)
 
         image_layer = self._viewer.get_image_layer()
         if image_path and Path(image_path).exists():
@@ -1352,7 +1410,11 @@ class MainWindow(QMainWindow):
 
             # Load the converted DXF through existing pipeline
             if result.dxf_path and result.dxf_path.exists():
-                self._load_dxf(str(result.dxf_path))
+                self._load_dxf(
+                    str(result.dxf_path),
+                    update_active_profile_cad=True,
+                    cad_source_type="dwg",
+                )
         else:
             dialog.set_error(result.error_message or "Unknown error")
             bus.dwg_conversion_failed.emit(result.error_message or "Unknown error")
